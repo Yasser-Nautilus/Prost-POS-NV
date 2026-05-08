@@ -1,0 +1,48 @@
+# Virtual Environment
+myEnv/
+venv/
+env/
+.venv/
+
+# Agent Skills
+.agent/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Secrets / Config (keep templates, ignore real configs)
+config/printers.json
+
+# Coverage
+.coverage
+htmlcov/
+.pytest_cache/
