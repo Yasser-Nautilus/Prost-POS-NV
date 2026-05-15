@@ -35,6 +35,7 @@ Handle the **full order flow** end-to-end: creation → save → print → statu
   - Parked orders live in **memory only** — not saved to database
   - If app crashes, parked orders are lost (acceptable for v1)
   - No limit on number of parked orders (practically 2-4 max)
+  - **⚠️ Table concurrency**: if a cashier parks a dine-in order for Table 3 (in-memory, not in DB), the table grid still shows Table 3 as GREEN (available) because the parked order isn't persisted. Another cashier could start a new order for Table 3. **Mitigation**: parked dine-in orders should mark their table as OCCUPIED in the in-memory table state shared across the app. This is a UI-level concern, not a DB concern.
 - **Why**: In a busy restaurant, the cashier needs to juggle multiple orders without losing progress.
 - **Touches**: `ui/views/pos_view.py`
 - **Status**: `Not started`
@@ -119,7 +120,8 @@ Handle the **full order flow** end-to-end: creation → save → print → statu
   - **Simplified flow** (no PREPARING/READY intermediate states):
     - Non-delivery: `ACTIVE` → `COMPLETED` (after payment)
     - Delivery: `ACTIVE` → `OUT_FOR_DELIVERY` → `DELIVERED` → `COMPLETED` (after settlement)
-  - `CANCELLED` is reachable from any non-completed state
+  - `CANCELLED` is reachable from any non-completed state **except OUT_FOR_DELIVERY**
+  - **Delivery in transit**: cancellation is **blocked** when order status is OUT_FOR_DELIVERY. Cashier sees warning: "الطلب خارج للتوصيل - لا يمكن إلغاؤه". Must wait for driver return (DELIVERED), then cancel.
   - Invalid transitions rejected by service layer
 - **Touches**: `core/services/order_service.py`
 - **Status**: `Not started`
@@ -143,7 +145,7 @@ Handle the **full order flow** end-to-end: creation → save → print → statu
 - **Details**:
   - Starts at #1 each day after "Close Shift"
   - Assigned at **save time** (not pay time)
-  - Race-safe with two concurrent cashiers (use DB auto-increment or sequence)
+  - Race-safe with two concurrent cashiers: use atomic `UPDATE shifts SET next_invoice_no = next_invoice_no + 1 WHERE id = ? RETURNING next_invoice_no` (not SELECT then UPDATE)
   - Format: plain integer (1, 2, 3... not padded)
 - **Touches**: `data/repositories/order_repository.py`, `core/services/financial_service.py`
 - **Status**: `Not started`

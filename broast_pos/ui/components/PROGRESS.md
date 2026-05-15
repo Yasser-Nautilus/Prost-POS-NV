@@ -92,6 +92,9 @@ Build **reusable UI building blocks** — widgets that multiple views share. Eve
     - Click card → fills street, zone, and delivery fee fields
   - **Zone dropdown**: pre-configured zones, auto-fills delivery fee (read-only)
   - **For Pickup**: phone + name only (no address/zone/fee needed)
+    - If phone found → auto-fill name, ignore addresses
+    - If phone NOT found → create a minimal customer record (name + phone only, no address required)
+    - Customer record is created so future orders can find them by phone
   - Signals: `customer_selected(customer)`, `address_selected(address)`
 - **Status**: `Not started`
 

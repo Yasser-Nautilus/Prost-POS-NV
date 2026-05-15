@@ -123,10 +123,23 @@ Abstract **all database access** behind a clean repository interface. Services c
     - `get_pending_dinein_total(shift_id)` → unpaid dine-in tables total
     - `get_pending_kitchen_total(shift_id)` → orders still in preparation total
     - `has_unsettled_trips()` → bool — prerequisite check for close
-    - `has_printed_daily_summary()` → bool — prerequisite check for close
+    - `has_printed_daily_summary(shift_id)` → checks `shifts.summary_printed_at IS NOT NULL`
+    - `mark_summary_printed(shift_id)` → sets `shifts.summary_printed_at = NOW()` (called when daily summary is first printed)
   - **Invoice**:
-    - `get_next_invoice_no(shift_id)` → increment and return next number
+    - `get_next_invoice_no(shift_id)` → atomic `UPDATE shifts SET next_invoice_no = next_invoice_no + 1 WHERE id = ? RETURNING next_invoice_no` (race-safe for 2 cashiers)
 - **Why**: Pending calculations are critical for expected cash. Close prerequisites prevent data loss.
+- **Status**: `Not started`
+
+### 8. Audit Repository (`audit_repository.py`)
+
+- **What**: Centralized audit trail logging
+- **Details**:
+  - `log(event_type, user_id, user_name, order_id=None, details=None)` → insert audit_log entry
+  - `get_logs_for_date(date)` → all audit entries for a given date
+  - `get_logs_for_order(order_id)` → audit trail for a specific order
+  - Event types: `order_cancelled`, `discount_applied`, `item_removed`, `shift_opened`, `shift_closed`, `shift_transferred`, `user_created`, `user_updated`
+  - Details stored as JSON (e.g., cancel reason, discount amount, removed item info)
+- **Why**: The `audit_log` table is defined in the schema but needs a repository to actually write/query it. Without this, audit logging will be implemented inconsistently across services.
 - **Status**: `Not started`
 
 ---

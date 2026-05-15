@@ -50,7 +50,7 @@ Define all business entities as **pure Python dataclasses** — no database logi
     - pin_hash (SHA-256, **unique per user** — can identify user by PIN alone)
     - role (UserRole)
     - is_active (bool)
-    - cashier_slot (1 or 2) — determines receipt printer routing
+    - cashier_slot (1 or 2, **nullable for drivers**) — determines receipt printer routing. Drivers don't print receipts, so their slot is NULL
   - Manager override: `verify_pin(pin)` returns the user if PIN matches a MANAGER or ADMIN
 - **Why**: PIN uniqueness enables the manager override pattern — manager types PIN on cashier device, system knows who authorized it. Avatar is shown on login screen tiles.
 - **Status**: `Not started`
@@ -100,8 +100,8 @@ Define all business entities as **pure Python dataclasses** — no database logi
     - id, driver_id, driver_name
     - order_ids[] (list of order IDs on this trip)
     - created_at, dispatched_at, returned_at, settled_at
-    - cash_collected (computed: sum of order_total WHERE payment = كاش)
-    - total_delivery_fees (computed: sum of delivery_fee for ALL orders)
+    - cash_collected (**calculated and stored at settlement time** — snapshot of sum of order_total WHERE payment = كاش)
+    - total_delivery_fees (**calculated and stored at settlement time** — snapshot of sum of delivery_fee for ALL orders)
     - is_settled (bool — can be false even after return, settlement happens separately)
   - `DriverAttendance` fields:
     - id, driver_id, check_in_at, check_out_at

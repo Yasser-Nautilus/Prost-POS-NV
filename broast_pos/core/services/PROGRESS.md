@@ -24,7 +24,12 @@ Handle **all business logic** — rules, validations, workflows. Services are th
     - Prints **amendment kitchen ticket** (تابع — Order #X) showing only changes
   - `complete_order(order_id, payment_method, amount_received)` → mark paid → auto-print receipt
   - `cancel_order(order_id, manager_pin, reason)` → verify PIN → audit trail
-  - `apply_discount(order, value, type, manager_pin)` → verify PIN → set discount fields
+  - `apply_discount(order, value, discount_type, manager_pin)` → verify PIN → set discount fields
+    - `discount_type`: "flat" (fixed amount) or "percent" (percentage of subtotal)
+    - Flat: `discount_amount = value` (capped at subtotal — cannot go below zero)
+    - Percent: `discount_amount = subtotal × (value / 100)` (capped at MAX_DISCOUNT_PERCENT)
+    - Discount applied to **subtotal only** (before delivery_fee and service are added)
+    - `total = subtotal + service - discount_amount + delivery_fee`
   - `get_order_by_table(table_number)` → load existing order for dine-in pay/edit flow
   - Private `_validate_order()` enforces: items required, delivery needs phone+address, pickup needs phone
 - **Business Rules**:
@@ -39,6 +44,8 @@ Handle **all business logic** — rules, validations, workflows. Services are th
   - Cancellation requires manager or admin PIN + reason
   - **Payment validation**: فيزا is NOT allowed for delivery orders
   - **3 payment methods only**: كاش / فيزا / اونلاين
+  - **Online payment (non-delivery)**: cashier selects اونلاين → order auto-marked as paid, no cash exchange. Optional: cashier can add a note for reference number
+  - **Cancellation of delivery in transit**: if order is OUT_FOR_DELIVERY, cancellation is **blocked** with warning "الطلب خارج للتوصيل - لا يمكن إلغاؤه". Must wait for driver return, then cancel.
   - Prices locked at order creation — admin price changes don't affect existing orders
 - **Status**: `Not started`
 
@@ -132,6 +139,7 @@ Handle **all business logic** — rules, validations, workflows. Services are th
     - Phone must be 11 digits starting with "01"
     - Zone is required for delivery orders
     - Delivery fee comes from zone — cannot be manually changed
+    - **Fee source**: always pulled from `customer_addresses.delivery_fee` (stored at address creation), never from the zone directly. This ensures historical consistency.
 - **Why**: Exact phone match is faster and simpler than partial search. Zone-based fixed fees prevent cashier mistakes.
 - **Status**: `Not started`
 
@@ -171,7 +179,9 @@ Handle **all business logic** — rules, validations, workflows. Services are th
     - Resets to #1 only on `open_shift()` (new day)
   - **Shift guard**:
     - `ensure_shift_active()` → called by OrderService before creating any order
-    - Throws error if no active shift → blocks order creation
+    - Calls `financial_repository.get_active_shift()` → returns shift or None
+    - If None: raises `ValueError("يجب فتح وردية أولاً")` → blocks order creation
+    - If active: returns shift (used by OrderService to get shift_id for the order)
 - **Status**: `Not started`
 
 ### 7. Report Service (`report_service.py`)

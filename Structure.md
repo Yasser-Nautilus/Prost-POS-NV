@@ -47,7 +47,8 @@ broast_pos/
 │       ├── product_repository.py    # Products/categories queries
 │       ├── customer_repository.py   # Phone lookup, addresses, zones
 │       ├── delivery_repository.py   # Trips, attendance, settlement
-│       └── financial_repository.py  # Shifts, expenses, pending calculations
+│       ├── financial_repository.py  # Shifts, expenses, pending calculations
+│       └── audit_repository.py      # Audit trail logging + queries
 │
 ├── infrastructure/                  # 🔌 External systems
 │   ├── printing/

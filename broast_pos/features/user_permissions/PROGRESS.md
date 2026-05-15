@@ -60,7 +60,7 @@ Enforce **role-based actions** with manager PIN overrides. Prevent unauthorized 
   - Fields: event_type, user_id, user_name, order_id (if applicable), details (JSON), timestamp
   - Viewable by admin in a future audit screen
 - **Why**: When the manager asks "who cancelled order #1234?" or "who applied a discount today?", the audit log has the answer. Without it, there's no accountability.
-- **Touches**: `data/database/schema.sql`, `core/services/order_service.py`
+- **Touches**: `data/repositories/audit_repository.py`, `core/services/order_service.py`, `core/services/financial_service.py`
 - **Status**: `Not started`
 
 ### 5. Navigation Access Control

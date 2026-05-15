@@ -23,23 +23,21 @@ Define the **main application windows** — the navigation shell and the login s
   - Content area: `QStackedWidget` that swaps between views
   - Header: show current user name, role, and shift status
   - Role-based navigation: cashiers only see POS + Tracking + Delivery
-  - User switch button: triggers PIN dialog without full logout
+  - Logout button: full logout → returns to login window (no fast switch — Option A)
   - Printer status indicator: small badge showing printer health
 - **Why**: Role-based navigation prevents cashiers from accessing management screens. The stacked widget approach means views are created once and swapped instantly — no re-creation lag.
 - **Status**: `Not started`
 
 ### 2. Login Window (`login_window.py`)
 
-- **What**: Full-screen login with username and PIN
+- **What**: Window container for the avatar-tile login flow
 - **Details**:
-  - Clean, centered login form
-  - Username field (dropdown or text input)
-  - PIN field (masked, 4-6 digits)
-  - Login button + keyboard shortcut (Enter)
-  - Error message display (Arabic)
-  - On successful login: hide login, show main window
-  - On app start: always show login first
-- **Why**: Simple and fast login is essential. At shift start, the cashier needs to get in within 5 seconds. No unnecessary branding or splash screens.
+  - Window frame and geometry management (full-screen or maximized)
+  - Hosts `login_view.py` which contains the actual avatar tile UI + PIN entry
+  - On successful login: hide login window → show main window
+  - On logout from main window: show login window again
+  - On app start: always show login window first
+- **Why**: The window is a container only — all login UI logic (avatar tiles, PIN numpad, validation) lives in `login_view.py`. This separation keeps window management clean.
 - **Status**: `Not started`
 
 ---

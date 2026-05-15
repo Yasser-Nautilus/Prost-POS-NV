@@ -6,6 +6,8 @@
 > **Overall Status**: 🔴 **0% implemented** — Architecture complete, all tasks Not Started
 > **Existing Code**: Only `__init__.py` placeholder files in all packages
 
+> **⚠️ Note**: Multi-device mode (secondary PC over network) is **DEFERRED to v2**. V1 is single-PC only.
+
 ---
 
 # 📊 Progress Summary Dashboard
@@ -16,7 +18,7 @@
 | core/models/ | 6 | 7 | 🔴 Not Started |
 | core/services/ | 7 | 7 | 🔴 Not Started |
 | data/database/ | 4 | 5 | 🔴 Not Started |
-| data/repositories/ | 7 | 7 | 🔴 Not Started |
+| data/repositories/ | 8 | 8 | 🔴 Not Started |
 | infrastructure/printing/ | 4 | 5 | 🔴 Not Started |
 | infrastructure/sync/ | 2 | 4 | 🔴 Not Started |
 | ui/styles/ | 1 | 1 | 🔴 Not Started |
@@ -28,7 +30,7 @@
 | **feature/printing_flow** | cross-cutting | 5 | 🔴 Not Started |
 | **feature/reports** | cross-cutting | 4 | 🔴 Not Started |
 | **feature/user_permissions** | cross-cutting | 5 | 🔴 Not Started |
-| **TOTAL** | ~50 files | ~88 tasks | 🔴 **0/88** |
+| **TOTAL** | ~51 files | ~89 tasks | 🔴 **0/89** |
 
 ---
 
@@ -36,7 +38,7 @@
 
 ```
 broast_pos/
-├── main.py
+├── main.py                          # Entry point: load config → init DB + migrations → seed if empty → create services → start QApplication → show login
 ├── config/
 │   ├── restaurant.json         # White-label identity (name, logo, colors, fonts)
 │   ├── config.py               # APP_NAME, VERSION, ENVIRONMENT, DEBUG
@@ -70,8 +72,9 @@ broast_pos/
 │       ├── user_repository.py
 │       ├── product_repository.py
 │       ├── customer_repository.py
-│       ├── delivery_repository.py
-│       └── financial_repository.py
+│       ├── delivery_repository.py   # Trips, attendance, settlement
+│       ├── financial_repository.py  # Shifts, expenses, pending calculations
+│       └── audit_repository.py      # Audit trail logging + queries
 ├── infrastructure/
 │   ├── printing/
 │   │   ├── printer_manager.py  # Routes to KITCHEN / CASHIER_1 / CASHIER_2
@@ -385,6 +388,8 @@ These track **end-to-end business features** across multiple modules.
 | **11** | Permissions + Audit + PIN Override | Phase 3 | 🔴 |
 | **12** | Polish: Theme, White-Label, Config | All | 🔴 |
 
+> ⚠️ **Note**: Manager PIN override is needed starting **Phase 5** (cancel/discount in OrderService), even though the full permission system comes in Phase 11. Implement `verify_pin()` in AuthService during Phase 3 so it’s available for Phase 5+.
+
 **Rule**: Never move to next phase if current one is unstable. Test in real workflow after each phase.
 
 ---
@@ -424,12 +429,16 @@ These track **end-to-end business features** across multiple modules.
 ### Financial Formulas
 ```
 subtotal         = Σ(qty × unit_price) for all items
-service          = subtotal × (service_pct / 100)
-total            = subtotal + service + delivery_fee - discount
+service          = subtotal × (SERVICE_CHARGE_PCT / 100)
+discount_amount  = value (if flat) OR subtotal × (value / 100) (if percent)
+total            = subtotal + service - discount_amount + delivery_fee
 change           = max(0, paid - total)
-restaurant_revenue = total - delivery_fee
+restaurant_revenue = total - delivery_fee   ← restaurant’s actual income
+gross_revenue    = total                    ← includes delivery fee (driver’s money)
 expected_cash    = total_sales - total_expenses - pending_delivery - pending_dinein - pending_kitchen
 ```
+
+> **⚠️ Revenue distinction**: `restaurant_revenue` excludes delivery fees (driver earns those). Daily reports should show both `gross_revenue` (total) and `restaurant_revenue` (total - delivery_fee) to avoid misrepresenting income.
 
 ---
 

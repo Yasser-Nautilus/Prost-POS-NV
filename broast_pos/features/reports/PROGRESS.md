@@ -66,5 +66,6 @@ Provide **accurate, reproducible financial summaries** for daily operations. The
 - This report is the **source of truth** at end of day — treat with maximum care
 - The printed format must match the small receipt image exactly
 - Reports can be regenerated at any time for any past date
+- **⚠️ Revenue distinction**: daily report should show both `gross_revenue` (total including delivery fees) and `restaurant_revenue` (total minus delivery fees). Delivery fees belong to the driver, not the restaurant.
 - Future: CSV export for accounting import
 - Future: auto-sync to Google Sheets

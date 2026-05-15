@@ -20,7 +20,7 @@ Set up the **SQLite database layer** — connection management, schema definitio
   - Methods: `execute()`, `fetch_one()`, `fetch_all()`, `executescript()`
   - Transaction support: `begin()`, `commit()`, `rollback()`
 - **Why**: Two cashiers on the same machine need concurrent access. WAL mode prevents lock contention.
-- **Critical**: Invoice numbering must be race-safe — use `AUTOINCREMENT` on orders table.
+- **Critical**: Invoice numbering must be race-safe — use atomic `UPDATE shifts SET next_invoice_no = next_invoice_no + 1 WHERE id = ? RETURNING next_invoice_no` inside a transaction. Do NOT use SELECT then UPDATE separately.
 - **Status**: `Not started`
 
 ### 2. Define Schema (`schema.sql`)
@@ -33,12 +33,12 @@ Set up the **SQLite database layer** — connection management, schema definitio
   - `customers` — id, name, phone (UNIQUE, 11-digit), notes, created_at
   - `zones` — id, name, delivery_fee, is_active
   - `customer_addresses` — id, customer_id (FK), street_name, zone_id (FK), zone_name (denormalized), delivery_fee (copied from zone)
-  - `orders` — id, invoice_no (UNIQUE AUTO), order_type, status, table_no, customer fields, financial fields (subtotal, discount, service, delivery_fee, total), staff fields, cancellation fields, timestamps
+  - `orders` — id, invoice_no (UNIQUE per shift), order_type, status, table_no, customer_id, customer_name, customer_phone, customer_address, customer_zone, delivery_fee, driver_id, driver_name, subtotal, discount_amount, discount_type (flat|percent), service_amount, total, payment_method, amount_paid, change_given, is_paid, paid_at, created_by_id, created_by_name, cashier_slot, cancelled_by_id, cancelled_by_name, cancel_reason, cancelled_at, shift_id, created_at, updated_at
   - `order_items` — id, order_id (FK), product_id, product_name, quantity (**INTEGER**), unit_price, total_price, notes (TEXT)
-  - `delivery_trips` — id, driver_id, driver_name, created_at, dispatched_at, returned_at, settled_at, cash_collected, total_delivery_fees, is_settled
+  - `delivery_trips` — id, driver_id, driver_name, created_at, dispatched_at, returned_at, settled_at, cash_collected (**stored at settlement**), total_delivery_fees (**stored at settlement**), is_settled
   - `delivery_trip_orders` — trip_id, order_id (join table)
   - `driver_attendance` — id, driver_id, check_in_at, check_out_at
-  - `shifts` — id, opened_by, opened_at, closed_by (nullable), closed_at (nullable), next_invoice_no (resets to 1), is_active
+  - `shifts` — id, opened_by, opened_at, closed_by (nullable), closed_at (nullable), next_invoice_no (resets to 1), is_active, **summary_printed_at (nullable TIMESTAMP — set when daily summary is first printed, prerequisite for shift close)**
   - `shift_transfers` — id, shift_id, from_user_id, to_user_id, timestamp, summary_snapshot (JSON)
   - `cash_transactions` — id, shift_id, type (`expense` only), amount, description, category, timestamp, user_id, **immutable**
   - `audit_log` — id, event_type, user_id, user_name, order_id, details (JSON), timestamp
@@ -88,6 +88,10 @@ Set up the **SQLite database layer** — connection management, schema definitio
     - "تشيكن فرايز عادي" (price: 70)
     - "2 قطعة دجاج حار" (price: 110)
     - "2 قطعة دجاج عادي" (price: 110)
+  - **Sample zones** (required for delivery orders to work on fresh install):
+    - "مدينة فاقوس" (delivery_fee: 20)
+    - "شارع الانتاج" (delivery_fee: 15)
+    - "الغابة" (delivery_fee: 80)
   - Only runs if tables are empty (idempotent)
 - **Status**: `Not started`
 
@@ -103,12 +107,13 @@ Set up the **SQLite database layer** — connection management, schema definitio
 - PIN is stored as SHA-256 hash, never plain text
 - **PIN hash is UNIQUE** — enables user identification by PIN alone (manager override)
 - `shifts.next_invoice_no` resets to 1 when a new shift is opened (daily)
-- `delivery_trips.cash_collected` = sum of order totals WHERE payment = كاش
-- `delivery_trips.total_delivery_fees` = sum of delivery fees for ALL orders
+- `delivery_trips.cash_collected` = sum of order totals WHERE payment = كاش (**calculated and stored at settlement time — snapshot**)
+- `delivery_trips.total_delivery_fees` = sum of delivery fees for ALL orders (**calculated and stored at settlement time — snapshot**)
 - `cash_transactions` are **expense-only** and **immutable** (no edit/delete after creation)
 - `cash_transactions.category` supports: delivery_fees, supplies, other
 - `shifts` have NO `opening_cash` — shift just opens with no cash amount
+- `shifts.summary_printed_at` tracks whether the daily summary was printed (prerequisite for shift close)
 - `shift_transfers` record mid-day cashier handovers with state snapshots
 - **Shift is shared** across both devices — one active shift at a time
 - **Orders blocked** if no active shift exists
-- **Multi-device**: normally single PC. During peak, main PC holds the database, secondary PC connects over local network via lightweight API. Repository pattern enables transparent switching.
+- **Multi-device**: ⚠️ **DEFERRED to v2**. V1 is single-PC only. Future: main PC holds the database, secondary PC connects over local network via lightweight REST API. Repository pattern enables transparent switching when this is implemented.

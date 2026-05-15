@@ -342,8 +342,9 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
 
 ```
 subtotal     = sum(qty × price) for all items
-service      = subtotal × (service_pct / 100)
-total        = subtotal + service + delivery_fee
+service      = subtotal × (SERVICE_CHARGE_PCT / 100)
+discount     = value (if flat) OR subtotal × (value / 100) (if percent)
+total        = subtotal + service - discount + delivery_fee
 change       = max(0, paid - total)
 ```
 

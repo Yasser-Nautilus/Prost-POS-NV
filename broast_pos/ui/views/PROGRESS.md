@@ -117,14 +117,30 @@ Implement all **main screens** (business flows). Each view is a `QWidget` that o
     - "Print Summary" button → prints multi-driver summary
 - **Status**: `Not started`
 
-### 4. Reports View (`reports_view.py`)
+### 4. Reports View (`reports_view.py`) — Manager Only
 
-- **What**: Daily financial summaries and shift reports
+- **What**: Comprehensive reporting dashboard with daily, monthly, and yearly views
 - **Details**:
-  - **Daily summary display**: table showing order type, count, revenue + grand total
-  - **Print summary button**: prints to cashier's thermal printer (exact format from photo)
-  - **Date selector**: view reports for any past date
-  - **Driver summary section**: all drivers, trips, total fees
+  - **Daily report** (on-screen + printable):
+    - Order type breakdown (count + revenue) — matches receipt photo format
+    - Payment method breakdown: كاش / فيزا / اونلاين
+    - Cancelled orders count + reasons
+    - Driver summary (trips, orders, fees)
+    - Product sales ranking (qty sold per product)
+    - Date picker to view past days
+  - **Monthly dashboard**:
+    - Total sales for the month
+    - Daily sales chart (bar or line)
+    - Best-selling items ranking (top 10-20)
+    - Monthly expenses total + breakdown by category
+  - **Yearly overview**:
+    - Monthly sales summary (12 months)
+    - Total revenue, total expenses
+    - Best-selling items for the year
+  - **Actions**:
+    - Print any report (daily summary, driver summary) — thermal printer, silent
+    - View on-screen (tables + simple charts)
+    - Data is always stored — even if not exported yet (future: Google Sheets)
 - **Status**: `Not started`
 
 ### 5. Products View (`products_view.py`) — Manager Only
@@ -199,32 +215,9 @@ Implement all **main screens** (business flows). Each view is a `QWidget` that o
   - **Shift history**: past shifts with summaries (read-only)
 - **Status**: `Not started`
 
-### 8. Reports View (`reports_view.py`) — Manager Only
+### ~~8. Reports View~~ — **MERGED into Task #4 above**
 
-- **What**: Comprehensive reporting dashboard with daily, monthly, and yearly views
-- **Details**:
-  - **Daily report** (on-screen + printable):
-    - Matches the receipt photo format: order type breakdown (count + revenue)
-    - Payment method breakdown: كاش / فيزا / اونلاين
-    - Cancelled orders count + reasons
-    - Driver summary (trips, orders, fees)
-    - Product sales ranking (qty sold per product)
-    - Date picker to view past days
-  - **Monthly dashboard**:
-    - Total sales for the month
-    - Daily sales chart (bar or line)
-    - Best-selling items ranking (top 10-20)
-    - Monthly expenses total + breakdown by category
-    - Comparison with previous month (optional)
-  - **Yearly overview**:
-    - Monthly sales summary (12 months)
-    - Total revenue, total expenses
-    - Best-selling items for the year
-  - **Actions**:
-    - Print any report (daily summary, driver summary)
-    - View on-screen (tables + simple charts)
-    - Data is always stored — even if not exported yet (future: Google Sheets)
-- **Status**: `Not started`
+- This task was a duplicate of Task #4 (both described `reports_view.py`). All details have been consolidated into Task #4.
 
 ### ~~9. Expenses View~~ — **DEFERRED to v2**
 

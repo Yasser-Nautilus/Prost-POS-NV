@@ -102,8 +102,11 @@ Centralize **all system configuration and constants** — no business logic, jus
 - **What**: Configurable business parameters
 - **Details**:
   - `DEFAULT_TAX_RATE` = 0.0 (no tax currently, configurable for future)
-  - `MAX_DISCOUNT_PERCENT` = 100 (safety cap)
+  - `SERVICE_CHARGE_PCT` = 0.0 (service charge % applied to subtotal. 0 = no service charge)
+  - `MAX_DISCOUNT_PERCENT` = 100 (safety cap — discount cannot exceed subtotal)
+  - `DISCOUNT_TYPES` = "flat" | "percent" (discount can be a fixed amount or a percentage of subtotal)
   - `ORDER_NUMBER_PREFIX` = "" (optional prefix for invoice numbers)
+  - `TABLE_COUNT` = 10 (number of dine-in tables displayed in table grid, configurable)
   - `AUTO_PRINT_KITCHEN` = True
   - `AUTO_PRINT_RECEIPT` = True
   - `TAKEAWAY_AUTO_COMPLETE_MINUTES` = 20 (visual highlight timer)

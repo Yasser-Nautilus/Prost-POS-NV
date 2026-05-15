@@ -69,8 +69,8 @@ Manage delivery **driver lifecycle, trip assignment, and financial settlement**.
     - For each order:
       - If كاش → driver collected `order_total` (food + delivery fee)
       - If اونلاين → driver collected `0` (everything prepaid)
-    - `cash_collected` = sum of order_total WHERE payment = كاش
-    - `total_delivery_fees` = sum of delivery_fee for ALL orders
+    - `cash_collected` = sum of order_total WHERE payment = كاش (**calculated and stored at settlement time**)
+    - `total_delivery_fees` = sum of delivery_fee for ALL orders (**calculated and stored at settlement time**)
     - `amount_to_hand_over` = `cash_collected`
   - Cashier confirms → trip marked as `settled`
   - **System records as fully delivered** — no shortage tracking (manager handles discrepancies offline)
