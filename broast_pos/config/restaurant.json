@@ -1,0 +1,48 @@
+{
+  "restaurant": {
+    "name_ar": "بروستش",
+    "name_en": "Prostsh",
+    "slogan_ar": "بروستش في القرمشة مبيهزرش",
+    "logo_path": "./assets/branding/logo.png",
+    "receipt_footer": "شكراً لزيارتكم — Thank you for visiting",
+    "receipt_notice": "",
+    "login_sidebar_image": "./assets/branding/sidebar.png",
+    "app_background_image": ""
+  },
+  "theme": {
+    "primary_bg": "#0d1b2a",
+    "secondary_bg": "#1b2838",
+    "accent_green": "#28a745",
+    "accent_red": "#dc3545",
+    "accent_blue": "#007bff",
+    "accent_orange": "#fd7e14",
+    "accent_yellow": "#ffc107",
+    "text_primary": "#ffffff",
+    "text_secondary": "#a0aec0",
+    "text_muted": "#6c757d",
+    "border_color": "#2d3748",
+    "input_bg": "#1a202c",
+    "button_confirm": "#28a745",
+    "button_cancel": "#dc3545",
+    "button_neutral": "#4a5568",
+    "table_occupied": "#dc3545",
+    "table_free": "#28a745",
+    "status_pending": "#ffc107",
+    "status_ready": "#28a745",
+    "status_cancelled": "#dc3545"
+  },
+  "category_colors": [
+    "#e74c3c", "#3498db", "#2ecc71", "#f39c12",
+    "#9b59b6", "#1abc9c", "#e67e22", "#34495e",
+    "#16a085", "#c0392b", "#2980b9", "#27ae60"
+  ],
+  "fonts": {
+    "family_arabic": "Noto Naskh Arabic",
+    "family_english": "Noto Naskh Arabic",
+    "size_heading": 18,
+    "size_body": 14,
+    "size_button": 16,
+    "size_small": 12,
+    "size_receipt": 11
+  }
+}
