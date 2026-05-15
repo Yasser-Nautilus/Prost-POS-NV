@@ -21,7 +21,7 @@ Set up the **SQLite database layer** — connection management, schema definitio
   - Transaction support: `begin()`, `commit()`, `rollback()`
 - **Why**: Two cashiers on the same machine need concurrent access. WAL mode prevents lock contention.
 - **Critical**: Invoice numbering must be race-safe — use atomic `UPDATE shifts SET next_invoice_no = next_invoice_no + 1 WHERE id = ? RETURNING next_invoice_no` inside a transaction. Do NOT use SELECT then UPDATE separately.
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 2. Define Schema (`schema.sql`)
 
@@ -46,7 +46,7 @@ Set up the **SQLite database layer** — connection management, schema definitio
   - ~~`product_modifiers`~~ — **REMOVED**
   - ~~`order_item_modifiers`~~ — **REMOVED**
 - **Why**: Schema must mirror the models exactly. No modifier tables needed — simplifies the database significantly.
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 3. Index Definitions (inside `schema.sql`)
 
@@ -64,7 +64,7 @@ Set up the **SQLite database layer** — connection management, schema definitio
   - `idx_trips_settled` — fast unsettled trip filtering
   - `idx_attendance_driver` — fast check-in status
 - **Why**: At 300+ orders/day, unindexed queries slow down within weeks.
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 4. Migrations System (`migrations.py`)
 
@@ -75,7 +75,7 @@ Set up the **SQLite database layer** — connection management, schema definitio
   - Each migration is a function: `migrate_v1_to_v2()`, etc.
   - Uses `ALTER TABLE` for adding columns, never drops existing data
   - Runs automatically at app startup
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 5. Seed Data (`seed.py`)
 
@@ -93,7 +93,7 @@ Set up the **SQLite database layer** — connection management, schema definitio
     - "شارع الانتاج" (delivery_fee: 15)
     - "الغابة" (delivery_fee: 80)
   - Only runs if tables are empty (idempotent)
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ---
 
