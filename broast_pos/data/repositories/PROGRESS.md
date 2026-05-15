@@ -17,7 +17,7 @@ Abstract **all database access** behind a clean repository interface. Services c
   - `save()` handles both insert (when id is None) and update (when id exists)
   - `delete()` performs soft-delete (status change), never hard-delete
 - **Why**: This is the contract that both SQLite and future Google Sheets implementations must fulfill.
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 2. Order Repository (`order_repository.py`)
 
@@ -35,7 +35,7 @@ Abstract **all database access** behind a clean repository interface. Services c
   - `get_next_invoice_number()` → next sequential int for current shift
   - Private helpers: `_row_to_order()`, `_load_items()`, `_insert()`, `_update()`, `_save_items()`
 - **Why**: Simplified without modifiers. Each item is just product_id, name, qty (int), price, notes.
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 3. User Repository (`user_repository.py`)
 
@@ -47,7 +47,7 @@ Abstract **all database access** behind a clean repository interface. Services c
   - `save(user)` → create or update user
   - `get_all_active()` → for user management screen
   - `get_drivers()` → users with driver role (for delivery assignment)
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 4. Product Repository (`product_repository.py`)
 
@@ -60,7 +60,7 @@ Abstract **all database access** behind a clean repository interface. Services c
   - ~~`get_modifiers_for_product()`~~ — **REMOVED** (no modifiers)
   - ~~`save_modifier()`~~ — **REMOVED**
 - **Why**: Simplified — no modifier queries, no join tables. Products are self-contained.
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 5. Customer Repository (`customer_repository.py`)
 
@@ -76,7 +76,7 @@ Abstract **all database access** behind a clean repository interface. Services c
     - `get_all_active_zones()` → for dropdown in customer panel
     - `save_zone(zone)` → create or update zone (name + delivery_fee)
     - `deactivate_zone(zone_id)` → soft delete
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 6. Delivery Repository (`delivery_repository.py`)
 
@@ -99,7 +99,7 @@ Abstract **all database access** behind a clean repository interface. Services c
   - **End-of-day**:
     - `get_all_drivers_daily_summary(date)` → per-driver: trip count, order count, fees earned
     - `get_driver_daily_trips(driver_id, date)` → all trips for one driver on a date
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 7. Financial Repository (`financial_repository.py`)
 
@@ -128,7 +128,7 @@ Abstract **all database access** behind a clean repository interface. Services c
   - **Invoice**:
     - `get_next_invoice_no(shift_id)` → atomic `UPDATE shifts SET next_invoice_no = next_invoice_no + 1 WHERE id = ? RETURNING next_invoice_no` (race-safe for 2 cashiers)
 - **Why**: Pending calculations are critical for expected cash. Close prerequisites prevent data loss.
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 8. Audit Repository (`audit_repository.py`)
 
@@ -140,7 +140,7 @@ Abstract **all database access** behind a clean repository interface. Services c
   - Event types: `order_cancelled`, `discount_applied`, `item_removed`, `shift_opened`, `shift_closed`, `shift_transferred`, `user_created`, `user_updated`
   - Details stored as JSON (e.g., cancel reason, discount amount, removed item info)
 - **Why**: The `audit_log` table is defined in the schema but needs a repository to actually write/query it. Without this, audit logging will be implemented inconsistently across services.
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ---
 
