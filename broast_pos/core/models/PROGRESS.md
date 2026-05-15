@@ -24,7 +24,7 @@ Define all business entities as **pure Python dataclasses** — no database logi
   - `can_be_cancelled()` and `is_delivery()` helper methods
 - **Why**: The `restaurant_revenue` property (total minus delivery_fee) is critical for correct shift reports and driver settlement.
 - **Important**: OrderItem has **NO modifiers list** — each product variation is a separate product. Notes field is used for per-item special instructions (e.g., "3 pieces cold").
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 2. OrderItem Model (inside `order.py`)
 
@@ -35,7 +35,7 @@ Define all business entities as **pure Python dataclasses** — no database logi
   - `total_price` property: `quantity × unit_price`
   - **No modifiers** — the product name itself contains the variation (e.g., "تشيكن فرايز حار")
   - Notes are per-item free text (e.g., "3 pieces cold" when ordering "9 Pieces Hot")
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 3. User Model (`user.py`)
 
@@ -53,7 +53,7 @@ Define all business entities as **pure Python dataclasses** — no database logi
     - cashier_slot (1 or 2, **nullable for drivers**) — determines receipt printer routing. Drivers don't print receipts, so their slot is NULL
   - Manager override: `verify_pin(pin)` returns the user if PIN matches a MANAGER or ADMIN
 - **Why**: PIN uniqueness enables the manager override pattern — manager types PIN on cashier device, system knows who authorized it. Avatar is shown on login screen tiles.
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 4. Product Model (`product.py`)
 
@@ -66,7 +66,7 @@ Define all business entities as **pure Python dataclasses** — no database logi
     - Example: "تشيكن فرايز حار" and "تشيكن فرايز عادي" are two distinct products
   - Sort order matters — the POS grid must display products in the exact order configured
 - **Why**: Removing modifiers dramatically simplifies the POS flow — tap product, it goes directly to the order panel. No popup dialog needed.
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 5. Customer Model (`customer.py`)
 
@@ -89,7 +89,7 @@ Define all business entities as **pure Python dataclasses** — no database logi
   - One customer can have **multiple addresses** (home, work, etc.)
   - Zone delivery fee is **fixed** — cashier cannot change it per order
 - **Why**: Phone is the primary key for customer lookup. Zone-based fees ensure pricing consistency. Street name is enough — no building numbers needed.
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 6. Delivery Model (`delivery.py`)
 
@@ -108,7 +108,7 @@ Define all business entities as **pure Python dataclasses** — no database logi
   - **Trip lifecycle**: created → dispatched → returned → settled (each step independent)
   - **No settlement blocking**: driver can go on new trips with unsettled previous trips
 - **Why**: Settlement depends on payment method. Cash orders: driver collected the money. Online orders: driver collected nothing. Driver earns fees from ALL orders, paid at end of day as expense.
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 7. Financial Model (`financial.py`)
 
@@ -135,7 +135,7 @@ Define all business entities as **pure Python dataclasses** — no database logi
     - expected_cash = total_sales - total_expenses - all_pending
     - order_breakdown: dict by type (count + revenue)
 - **Why**: Expected cash accounts for money that hasn't been collected yet. Pending orders are deducted because the cash isn't physically in the drawer.
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ---
 
