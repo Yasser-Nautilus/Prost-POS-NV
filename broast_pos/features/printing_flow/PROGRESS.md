@@ -28,7 +28,8 @@ Ensure every required document **prints automatically, silently, and correctly r
   - Auto-cut after printing
 - **Why**: The kitchen has no screen. This printed ticket is the ONLY way they know an order exists.
 - **Touches**: `infrastructure/printing/printer_manager.py`, `infrastructure/printing/receipt_templates.py`
-- **Status**: `Not started`
+- **Impl**: `printing_controller.py` → `print_kitchen_ticket()` + `print_amendment_ticket()`
+- **Status**: `Done`
 
 ### 2. Cashier Receipt (Customer Copy) — 4 Variants
 
@@ -56,7 +57,8 @@ Ensure every required document **prints automatically, silently, and correctly r
   - **Visa is NOT available for delivery** — only at the restaurant counter
   - Auto-cut after printing
 - **Touches**: `infrastructure/printing/receipt_templates.py`, `infrastructure/printing/printer_manager.py`
-- **Status**: `Not started`
+- **Impl**: `printing_controller.py` → `print_customer_receipt()` auto-selects variant by order_type
+- **Status**: `Done`
 
 ### 3. Daily Summary Receipt
 
@@ -72,7 +74,8 @@ Ensure every required document **prints automatically, silently, and correctly r
   - Auto-cut after printing
 - **Why**: Source of truth at end of day. Must match existing format exactly.
 - **Touches**: `infrastructure/printing/receipt_templates.py`, `ui/views/reports_view.py`
-- **Status**: `Not started`
+- **Impl**: `printing_controller.py` → `print_daily_summary()`
+- **Status**: `Done`
 
 ### 4. Driver Settlement Receipt
 
@@ -92,7 +95,8 @@ Ensure every required document **prints automatically, silently, and correctly r
     - **Amount to hand over** = total cash collected
   - Auto-cut after printing
 - **Why**: Driver accountability. Shows exactly what cash the driver should have.
-- **Status**: `Not started`
+- **Impl**: `printing_controller.py` → `print_settlement_receipt()`
+- **Status**: `Done`
 
 ### 5. Failure Handling
 
@@ -104,7 +108,8 @@ Ensure every required document **prints automatically, silently, and correctly r
   - Failed prints are noted but the order is still saved
   - On app startup: test printer connections, warn if any are offline
 - **Touches**: `infrastructure/printing/printer_manager.py`, `ui/windows/main_window.py`
-- **Status**: `Not started`
+- **Impl**: `printing_controller.py` → `check_printer_health()`, failure counter, `on_print_failure` callback
+- **Status**: `Done`
 
 ---
 
