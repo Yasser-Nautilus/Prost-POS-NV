@@ -71,7 +71,7 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   Paid:              {paid}
   Change:            {change}
   --------------------------------
-       بروستش في القرمشة سبيهزرقن
+بروستش في القرمشة مبيهزرش
   - - - - - - - - ✂ - - - - - - -
   ```
 
@@ -105,8 +105,8 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   Paid:              {paid}
   Change:            {change}
   --------------------------------
-       بروستش في القرمشة سبيهزرقن
-  - - - - - - - - ✂ - - - - - - -
+بروستش في القرمشة مبيهزرش  
+- - - - - - - - ✂ - - - - - - -
   ```
 
   #### 3c. Customer Receipt — Takeaway
@@ -161,12 +161,8 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   Cashier: {cashier}
   Print On: {date}      {time}
   --------------------------------
-   إضافة:
-    {qty}  |  {item_name}
-            ملاحظة: {note}          ← if note exists
-    {qty}  |  {item_name}
-
-  حذف:
+    {qty}  |  {item_name}         ← each change printed directly
+            ملاحظة: {note}        ← if note exists
     {qty}  |  {item_name}
   --------------------------------
   ================================
@@ -174,12 +170,12 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   ```
   - Header: "تابع" (follow-up), NOT "تعديل" (modification)
   - Shows ONLY the changes — not the full original order
-  - "إضافة" section: items added to the order
-  - "حذف" section: items removed from the order (required manager PIN)
+  - **No fixed section headers** (no "إضافة" / "حذف" labels) — items printed directly as they are
+  - If only additions: print only the added items
+  - If only removals: print only the removed items
+  - If both: print all changes in order, no grouping headers
   - **NO prices** — same as regular kitchen ticket
-  - Kitchen sees: "this is a follow-up for Order #3, add these items, remove those"
-  - If only additions: "حذف" section is omitted
-  - If only removals: "إضافة" section is omitted
+  - Kitchen sees: "this is a follow-up for Order #3" with the actual changes listed
 
   #### 3f. End-of-Day Sales Report (matches receipt photo)
   ```
@@ -364,12 +360,14 @@ All monetary values formatted to 2 decimal places. Change never negative.
 - **3 payment methods only**: كاش / فيزا / اونلاين
 - **Visa NOT available for delivery**
 - **Online delivery**: driver collects nothing (everything prepaid including delivery fee)
-- **White-label receipts**: all branding from `restaurant.json`:
+- **No hardcoded branded text** — ALL branding loaded from `restaurant.json`:
   - `{logo}` → `restaurant.logo_path`
-  - `{restaurant_name}` → `restaurant.name_ar`
-  - `{slogan}` → `restaurant.slogan_ar`
+  - `{restaurant_name}` → `restaurant.name_ar` + `restaurant.name_en`
+  - `{slogan}` → `restaurant.slogan_ar` (e.g., "بروستش في القرمشة مبيهزرش")
   - Receipt footer → `restaurant.receipt_footer`
+  - **Never write Arabic branding strings directly in code**
 - **Cash delivery**: driver collects full amount (food + delivery fee)
+- **Amendment tickets**: no fixed section headers ("إضافة"/"حذف") — changes printed directly
 - Install dependency: `pip install python-escpos`
 
 ## 📌 Order Type Definitions (for template selection)
