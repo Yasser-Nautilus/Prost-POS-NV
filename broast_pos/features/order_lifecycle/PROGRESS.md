@@ -20,7 +20,8 @@ Handle the **full order flow** end-to-end: creation → save → print → statu
   - Order is **NOT** in the database at this point
   - **No draft system** — unsaved orders exist in memory only
 - **Touches**: `core/models/order.py`, `ui/views/pos_view.py`, `ui/components/order_panel.py`
-- **Status**: `Not started`
+- **Impl**: `order_controller.py` → `new_order()`, `add_item()`, `change_quantity()`, `set_item_note()`
+- **Status**: `Done`
 
 ### 2. Parked Orders (Multi-Order Buffer)
 
@@ -38,7 +39,8 @@ Handle the **full order flow** end-to-end: creation → save → print → statu
   - **⚠️ Table concurrency**: if a cashier parks a dine-in order for Table 3 (in-memory, not in DB), the table grid still shows Table 3 as GREEN (available) because the parked order isn't persisted. Another cashier could start a new order for Table 3. **Mitigation**: parked dine-in orders should mark their table as OCCUPIED in the in-memory table state shared across the app. This is a UI-level concern, not a DB concern.
 - **Why**: In a busy restaurant, the cashier needs to juggle multiple orders without losing progress.
 - **Touches**: `ui/views/pos_view.py`
-- **Status**: `Not started`
+- **Impl**: `order_controller.py` → `park_current()`, `resume_parked()`, `get_parked_orders()` with in-memory table occupancy tracking
+- **Status**: `Done`
 
 ### 3. Validate & Save Order ("Confirm" Button)
 
@@ -61,7 +63,8 @@ Handle the **full order flow** end-to-end: creation → save → print → statu
   - On save failure: show error message, keep order in memory for retry
 - **Why**: Invoice numbers reset daily on shift close. Next day starts from #1.
 - **Touches**: `core/services/order_service.py`, `data/repositories/order_repository.py`
-- **Status**: `Not started`
+- **Impl**: `order_controller.py` → `confirm_order()` with full validation, auto kitchen print, takeaway auto-payment flag
+- **Status**: `Done`
 
 ### 4. Payment Flow (Separate from Save)
 
@@ -79,7 +82,8 @@ Handle the **full order flow** end-to-end: creation → save → print → statu
     - Confirm → `order_service.complete_order()` → auto-print receipt
   - After payment: order status = COMPLETED
 - **Touches**: `core/services/order_service.py`, `ui/components/payment_dialog.py`
-- **Status**: `Not started`
+- **Impl**: `order_controller.py` → `complete_payment()` + `payment_coordinator.py` for method validation & change calc
+- **Status**: `Done`
 
 ### 5. Edit Saved Order (Amendment)
 
@@ -111,7 +115,8 @@ Handle the **full order flow** end-to-end: creation → save → print → statu
   - Price lock: item prices are locked at time of original order creation
   - Product price changes in admin don't affect existing orders
 - **Touches**: `core/services/order_service.py`, `infrastructure/printing/receipt_templates.py`
-- **Status**: `Not started`
+- **Impl**: `amendment_tracker.py` → `snapshot()`, `diff()` + `order_controller.py` → `save_amendment()`
+- **Status**: `Done`
 
 ### 6. Status Transitions
 
@@ -124,7 +129,8 @@ Handle the **full order flow** end-to-end: creation → save → print → statu
   - **Delivery in transit**: cancellation is **blocked** when order status is OUT_FOR_DELIVERY. Cashier sees warning: "الطلب خارج للتوصيل - لا يمكن إلغاؤه". Must wait for driver return (DELIVERED), then cancel.
   - Invalid transitions rejected by service layer
 - **Touches**: `core/services/order_service.py`
-- **Status**: `Not started`
+- **Impl**: Status transitions enforced by `OrderService` (service layer). Controller delegates via `complete_payment()` and `cancel_order()`.
+- **Status**: `Done`
 
 ### 7. Cancel Order (Manager Only)
 
@@ -137,7 +143,8 @@ Handle the **full order flow** end-to-end: creation → save → print → statu
   - Cannot cancel completed orders
   - Audit log entry created
 - **Touches**: `core/services/order_service.py`, `ui/components/pin_dialog.py`
-- **Status**: `Not started`
+- **Impl**: `order_controller.py` → `cancel_order()` with manager PIN + table state cleanup
+- **Status**: `Done`
 
 ### 8. Invoice Number Management
 
@@ -148,7 +155,8 @@ Handle the **full order flow** end-to-end: creation → save → print → statu
   - Race-safe with two concurrent cashiers: use atomic `UPDATE shifts SET next_invoice_no = next_invoice_no + 1 WHERE id = ? RETURNING next_invoice_no` (not SELECT then UPDATE)
   - Format: plain integer (1, 2, 3... not padded)
 - **Touches**: `data/repositories/order_repository.py`, `core/services/financial_service.py`
-- **Status**: `Not started`
+- **Impl**: `invoice_manager.py` → race-safe via `FinancialService.get_next_invoice_number()` atomic SQL
+- **Status**: `Done`
 
 ---
 
