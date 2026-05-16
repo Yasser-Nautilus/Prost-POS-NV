@@ -68,7 +68,7 @@ Centralize **all system configuration and constants** — no business logic, jus
   - Future: Admin page in the app to edit these values via UI
   - Theme colors are loaded at startup and applied via Qt StyleSheet
   - Receipt templates read `restaurant.name_ar`, `receipt_footer`, etc.
-- **Status**: `To Review`
+- **Status**: `Done`
 
 ### 2. General Settings (`config.py`)
 
@@ -79,7 +79,7 @@ Centralize **all system configuration and constants** — no business logic, jus
   - `ENVIRONMENT` = "dev" | "prod"
   - `DEBUG` = True/False
   - `LANGUAGE` = "ar" (Arabic primary)
-- **Status**: `To Review`
+- **Status**: `Done`
 
 ### 3. Printer Configuration (`printers.json`)
 
@@ -95,7 +95,7 @@ Centralize **all system configuration and constants** — no business logic, jus
     ```
   - Loaded at app startup by PrinterManager
   - Editable without code changes
-- **Status**: `To Review`
+- **Status**: `Done`
 
 ### 4. Business Rules Configuration
 
@@ -112,7 +112,7 @@ Centralize **all system configuration and constants** — no business logic, jus
   - `TAKEAWAY_AUTO_COMPLETE_MINUTES` = 20 (visual highlight timer)
   - `TRACKING_REFRESH_SECONDS` = 10
 - **Why**: Zones are now in the database (manager-managed), not in config.
-- **Status**: `To Review`
+- **Status**: `Done`
 
 ### 5. Paths & Files
 
@@ -124,7 +124,7 @@ Centralize **all system configuration and constants** — no business logic, jus
   - `RESTAURANT_CONFIG_PATH` = "./config/restaurant.json"
   - `FONTS_PATH` = "./assets/fonts/"
   - `BRANDING_PATH` = "./assets/branding/"
-- **Status**: `To Review`
+- **Status**: `Done`
 
 ---
 

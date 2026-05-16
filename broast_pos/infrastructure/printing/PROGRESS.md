@@ -25,7 +25,7 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   - Failure handling: log error + return `False` — **never raise, never block**
   - Status indicator: expose `is_printer_available(key)` for UI warning badge
 - **Why**: The system is useless without printing. The kitchen never sees a screen — they rely entirely on printed tickets. If the printer fails, the cashier must still be able to create orders (log the failure, retry later).
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 2. ESC/POS Adapter (`escpos_printer.py`)
 
@@ -40,7 +40,7 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   - Arabic text encoding support (CP864 or UTF-8 depending on printer model)
   - Auto-reconnect on connection loss
 - **Why**: Different printers connect differently. USB is common for cashier printers, Network/TCP is common for kitchen printers located across the restaurant.
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 3. Receipt Templates (`receipt_templates.py`)
 
@@ -50,7 +50,7 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   #### 3a. Customer Receipt — Dine-In
   ```
   ================================
-          بروستش / Prostsir
+       {name_ar} / {name_en}      ← from restaurant.json
                 -
   Dine IN                Station: {station}
   Cashier: {cashier}      Table: {table}
@@ -71,14 +71,15 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   Paid:              {paid}
   Change:            {change}
   --------------------------------
-       بروستش في القرمشة سبيهزرقن
+  {slogan_ar}                      ← from restaurant.json
+  {receipt_footer}                 ← from restaurant.json
   - - - - - - - - ✂ - - - - - - -
   ```
 
   #### 3b. Customer Receipt — Delivery
   ```
   ================================
-          بروستش / Prostsir
+       {name_ar} / {name_en}      ← from restaurant.json
                 -
   Delivery               Station: {station}
   Cashier: {cashier}     Order: #{order_number}
@@ -105,7 +106,8 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   Paid:              {paid}
   Change:            {change}
   --------------------------------
-       بروستش في القرمشة سبيهزرقن
+  {slogan_ar}                      ← from restaurant.json
+  {receipt_footer}                 ← from restaurant.json
   - - - - - - - - ✂ - - - - - - -
   ```
 
@@ -161,12 +163,8 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   Cashier: {cashier}
   Print On: {date}      {time}
   --------------------------------
-   إضافة:
-    {qty}  |  {item_name}
-            ملاحظة: {note}          ← if note exists
-    {qty}  |  {item_name}
-
-  حذف:
+    {qty}  |  {item_name}         ← each change printed directly
+            ملاحظة: {note}        ← if note exists
     {qty}  |  {item_name}
   --------------------------------
   ================================
@@ -174,12 +172,12 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   ```
   - Header: "تابع" (follow-up), NOT "تعديل" (modification)
   - Shows ONLY the changes — not the full original order
-  - "إضافة" section: items added to the order
-  - "حذف" section: items removed from the order (required manager PIN)
+  - **No fixed section headers** (no "إضافة" / "حذف" labels) — items printed directly as they are
+  - If only additions: print only the added items
+  - If only removals: print only the removed items
+  - If both: print all changes in order, no grouping headers
   - **NO prices** — same as regular kitchen ticket
-  - Kitchen sees: "this is a follow-up for Order #3, add these items, remove those"
-  - If only additions: "حذف" section is omitted
-  - If only removals: "إضافة" section is omitted
+  - Kitchen sees: "this is a follow-up for Order #3" with the actual changes listed
 
   #### 3f. End-of-Day Sales Report (matches receipt photo)
   ```
@@ -243,9 +241,9 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   #{inv}  |  {total}    | كاش      | {total}
   #{inv}  |  {total}    | اونلاين   | 0.00
   --------------------------------
-  Cash Collected:         {cash_collected}
-  Delivery Fees Earned:   {fees}
-  Amount to Hand Over:    {cash_collected}
+  اجمالي الكاش:           {cash_collected}
+  عمولة التوصيل:          {fees}
+  المبلغ المطلوب تسليمه:   {cash_collected}
   ================================
   - - - - - - - - ✂ - - - - - - -
   ```
@@ -261,7 +259,7 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   {name}     |  {n}  |  {n}   | {fees}
   {name}     |  {n}  |  {n}   | {fees}
   --------------------------------
-  Total Driver Expenses:  {total_fees}
+  اجمالي عمولات المناديب:  {total_fees}
   ================================
   - - - - - - - - ✂ - - - - - - -
   ```
@@ -275,7 +273,7 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
 - **No modifiers system** — each product variation is a separate product in the menu
 - **Notes per item**: shown as `ملاحظة: {text}` below the item line if present
 
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 4. Silent Printing Flow
 
@@ -292,7 +290,7 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   - **No Qt print dialog ever** — all printing goes directly to ESC/POS
   - If printer unavailable: log warning, show small badge icon in UI, continue
 - **Why**: The old system opened a Qt print dialog for every single print — this is completely unusable in a busy shift. Silent printing is a hard requirement.
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ### 5. Printer Configuration (`printer_config.py`)
 
@@ -309,7 +307,7 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   - Load at app startup
   - Future: setup screen in admin panel to configure without editing files
 - **Why**: Printer addresses change when hardware is swapped. The config must be editable without touching code.
-- **Status**: `Not started`
+- **Status**: `To Review`
 
 ---
 
@@ -364,12 +362,14 @@ All monetary values formatted to 2 decimal places. Change never negative.
 - **3 payment methods only**: كاش / فيزا / اونلاين
 - **Visa NOT available for delivery**
 - **Online delivery**: driver collects nothing (everything prepaid including delivery fee)
-- **White-label receipts**: all branding from `restaurant.json`:
+- **No hardcoded branded text** — ALL branding loaded from `restaurant.json`:
   - `{logo}` → `restaurant.logo_path`
-  - `{restaurant_name}` → `restaurant.name_ar`
-  - `{slogan}` → `restaurant.slogan_ar`
+  - `{restaurant_name}` → `restaurant.name_ar` + `restaurant.name_en`
+  - `{slogan}` → `restaurant.slogan_ar` (e.g., "بروستش في القرمشة مبيهزرش")
   - Receipt footer → `restaurant.receipt_footer`
+  - **Never write Arabic branding strings directly in code**
 - **Cash delivery**: driver collects full amount (food + delivery fee)
+- **Amendment tickets**: no fixed section headers ("إضافة"/"حذف") — changes printed directly
 - Install dependency: `pip install python-escpos`
 
 ## 📌 Order Type Definitions (for template selection)
