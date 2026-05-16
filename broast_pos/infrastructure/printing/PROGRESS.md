@@ -50,7 +50,7 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   #### 3a. Customer Receipt — Dine-In
   ```
   ================================
-          بروستش / Prostsir
+       {name_ar} / {name_en}      ← from restaurant.json
                 -
   Dine IN                Station: {station}
   Cashier: {cashier}      Table: {table}
@@ -71,14 +71,15 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   Paid:              {paid}
   Change:            {change}
   --------------------------------
-بروستش في القرمشة مبيهزرش
+  {slogan_ar}                      ← from restaurant.json
+  {receipt_footer}                 ← from restaurant.json
   - - - - - - - - ✂ - - - - - - -
   ```
 
   #### 3b. Customer Receipt — Delivery
   ```
   ================================
-          بروستش / Prostsir
+       {name_ar} / {name_en}      ← from restaurant.json
                 -
   Delivery               Station: {station}
   Cashier: {cashier}     Order: #{order_number}
@@ -105,8 +106,9 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   Paid:              {paid}
   Change:            {change}
   --------------------------------
-بروستش في القرمشة مبيهزرش  
-- - - - - - - - ✂ - - - - - - -
+  {slogan_ar}                      ← from restaurant.json
+  {receipt_footer}                 ← from restaurant.json
+  - - - - - - - - ✂ - - - - - - -
   ```
 
   #### 3c. Customer Receipt — Takeaway
