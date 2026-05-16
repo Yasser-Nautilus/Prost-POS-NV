@@ -241,9 +241,9 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   #{inv}  |  {total}    | كاش      | {total}
   #{inv}  |  {total}    | اونلاين   | 0.00
   --------------------------------
-  Cash Collected:         {cash_collected}
-  Delivery Fees Earned:   {fees}
-  Amount to Hand Over:    {cash_collected}
+  اجمالي الكاش:           {cash_collected}
+  عمولة التوصيل:          {fees}
+  المبلغ المطلوب تسليمه:   {cash_collected}
   ================================
   - - - - - - - - ✂ - - - - - - -
   ```
@@ -259,7 +259,7 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   {name}     |  {n}  |  {n}   | {fees}
   {name}     |  {n}  |  {n}   | {fees}
   --------------------------------
-  Total Driver Expenses:  {total_fees}
+  اجمالي عمولات المناديب:  {total_fees}
   ================================
   - - - - - - - - ✂ - - - - - - -
   ```
