@@ -47,7 +47,7 @@ Handle **all business logic** — rules, validations, workflows. Services are th
   - **Online payment (non-delivery)**: cashier selects اونلاين → order auto-marked as paid, no cash exchange. Optional: cashier can add a note for reference number
   - **Cancellation of delivery in transit**: if order is OUT_FOR_DELIVERY, cancellation is **blocked** with warning "الطلب خارج للتوصيل - لا يمكن إلغاؤه". Must wait for driver return, then cancel.
   - Prices locked at order creation — admin price changes don't affect existing orders
-- **Status**: `To Review`
+- **Status**: `Done`
 
 ### 2. Auth Service (`auth_service.py`)
 
@@ -74,7 +74,7 @@ Handle **all business logic** — rules, validations, workflows. Services are th
   - `view_reports` → MANAGER, ADMIN
   - `manage_users` → ADMIN only
 - **Why**: Two cashiers on separate devices. Session determines which cashier slot → which receipt printer. Manager override = manager walks to cashier's device and types their PIN.
-- **Status**: `To Review`
+- **Status**: `Done`
 
 ### 3. Delivery Service (`delivery_service.py`)
 
@@ -106,7 +106,7 @@ Handle **all business logic** — rules, validations, workflows. Services are th
     - `get_all_drivers_daily_summary(date)` → all drivers with trip count, order count, fees earned
     - `get_driver_daily_summary(driver_id, date)` → single driver detail
 - **Permissions**: Adding drivers = manager. Check-in/out + dispatching = cashier.
-- **Status**: `To Review`
+- **Status**: `Done`
 
 ### 4. Product Service (`product_service.py`)
 
@@ -119,7 +119,7 @@ Handle **all business logic** — rules, validations, workflows. Services are th
   - ~~`get_modifiers_for_product()`~~ — **REMOVED** (no modifiers)
   - Each product variation is a separate entry (e.g., "تشيكن فرايز حار", "تشيكن فرايز عادي")
 - **Why**: Product search is essential at 300+ orders/day. Search must be instant (<100ms).
-- **Status**: `To Review`
+- **Status**: `Done`
 
 ### 5. Customer Service (`customer_service.py`)
 
@@ -147,7 +147,7 @@ Handle **all business logic** — rules, validations, workflows. Services are th
     - Delivery fee comes from zone — cannot be manually changed
     - **Fee source**: always pulled from `customer_addresses.delivery_fee` (stored at address creation), never from the zone directly. This ensures historical consistency.
 - **Why**: Exact phone match is faster and simpler than partial search. Zone-based fixed fees prevent cashier mistakes.
-- **Status**: `To Review`
+- **Status**: `Done`
 
 ### 6. Financial Service (`financial_service.py`)
 
@@ -188,7 +188,7 @@ Handle **all business logic** — rules, validations, workflows. Services are th
     - Calls `financial_repository.get_active_shift()` → returns shift or None
     - If None: raises `ValueError("يجب فتح وردية أولاً")` → blocks order creation
     - If active: returns shift (used by OrderService to get shift_id for the order)
-- **Status**: `To Review`
+- **Status**: `Done`
 
 ### 7. Report Service (`report_service.py`)
 
@@ -212,7 +212,7 @@ Handle **all business logic** — rules, validations, workflows. Services are th
     - `generate_yearly_bestsellers(year)` → top products for the year
   - Data is returned as plain dicts/dataclasses — **NO print logic here**
   - All data is stored permanently — nothing deleted on shift close
-- **Status**: `To Review`
+- **Status**: `Done`
 
 ---
 
