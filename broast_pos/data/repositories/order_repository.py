@@ -133,6 +133,95 @@ class OrderRepository(BaseRepository[Order]):
         return [self._row_to_order_with_items(r) for r in rows]
 
     # ------------------------------------------------------------------
+    # Report query methods (used by ReportService)
+    # ------------------------------------------------------------------
+
+    def get_completed_for_date(self, date_str: str) -> List[Order]:
+        """Non-cancelled orders for a date — alias for get_orders_for_report."""
+        return self.get_orders_for_report(date_str)
+
+    def get_cancelled_for_date(self, date_str: str) -> List[Order]:
+        """Cancelled orders for a specific date (YYYY-MM-DD)."""
+        rows = self._db.fetch_all(
+            """SELECT * FROM orders
+               WHERE DATE(created_at) = ? AND status = 'cancelled'
+               ORDER BY invoice_no""",
+            (date_str,),
+        )
+        return [self._row_to_order_with_items(r) for r in rows]
+
+    def get_product_sales_for_date(self, date_str: str) -> list:
+        """Qty sold per product for a date, sorted by popularity (highest first).
+
+        Returns:
+            [{"product_name": "...", "quantity": 45, "revenue": 1350.0}, ...]
+        """
+        rows = self._db.fetch_all(
+            """SELECT oi.product_name,
+                      SUM(oi.quantity) AS quantity,
+                      COALESCE(SUM(oi.total_price), 0) AS revenue
+               FROM order_items oi
+               JOIN orders o ON o.id = oi.order_id
+               WHERE DATE(o.created_at) = ? AND o.status != 'cancelled'
+               GROUP BY oi.product_name
+               ORDER BY quantity DESC""",
+            (date_str,),
+        )
+        return [
+            {
+                "product_name": r["product_name"],
+                "quantity": r["quantity"],
+                "revenue": r["revenue"],
+            }
+            for r in rows
+        ]
+
+    def get_daily_revenue(self, date_str: str) -> float:
+        """Total revenue for a date (non-cancelled orders)."""
+        row = self._db.fetch_one(
+            """SELECT COALESCE(SUM(total), 0) AS revenue
+               FROM orders
+               WHERE DATE(created_at) = ? AND status != 'cancelled'""",
+            (date_str,),
+        )
+        return row["revenue"] if row else 0.0
+
+    def get_product_sales_for_range(
+        self, start_date: str, end_date: str, limit: int = 20,
+    ) -> list:
+        """Qty sold per product for a date range, sorted by popularity.
+
+        Args:
+            start_date: YYYY-MM-DD inclusive start.
+            end_date: YYYY-MM-DD inclusive end.
+            limit: Max products to return.
+
+        Returns:
+            [{"product_name": "...", "quantity": 320, "revenue": 9600.0}, ...]
+        """
+        rows = self._db.fetch_all(
+            """SELECT oi.product_name,
+                      SUM(oi.quantity) AS quantity,
+                      COALESCE(SUM(oi.total_price), 0) AS revenue
+               FROM order_items oi
+               JOIN orders o ON o.id = oi.order_id
+               WHERE DATE(o.created_at) BETWEEN ? AND ?
+                 AND o.status != 'cancelled'
+               GROUP BY oi.product_name
+               ORDER BY quantity DESC
+               LIMIT ?""",
+            (start_date, end_date, limit),
+        )
+        return [
+            {
+                "product_name": r["product_name"],
+                "quantity": r["quantity"],
+                "revenue": r["revenue"],
+            }
+            for r in rows
+        ]
+
+    # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
 
