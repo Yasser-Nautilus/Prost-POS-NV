@@ -8,7 +8,10 @@ Modules:
     amendment_tracker: Tracks item changes for amendment kitchen tickets.
 """
 
-from broast_pos.features.order_lifecycle.order_controller import OrderController
+from broast_pos.features.order_lifecycle.order_controller import (
+    OrderController,
+    ConfirmResult,
+)
 from broast_pos.features.order_lifecycle.invoice_manager import InvoiceManager
 from broast_pos.features.order_lifecycle.payment_coordinator import (
     PaymentCoordinator,
@@ -18,6 +21,7 @@ from broast_pos.features.order_lifecycle.amendment_tracker import AmendmentTrack
 
 __all__ = [
     "OrderController",
+    "ConfirmResult",
     "InvoiceManager",
     "PaymentCoordinator",
     "PaymentResult",

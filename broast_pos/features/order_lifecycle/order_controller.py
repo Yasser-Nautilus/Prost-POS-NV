@@ -11,7 +11,7 @@ Flow: UI → OrderController → OrderService + PrintTriggers + FinancialService
 from __future__ import annotations
 
 import logging
-from dataclasses import asdict
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from broast_pos.core.models.order import (
@@ -25,8 +25,18 @@ from broast_pos.core.services.order_service import OrderService
 from broast_pos.core.services.financial_service import FinancialService
 from broast_pos.core.services.auth_service import AuthService
 from broast_pos.infrastructure.printing.print_triggers import PrintTriggers
+from broast_pos.features.order_lifecycle.amendment_tracker import AmendmentTracker
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ConfirmResult:
+    """Result of confirm_order() — typed instead of string-encoded."""
+
+    invoice_no: int
+    needs_immediate_payment: bool = False
+    order_id: Optional[int] = None
 
 
 class OrderController:
@@ -54,6 +64,7 @@ class OrderController:
         self._current_order: Optional[Order] = None
         self._parked_orders: List[Order] = []
         self._occupied_tables: Dict[int, str] = {}  # table_no → order_ref
+        self._amendment_tracker = AmendmentTracker()
 
         # Callbacks for UI updates
         self._on_order_changed: Optional[Callable] = None
@@ -160,9 +171,8 @@ class OrderController:
             if self._current_order.id is not None:
                 if not manager_pin:
                     return False, "يتطلب صلاحية مدير"
-                try:
-                    self._auth_svc.verify_pin(manager_pin)
-                except Exception:
+                manager = self._auth_svc.verify_pin(manager_pin)
+                if manager is None:
                     return False, "رمز PIN غير صحيح"
 
             self._current_order.items.pop(index)
@@ -250,11 +260,19 @@ class OrderController:
     # 3. Validate & Save ("Confirm" button)
     # ------------------------------------------------------------------
 
-    def confirm_order(self, cashier_name: str = "") -> Tuple[bool, str]:
+    def confirm_order(
+        self,
+        cashier_id: int,
+        cashier_name: str = "",
+    ) -> Tuple[bool, Any]:
         """Validate, save, and print kitchen ticket.
 
+        Args:
+            cashier_id: ID of the logged-in cashier.
+            cashier_name: Display name of the cashier.
+
         Returns:
-            (success, message_or_invoice_no)
+            (success, ConfirmResult or error message)
         """
         if self._current_order is None:
             return False, "لا يوجد طلب حالي"
@@ -275,19 +293,11 @@ class OrderController:
             if not order.customer_phone:
                 return False, "يجب إدخال رقم الهاتف"
 
-        # Get invoice number
-        try:
-            invoice_no = self._financial_svc.get_next_invoice_number()
-        except Exception as exc:
-            return False, f"فشل في إنشاء رقم الفاتورة: {exc}"
-
-        order.invoice_no = invoice_no
-        order.cashier_name = cashier_name
         self._recalc_totals()
 
-        # Save via service
+        # Save via service (service handles invoice assignment internally)
         try:
-            saved = self._order_svc.create_order(order)
+            saved = self._order_svc.create_order(order, cashier_id, cashier_name)
         except Exception as exc:
             logger.error("Order save failed: %s", exc)
             return False, f"فشل في حفظ الطلب: {exc}"
@@ -317,15 +327,13 @@ class OrderController:
         self._current_order = None
         self._notify_order_changed()
 
-        logger.info("Order #%d confirmed and saved", invoice_no)
+        logger.info("Order #%d confirmed and saved", saved.invoice_no)
 
-        # Return info about what UI should do next
-        needs_payment = saved.order_type == OrderType.TAKEAWAY
-        msg = f"#{invoice_no}"
-        if needs_payment:
-            msg += "|NEEDS_PAYMENT"
-
-        return True, msg
+        return True, ConfirmResult(
+            invoice_no=saved.invoice_no,
+            needs_immediate_payment=(saved.order_type == OrderType.TAKEAWAY),
+            order_id=saved.id,
+        )
 
     # ------------------------------------------------------------------
     # 4. Payment Flow
@@ -374,27 +382,34 @@ class OrderController:
     # ------------------------------------------------------------------
 
     def load_order(self, order_id: int) -> Optional[Order]:
-        """Load a saved order for editing/payment."""
+        """Load a saved order for editing/payment.
+
+        Also takes a snapshot for amendment tracking.
+        """
         order = self._order_svc.get_order_by_id(order_id)
         if order:
             self._current_order = order
+            self._amendment_tracker.snapshot(order.items)
             self._notify_order_changed()
         return order
 
     def load_order_by_table(self, table_number: int) -> Optional[Order]:
-        """Load an active dine-in order by table number."""
+        """Load an active dine-in order by table number.
+
+        Also takes a snapshot for amendment tracking.
+        """
         order = self._order_svc.get_order_by_table(table_number)
         if order:
             self._current_order = order
+            self._amendment_tracker.snapshot(order.items)
             self._notify_order_changed()
         return order
 
-    def save_amendment(self, changes: List[Dict[str, Any]]) -> Tuple[bool, str]:
+    def save_amendment(self, manager_pin: Optional[str] = None) -> Tuple[bool, str]:
         """Save amendments to an existing order and print amendment ticket.
 
-        Args:
-            changes: List of change dicts with product_name, quantity,
-                     and action type info for the kitchen.
+        Uses the AmendmentTracker to detect added/removed items.
+        Removing items requires manager PIN.
 
         Returns:
             (success, message)
@@ -402,17 +417,44 @@ class OrderController:
         if self._current_order is None or self._current_order.id is None:
             return False, "لا يوجد طلب محفوظ للتعديل"
 
-        self._recalc_totals()
+        # Compute diff from snapshot
+        changes = self._amendment_tracker.diff(self._current_order.items)
+        if not changes:
+            return True, "لا توجد تغييرات"
+
+        # Split into added and removed OrderItems
+        added_items: List[OrderItem] = []
+        removed_items: List[OrderItem] = []
+        for change in changes:
+            item = OrderItem(
+                product_id=0,  # ID resolved by service from name lookup
+                product_name=change["product_name"],
+                unit_price=0,
+                quantity=change["quantity"],
+            )
+            if change["action"] == "added":
+                added_items.append(item)
+            elif change["action"] == "removed":
+                removed_items.append(item)
 
         try:
-            self._order_svc.amend_order(self._current_order)
+            self._order_svc.amend_order(
+                self._current_order.id,
+                added_items,
+                removed_items,
+                manager_pin,
+            )
+        except PermissionError as exc:
+            return False, str(exc)
         except Exception as exc:
             return False, f"فشل في حفظ التعديل: {exc}"
 
-        # Print amendment ticket if there are changes
-        if changes:
-            order_dict = self._order_to_dict(self._current_order)
-            self._print.on_order_amended(order_dict, changes)
+        # Print amendment ticket
+        order_dict = self._order_to_dict(self._current_order)
+        self._print.on_order_amended(order_dict, changes)
+
+        # Clear tracker
+        self._amendment_tracker.clear()
 
         logger.info("Amendment saved for order #%s", self._current_order.invoice_no)
         return True, "تم حفظ التعديل"
@@ -457,22 +499,31 @@ class OrderController:
 
     def apply_discount(
         self,
-        order_id: int,
+        value: float,
+        discount_type: str,
         manager_pin: str,
-        discount_pct: float,
     ) -> Tuple[bool, str]:
-        """Apply percentage discount (requires manager PIN)."""
+        """Apply discount to the current order (requires manager PIN).
+
+        Args:
+            value: Discount amount (flat EGP) or percentage (0-100).
+            discount_type: "flat" or "percent".
+            manager_pin: Manager/admin PIN for authorization.
+        """
+        if self._current_order is None or self._current_order.id is None:
+            return False, "لا يوجد طلب محفوظ"
+
         try:
-            self._order_svc.apply_discount(order_id, manager_pin, discount_pct)
-        except Exception as exc:
+            saved = self._order_svc.apply_discount(
+                self._current_order, value, discount_type, manager_pin
+            )
+            self._current_order = saved
+            self._notify_order_changed()
+        except (PermissionError, ValueError) as exc:
             return False, str(exc)
 
-        # Reload
-        if self._current_order and self._current_order.id == order_id:
-            self._current_order = self._order_svc.get_order_by_id(order_id)
-            self._notify_order_changed()
-
-        return True, f"تم تطبيق خصم {discount_pct}%"
+        label = f"{value}%" if discount_type == "percent" else f"{value} ج.م"
+        return True, f"تم تطبيق خصم {label}"
 
     # ------------------------------------------------------------------
     # 8. Table State
