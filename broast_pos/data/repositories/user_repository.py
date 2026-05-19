@@ -80,6 +80,36 @@ class UserRepository(BaseRepository[User]):
         )
         return [self._row_to_user(r) for r in rows]
 
+    def pin_exists(self, pin_hash: str, exclude_user_id: Optional[int] = None) -> bool:
+        """Check if a PIN hash is already taken by another active user.
+
+        Used for uniqueness validation before saving a new or changed PIN.
+        Excludes ``exclude_user_id`` so a user can keep their own PIN.
+        """
+        if exclude_user_id is not None:
+            row = self._db.fetch_one(
+                """SELECT COUNT(*) AS c FROM users
+                   WHERE pin_hash = ? AND is_active = 1 AND id != ?""",
+                (pin_hash, exclude_user_id),
+            )
+        else:
+            row = self._db.fetch_one(
+                """SELECT COUNT(*) AS c FROM users
+                   WHERE pin_hash = ? AND is_active = 1""",
+                (pin_hash,),
+            )
+        return row["c"] > 0 if row else False
+
+    def get_by_role(self, role: UserRole) -> List[User]:
+        """All active users with a specific role."""
+        rows = self._db.fetch_all(
+            """SELECT * FROM users
+               WHERE role = ? AND is_active = 1
+               ORDER BY display_name""",
+            (role.value,),
+        )
+        return [self._row_to_user(r) for r in rows]
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
