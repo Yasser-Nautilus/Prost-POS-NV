@@ -13,7 +13,7 @@ from __future__ import annotations
 import copy
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from broast_pos.core.models.order import OrderItem
 
@@ -39,9 +39,13 @@ class AmendmentTracker:
         changes = tracker.diff(order.items)  # Get changes for printing
     """
 
+    # Key type: (product_id, notes) — distinguishes same product with
+    # different special instructions (e.g., "chicken fries" vs "chicken fries, no salt").
+    _Key = Tuple[int, str]
+
     def __init__(self) -> None:
-        self._original: Optional[Dict[int, int]] = None
-        self._original_names: Dict[int, str] = {}
+        self._original: Optional[Dict[AmendmentTracker._Key, int]] = None
+        self._original_names: Dict[AmendmentTracker._Key, str] = {}
 
     def snapshot(self, items: List[OrderItem]) -> None:
         """Take a snapshot of the current items before editing.
@@ -52,8 +56,9 @@ class AmendmentTracker:
         self._original = {}
         self._original_names = {}
         for item in items:
-            self._original[item.product_id] = item.quantity
-            self._original_names[item.product_id] = item.product_name
+            key = (item.product_id, item.notes or "")
+            self._original[key] = item.quantity
+            self._original_names[key] = item.product_name
         logger.debug("Amendment snapshot taken: %d items", len(items))
 
     def diff(self, current_items: List[OrderItem]) -> List[Dict[str, object]]:
@@ -71,18 +76,19 @@ class AmendmentTracker:
             return []
 
         changes: List[OrderChange] = []
-        current_map: Dict[int, int] = {}
-        current_names: Dict[int, str] = {}
+        current_map: Dict[AmendmentTracker._Key, int] = {}
+        current_names: Dict[AmendmentTracker._Key, str] = {}
 
         for item in current_items:
-            current_map[item.product_id] = item.quantity
-            current_names[item.product_id] = item.product_name
+            key = (item.product_id, item.notes or "")
+            current_map[key] = item.quantity
+            current_names[key] = item.product_name
 
         # Check for additions and quantity increases
-        for pid, qty in current_map.items():
-            orig_qty = self._original.get(pid, 0)
+        for key, qty in current_map.items():
+            orig_qty = self._original.get(key, 0)
             if qty > orig_qty:
-                name = current_names[pid]
+                name = current_names[key]
                 changes.append(OrderChange(
                     action="added",
                     product_name=name,
@@ -90,10 +96,10 @@ class AmendmentTracker:
                 ))
 
         # Check for removals and quantity decreases
-        for pid, orig_qty in self._original.items():
-            curr_qty = current_map.get(pid, 0)
+        for key, orig_qty in self._original.items():
+            curr_qty = current_map.get(key, 0)
             if curr_qty < orig_qty:
-                name = self._original_names[pid]
+                name = self._original_names[key]
                 changes.append(OrderChange(
                     action="removed",
                     product_name=name,
