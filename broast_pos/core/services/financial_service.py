@@ -72,13 +72,7 @@ class FinancialService:
         if existing is not None:
             raise ValueError("يوجد وردية مفتوحة بالفعل")
 
-        shift = Shift(
-            opened_by=user_id,
-            opened_at=datetime.now().isoformat(),
-            next_invoice_no=1,
-            is_active=True,
-        )
-        saved = self._financial.save(shift)
+        saved = self._financial.open_shift(user_id)
 
         self._audit.log(
             event_type="shift_opened",
@@ -133,7 +127,10 @@ class FinancialService:
             summary_snapshot=snapshot,
         )
 
-        saved = self._financial.save_transfer(transfer)
+        saved = self._financial.save_transfer(
+            shift.id, from_user_id, to_user_id,
+            json.loads(snapshot),
+        )
 
         self._audit.log(
             event_type="shift_transferred",
