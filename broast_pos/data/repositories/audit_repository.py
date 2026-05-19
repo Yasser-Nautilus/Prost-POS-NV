@@ -118,6 +118,38 @@ class AuditRepository(BaseRepository[AuditEntry]):
         )
         return [self._row_to_entry(r) for r in rows]
 
+    def get_logs_by_user(self, user_id: int, limit: int = 50) -> List[AuditEntry]:
+        """Audit trail for a specific user (most recent first)."""
+        rows = self._db.fetch_all(
+            """SELECT * FROM audit_log
+               WHERE user_id = ?
+               ORDER BY timestamp DESC LIMIT ?""",
+            (user_id, limit),
+        )
+        return [self._row_to_entry(r) for r in rows]
+
+    def get_logs_by_event_type(
+        self,
+        event_type: str,
+        date_str: Optional[str] = None,
+    ) -> List[AuditEntry]:
+        """All logs of a specific event type, optionally scoped to a date."""
+        if date_str:
+            rows = self._db.fetch_all(
+                """SELECT * FROM audit_log
+                   WHERE event_type = ? AND DATE(timestamp) = ?
+                   ORDER BY timestamp""",
+                (event_type, date_str),
+            )
+        else:
+            rows = self._db.fetch_all(
+                """SELECT * FROM audit_log
+                   WHERE event_type = ?
+                   ORDER BY timestamp DESC LIMIT 100""",
+                (event_type,),
+            )
+        return [self._row_to_entry(r) for r in rows]
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
