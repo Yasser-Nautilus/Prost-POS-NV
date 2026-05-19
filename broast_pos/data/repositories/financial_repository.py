@@ -32,7 +32,19 @@ class FinancialRepository(BaseRepository[Shift]):
         return self._row_to_shift(row) if row else None
 
     def save(self, entity: Shift) -> Shift:
-        """Not used directly — use open_shift / close_shift instead."""
+        """Persist shift state — updates mutable fields."""
+        self._db.execute(
+            """UPDATE shifts SET
+                   closed_by = ?, closed_at = ?, is_active = ?,
+                   next_invoice_no = ?, summary_printed_at = ?
+               WHERE id = ?""",
+            (
+                entity.closed_by, entity.closed_at,
+                int(entity.is_active), entity.next_invoice_no,
+                entity.summary_printed_at, entity.id,
+            ),
+        )
+        self._db.commit()
         return entity
 
     def delete(self, entity_id: int) -> None:
@@ -141,6 +153,54 @@ class FinancialRepository(BaseRepository[Shift]):
             (date_str,),
         )
         return [self._row_to_transaction(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Aliases (match method names used by FinancialService / ReportService)
+    # ------------------------------------------------------------------
+
+    def save_expense(self, transaction: CashTransaction) -> CashTransaction:
+        """Alias for add_expense — used by FinancialService."""
+        return self.add_expense(transaction)
+
+    def get_expenses(self, shift_id: int) -> List[CashTransaction]:
+        """Alias for get_shift_expenses — used by FinancialService."""
+        return self.get_shift_expenses(shift_id)
+
+    def get_shift_summary(self, shift_id: int) -> ShiftSummary:
+        """Alias for build_shift_summary — used by ReportService."""
+        return self.build_shift_summary(shift_id)
+
+    # ------------------------------------------------------------------
+    # Date-based report queries (used by ReportService)
+    # ------------------------------------------------------------------
+
+    def get_daily_expenses_total(self, date_str: str) -> float:
+        """Sum of all expenses for a date (YYYY-MM-DD)."""
+        row = self._db.fetch_one(
+            """SELECT COALESCE(SUM(amount), 0) AS total
+               FROM cash_transactions
+               WHERE DATE(timestamp) = ?""",
+            (date_str,),
+        )
+        return row["total"] if row else 0.0
+
+    def get_expenses_by_category(
+        self, start_date: str, end_date: str,
+    ) -> Dict[str, float]:
+        """Expense totals grouped by category for a date range.
+
+        Returns:
+            {"مشتريات": 500.0, "صيانة": 200.0, ...}
+        """
+        rows = self._db.fetch_all(
+            """SELECT category, COALESCE(SUM(amount), 0) AS total
+               FROM cash_transactions
+               WHERE DATE(timestamp) BETWEEN ? AND ?
+               GROUP BY category
+               ORDER BY total DESC""",
+            (start_date, end_date),
+        )
+        return {r["category"]: r["total"] for r in rows}
 
     # ------------------------------------------------------------------
     # Reporting queries

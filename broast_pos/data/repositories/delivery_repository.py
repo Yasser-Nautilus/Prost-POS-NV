@@ -230,6 +230,10 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
         )
         return [self._row_to_trip_with_orders(r) for r in rows]
 
+    def get_daily_summary(self, date_str: str) -> List[Dict]:
+        """Alias for get_all_drivers_daily_summary — used by ReportService."""
+        return self.get_all_drivers_daily_summary(date_str)
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
