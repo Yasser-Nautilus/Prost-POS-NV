@@ -120,13 +120,14 @@ class PrintingFlowController:
         self,
         summary_data: Dict[str, Any],
         cashier_slot: int = 1,
+        shift_period: Optional[Dict[str, str]] = None,
     ) -> bool:
         """Print end-of-shift summary receipt.
 
         Triggered manually by manager from Reports view.
         """
         try:
-            self._triggers.on_shift_summary(summary_data, cashier_slot)
+            self._triggers.on_shift_close(summary_data, cashier_slot, shift_period)
             logger.info("Daily summary printed on slot %d", cashier_slot)
             return True
         except Exception as exc:
@@ -147,7 +148,7 @@ class PrintingFlowController:
         Shows cash/online breakdown per order and amount to hand over.
         """
         try:
-            self._triggers.on_trip_settled(settlement_data, cashier_slot)
+            self._triggers.on_driver_settled(settlement_data, cashier_slot)
             logger.info("Settlement receipt printed on slot %d", cashier_slot)
             return True
         except Exception as exc:
@@ -165,15 +166,14 @@ class PrintingFlowController:
             Dict mapping printer names to their online status.
         """
         status = {}
-        try:
-            printers = self._manager.get_all_printers()
-            for name, printer in printers.items():
-                online = printer.is_connected()
+        for name in ["kitchen", "cashier_1", "cashier_2"]:
+            try:
+                online = self._manager.is_printer_available(name)
                 status[name] = online
                 if not online:
                     logger.warning("Printer '%s' is offline", name)
-        except Exception:
-            pass
+            except Exception:
+                status[name] = False
         return status
 
     @property
