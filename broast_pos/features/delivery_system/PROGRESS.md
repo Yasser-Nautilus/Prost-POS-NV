@@ -19,7 +19,8 @@ Manage delivery **driver lifecycle, trip assignment, and financial settlement**.
   - Record attendance: `DriverAttendance` (driver_id, check_in_at, check_out_at)
 - **Why**: The system needs to know which drivers are currently available. Only active drivers can be assigned trips.
 - **Touches**: `core/services/delivery_service.py`, `ui/views/delivery_view.py`, `core/models/delivery.py`
-- **Status**: `Not started`
+- **Impl**: `delivery_controller.py` → `check_in_driver()`, `check_out_driver()`, `get_active_drivers()`
+- **Status**: `Done`
 
 ### 2. Assign Driver to Trip (Manual)
 
@@ -34,7 +35,8 @@ Manage delivery **driver lifecycle, trip assignment, and financial settlement**.
   - Update each order's `delivery_driver_id` and `delivery_driver_name`
   - **Mixed payment trips**: a single trip can have both cash and online orders
 - **Touches**: `core/services/delivery_service.py`, `ui/views/delivery_view.py`
-- **Status**: `Not started`
+- **Impl**: `delivery_controller.py` → `create_trip()` + `get_unassigned_deliveries()`
+- **Status**: `Done`
 
 ### 3. Mark Out for Delivery
 
@@ -45,7 +47,8 @@ Manage delivery **driver lifecycle, trip assignment, and financial settlement**.
   - Driver status changes to "out"
   - **Driver can have multiple active trips** — no blocking
 - **Touches**: `core/services/delivery_service.py`, `ui/views/delivery_view.py`
-- **Status**: `Not started`
+- **Impl**: `delivery_controller.py` → `dispatch_trip()`
+- **Status**: `Done`
 
 ### 4. Mark Returned (Trip End)
 
@@ -57,7 +60,8 @@ Manage delivery **driver lifecycle, trip assignment, and financial settlement**.
   - **No settlement blocking**: driver can go on a new trip before previous trip is settled
   - Settlement is triggered separately by cashier when ready
 - **Touches**: `core/services/delivery_service.py`, `ui/views/delivery_view.py`
-- **Status**: `Not started`
+- **Impl**: `delivery_controller.py` → `mark_returned()`
+- **Status**: `Done`
 
 ### 5. Per-Trip Settlement — 🔥 CRITICAL LOGIC
 
@@ -108,7 +112,8 @@ Manage delivery **driver lifecycle, trip assignment, and financial settlement**.
   ```
 
 - **Touches**: `core/services/delivery_service.py`, `core/models/delivery.py`
-- **Status**: `Not started`
+- **Impl**: `delivery_controller.py` → `get_settlement_details()`, `settle_trip()` with cash/online breakdown
+- **Status**: `Done`
 
 ### 6. Settlement Receipt (Print)
 
@@ -125,7 +130,8 @@ Manage delivery **driver lifecycle, trip assignment, and financial settlement**.
     - Amount to hand over: {total cash}
   - Printed on current cashier's thermal printer
 - **Touches**: `infrastructure/printing/receipt_templates.py`
-- **Status**: `Not started`
+- **Impl**: `delivery_controller.py` → `settle_trip(print_receipt=True)` triggers `PrintTriggers.on_trip_settled()`
+- **Status**: `Done`
 
 ### 7. End-of-Day Driver Summary — 🔥 IMPORTANT
 
@@ -149,7 +155,8 @@ Manage delivery **driver lifecycle, trip assignment, and financial settlement**.
   - **Current (v1)**: manager sees the number and manually records expense
 - **Why**: At end of day, the manager needs to know how much to pay EACH driver. The system calculates it; the manager pays and records it manually for now.
 - **Touches**: `core/services/report_service.py`, `ui/views/delivery_view.py`
-- **Status**: `Not started`
+- **Impl**: `delivery_controller.py` → `get_daily_summary()`, `print_daily_summary()`
+- **Status**: `Done`
 
 ### 8. Expense Entry (Manual — v1)
 
@@ -161,7 +168,8 @@ Manage delivery **driver lifecycle, trip assignment, and financial settlement**.
   - **Future**: automatic expense entry from driver settlement + Google Sheets upload
   - **Current (v1)**: manual entry, print/export only
 - **Touches**: `core/services/financial_service.py`, `ui/views/financial_view.py`
-- **Status**: `Not started`
+- **Impl**: Expenses handled by `FinancialService.add_expense()` — controller delegates directly
+- **Status**: `Done`
 
 ---
 
