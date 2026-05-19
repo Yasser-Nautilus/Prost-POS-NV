@@ -18,7 +18,8 @@ Provide **accurate, reproducible financial summaries** for daily operations. The
   - Include grand total: total order count, total revenue
 - **Why**: This is the core data for the daily summary receipt. Must be 100% accurate — any discrepancy means financial trust is broken.
 - **Touches**: `core/services/report_service.py`, `data/repositories/order_repository.py`
-- **Status**: `Not started`
+- **Impl**: `reports_controller.py` → `get_sales_by_type()`, `get_payment_breakdown()`, `get_bestsellers()`, `get_cancelled_orders()`
+- **Status**: `To Review`
 
 ### 2. Daily Summary Generation
 
