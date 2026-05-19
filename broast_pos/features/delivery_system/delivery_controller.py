@@ -229,16 +229,19 @@ class DeliveryController:
         Returns:
             (success, message)
         """
+        # Capture details BEFORE settling — data may be stale after
+        settlement_details = None
+        if print_receipt:
+            settlement_details = self.get_settlement_details(trip_id)
+
         try:
             trip = self._delivery_svc.settle_trip(trip_id)
         except Exception as exc:
             return False, str(exc)
 
         # Print settlement receipt if requested
-        if print_receipt:
-            details = self.get_settlement_details(trip_id)
-            if details:
-                self._print.on_trip_settled(details, self._cashier_slot)
+        if print_receipt and settlement_details:
+            self._print.on_driver_settled(settlement_details, self._cashier_slot)
 
         self._notify_trips()
         return True, "تم تسوية الرحلة"
@@ -246,7 +249,7 @@ class DeliveryController:
     def get_unsettled_trips(self, driver_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Get all returned but unsettled trips."""
         try:
-            if driver_id:
+            if driver_id is not None:
                 trips = self._delivery_svc.get_unsettled_trips(driver_id)
             else:
                 # Get all active drivers' unsettled trips
