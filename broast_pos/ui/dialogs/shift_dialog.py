@@ -67,6 +67,7 @@ class ShiftDialog(QDialog):
         user_name: str = "",
         on_add_expense: Optional[Callable] = None,
         on_close_shift: Optional[Callable] = None,
+        on_print_summary: Optional[Callable] = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
@@ -75,6 +76,7 @@ class ShiftDialog(QDialog):
         self._user_name = user_name
         self._on_add_expense = on_add_expense
         self._on_close_shift = on_close_shift
+        self._on_print_summary = on_print_summary
 
         self._active_shift: Optional[Shift] = None
         self._summary: Optional[ShiftSummary] = None
@@ -485,7 +487,8 @@ class ShiftDialog(QDialog):
         try:
             self._financial.mark_summary_printed(self._active_shift.id)
             logger.info("Summary marked as printed for shift #%d", self._active_shift.id)
-            # TODO: trigger actual print via PrinterManager
+            if self._on_print_summary:
+                self._on_print_summary(self._active_shift.id)
             self._refresh()
         except Exception as exc:
             logger.warning("Print summary failed: %s", exc)
