@@ -122,7 +122,6 @@ CREATE TABLE IF NOT EXISTS orders (
     -- Invoice
     invoice_no        INTEGER NOT NULL,
     shift_id          INTEGER NOT NULL REFERENCES shifts(id),
-    UNIQUE(invoice_no, shift_id),                          -- unique per shift
 
     -- Type & status
     order_type        TEXT    NOT NULL CHECK (order_type IN ('dine_in', 'takeaway', 'delivery', 'pickup')),
@@ -169,7 +168,10 @@ CREATE TABLE IF NOT EXISTS orders (
 
     -- Timestamps
     created_at        TEXT    NOT NULL DEFAULT (datetime('now')),
-    updated_at        TEXT    NOT NULL DEFAULT (datetime('now'))
+    updated_at        TEXT    NOT NULL DEFAULT (datetime('now')),
+
+    -- Table constraints
+    UNIQUE(invoice_no, shift_id)                           -- unique per shift
 );
 
 

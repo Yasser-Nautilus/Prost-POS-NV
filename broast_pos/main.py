@@ -21,13 +21,16 @@ from PyQt6.QtWidgets import QApplication
 from broast_pos.config.config import get_app_name
 from broast_pos.core.models.user import User
 from broast_pos.core.services.auth_service import AuthService
+from broast_pos.core.services.product_service import ProductService
 from broast_pos.data.database.connection import DatabaseConnection
 from broast_pos.data.database.migrations import initialise_database
 from broast_pos.data.database.seed import seed_database
+from broast_pos.data.repositories.product_repository import ProductRepository
 from broast_pos.data.repositories.user_repository import UserRepository
 from broast_pos.ui.styles.theme import apply_theme
+from broast_pos.ui.views.pos_view import PosView
 from broast_pos.ui.windows.login_window import LoginWindow
-from broast_pos.ui.windows.main_window import MainWindow
+from broast_pos.ui.windows.main_window import MainWindow, NavPage
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +50,13 @@ class AppController:
     Owns both windows and handles the swap on login/logout.
     """
 
-    def __init__(self, auth_service: AuthService) -> None:
+    def __init__(
+        self,
+        auth_service: AuthService,
+        product_service: ProductService,
+    ) -> None:
         self._auth = auth_service
+        self._product_svc = product_service
         self._login_window = LoginWindow(auth_service)
         self._main_window: Optional[MainWindow] = None
 
@@ -73,6 +81,16 @@ class AppController:
         # Create a fresh main window for this session
         self._main_window = MainWindow(user)
         self._main_window.logout_requested.connect(self._on_logout)
+
+        # Inject the POS view (replaces the placeholder)
+        pos_view = PosView(
+            product_service=self._product_svc,
+            user_id=user.id or 0,
+            user_name=user.display_name or user.username,
+            cashier_slot=user.cashier_slot or 1,
+        )
+        self._main_window.set_view(NavPage.POS, pos_view)
+
         self._main_window.show()
 
     def _on_logout(self) -> None:
@@ -110,7 +128,9 @@ def main() -> int:
     # 2. Services
     # ------------------------------------------------------------------
     user_repo = UserRepository(db)
+    product_repo = ProductRepository(db)
     auth_service = AuthService(user_repo)
+    product_service = ProductService(product_repo)
 
     # ------------------------------------------------------------------
     # 3. Qt Application
@@ -124,7 +144,7 @@ def main() -> int:
     # ------------------------------------------------------------------
     # 4. Window lifecycle controller
     # ------------------------------------------------------------------
-    controller = AppController(auth_service)
+    controller = AppController(auth_service, product_service)
     controller.start()
 
     logger.info("Application ready — showing login window")
