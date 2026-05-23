@@ -41,10 +41,14 @@ from broast_pos.features.order_lifecycle.order_controller import (
 from broast_pos.infrastructure.printing.print_triggers import PrintTriggers
 from broast_pos.infrastructure.printing.printer_manager import PrinterManager
 from broast_pos.ui.dialogs.payment_dialog import PaymentDialog
+from broast_pos.ui.dialogs.shift_dialog import ShiftDialog
+from broast_pos.ui.dialogs.expense_dialog import ExpenseDialog
+from broast_pos.ui.dialogs.pin_dialog import PinDialog
 from broast_pos.ui.styles.theme import apply_theme
 from broast_pos.ui.views.pos_view import PosView
 from broast_pos.ui.windows.login_window import LoginWindow
 from broast_pos.ui.windows.main_window import MainWindow, NavPage
+from PyQt6.QtWidgets import QApplication, QMessageBox, QDialog
 
 logger = logging.getLogger(__name__)
 
@@ -72,12 +76,14 @@ class AppController:
         order_service: OrderService,
         financial_service: FinancialService,
         print_triggers: PrintTriggers,
+        printer_manager: PrinterManager,
     ) -> None:
         self._auth = auth_service
         self._product_svc = product_service
         self._order_svc = order_service
         self._financial_svc = financial_service
         self._print_triggers = print_triggers
+        self._printer_mgr = printer_manager
 
         self._login_window = LoginWindow(auth_service)
         self._main_window: Optional[MainWindow] = None
@@ -129,7 +135,19 @@ class AppController:
         # Wire confirm flow: PosView → AppController → OrderController
         self._pos_view.order_confirmed.connect(self._on_order_confirmed)
 
+        # Wire shift click in header
+        self._main_window.shift_clicked.connect(self._show_shift_dialog)
+
+        # Update initial shift badge
+        self._update_shift_badge()
+
         self._main_window.show()
+
+        # If no active shift, auto-prompt ShiftDialog
+        try:
+            self._financial_svc.ensure_shift_active()
+        except ValueError:
+            self._show_shift_dialog(auto_prompt=True)
 
     def _on_logout(self) -> None:
         """Logout requested → destroy main window, show login."""
@@ -223,6 +241,109 @@ class AppController:
         dialog.payment_confirmed.connect(on_payment)
         dialog.exec()
 
+    def _update_shift_badge(self) -> None:
+        """Fetch current active shift and update header badge."""
+        if not self._main_window:
+            return
+        try:
+            active_shift = self._financial_svc.ensure_shift_active()
+            self._main_window.update_shift_status(active=True, shift_id=active_shift.id)
+        except ValueError:
+            self._main_window.update_shift_status(active=False)
+
+    def _show_shift_dialog(self, auto_prompt: bool = False) -> None:
+        """Open the shift management dialog."""
+        if not self._main_window or not self._current_user:
+            return
+
+        user = self._current_user
+
+        def on_add_expense() -> None:
+            dialog = ExpenseDialog(self._main_window)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                amount, category, description = dialog.get_data()
+                try:
+                    active_shift = self._financial_svc.ensure_shift_active()
+                    self._financial_svc.add_expense(
+                        shift_id=active_shift.id,
+                        amount=amount,
+                        description=description,
+                        category=category,
+                        user_id=user.id or 0,
+                    )
+                    logger.info("Expense of %s added successfully", amount)
+                except Exception as exc:
+                    self._show_error(str(exc))
+
+        def on_close_shift() -> None:
+            try:
+                active_shift = self._financial_svc.ensure_shift_active()
+            except ValueError:
+                self._show_error("لا توجد وردية مفتوحة لإغلاقها")
+                return
+
+            pin_val = None
+            def on_pin_verified(raw_pin: str) -> None:
+                nonlocal pin_val
+                pin_val = raw_pin
+
+            pin_dialog = PinDialog(
+                title="أدخل PIN المدير لإغلاق الوردية",
+                verify_fn=self._auth.verify_pin,
+                parent=self._main_window,
+            )
+            pin_dialog.pin_verified.connect(on_pin_verified)
+            if pin_dialog.exec() == QDialog.DialogCode.Accepted and pin_val is not None:
+                try:
+                    self._financial_svc.close_shift(active_shift.id, pin_val)
+                    self._update_shift_badge()
+                    self._show_info("تم إغلاق الوردية بنجاح")
+                except Exception as exc:
+                    self._show_error(str(exc))
+
+        def on_print_summary(shift_id: int) -> None:
+            try:
+                summary = self._financial_svc.get_shift_summary(shift_id)
+                report = {
+                    "shift_id": shift_id,
+                    "total_sales": summary.total_sales,
+                    "total_expenses": summary.total_expenses,
+                    "pending_delivery": summary.pending_delivery,
+                    "pending_dinein": summary.pending_dinein,
+                    "pending_kitchen": summary.pending_kitchen,
+                    "expected_cash": summary.expected_cash,
+                    "order_breakdown": summary.order_breakdown,
+                }
+                slot = user.cashier_slot or 1
+                self._printer_mgr.print_shift_summary(report, cashier_slot=slot)
+            except Exception as exc:
+                self._show_error(f"فشلت عملية الطباعة: {exc}")
+
+        dialog = ShiftDialog(
+            financial_service=self._financial_svc,
+            user_id=user.id or 0,
+            user_name=user.display_name or user.username,
+            on_add_expense=on_add_expense,
+            on_close_shift=on_close_shift,
+            on_print_summary=on_print_summary,
+            parent=self._main_window,
+        )
+
+        def on_state_changed(is_open: bool) -> None:
+            self._update_shift_badge()
+
+        dialog.shift_state_changed.connect(on_state_changed)
+        dialog.exec()
+
+    def _show_info(self, message: str) -> None:
+        """Show a non-blocking info message."""
+        if self._main_window:
+            QMessageBox.information(
+                self._main_window,
+                "نجاح",
+                message,
+            )
+
     def _show_error(self, message: str) -> None:
         """Show a non-blocking error message."""
         if self._main_window:
@@ -300,6 +421,7 @@ def main() -> int:
         order_service=order_service,
         financial_service=financial_service,
         print_triggers=print_triggers,
+        printer_manager=printer_manager,
     )
     controller.start()
 
