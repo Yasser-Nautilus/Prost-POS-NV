@@ -80,7 +80,7 @@ class ProductService:
             raise ValueError("الفئة غير موجودة")
 
         # Check for active products in this category
-        products = self._products.get_by_category(category_id)
+        products = self._products.get_products_by_category(category_id)
         if products:
             raise ValueError(
                 "لا يمكن حذف الفئة — يوجد منتجات مرتبطة بها"
@@ -94,14 +94,14 @@ class ProductService:
 
     def get_products_by_category(self, category_id: int) -> List[Product]:
         """Sorted products for a specific category grid."""
-        return self._products.get_by_category(category_id)
+        return self._products.get_products_by_category(category_id)
 
     def search_products(self, query: str) -> List[Product]:
         """Fast text search across product names."""
         query = query.strip()
         if not query:
             return []
-        return self._products.search(query)
+        return self._products.search_products(query)
 
     def create_product(
         self,
