@@ -48,6 +48,8 @@ from broast_pos.core.models.product import Category, Product
 from broast_pos.core.services.product_service import ProductService
 from broast_pos.ui.components.order_panel import OrderPanel
 from broast_pos.ui.components.product_grid import ProductGrid
+from broast_pos.ui.components.table_grid import TableGrid
+from broast_pos.ui.dialogs.pin_dialog import PinDialog
 from broast_pos.ui.styles.theme import get_color
 
 logger = logging.getLogger(__name__)
@@ -711,10 +713,9 @@ class PosView(QWidget):
             logger.warning("Cannot confirm: no items in order")
             return
 
-        # Basic validation
+        # Dine-in: show table selection grid
         if order.order_type == OrderType.DINE_IN and order.table_no is None:
-            # TODO: show table selection grid
-            logger.warning("Dine-in order requires table number")
+            self._show_table_grid()
             return
 
         logger.info(
@@ -727,6 +728,23 @@ class PosView(QWidget):
 
         # Remove the confirmed order from parked list and create a fresh one
         self._close_order(self._active_order_idx)
+
+    def _show_table_grid(self) -> None:
+        """Show table selection dialog for dine-in orders."""
+        dialog = TableGrid(parent=self)
+
+        def on_table_selected(table_no: int) -> None:
+            order = self._current_order()
+            if order is None:
+                return
+            order.table_no = table_no
+            logger.info("Table %d selected for dine-in order", table_no)
+            # Now that we have a table, proceed with confirm
+            self.order_confirmed.emit(order)
+            self._close_order(self._active_order_idx)
+
+        dialog.table_selected.connect(on_table_selected)
+        dialog.exec()
 
     def _on_cancel_order(self) -> None:
         """Cancel/discard the current in-memory order."""
@@ -743,9 +761,23 @@ class PosView(QWidget):
         logger.info("In-memory order discarded")
 
     def _on_discount(self) -> None:
-        """Discount button pressed — requires manager PIN (future)."""
-        # TODO: Show PIN dialog → unlock discount field
-        logger.info("Discount requested — manager PIN needed (not yet implemented)")
+        """Discount button pressed — show PIN dialog for manager override."""
+        order = self._current_order()
+        if order is None or not order.items:
+            return
+
+        dialog = PinDialog(
+            title="ادخل PIN المدير لتطبيق الخصم",
+            parent=self,
+        )
+
+        def on_pin_verified(raw_pin: str) -> None:
+            logger.info("Manager PIN verified for discount")
+            # TODO: show discount entry dialog
+            # For now, just log — discount dialog is Phase 6+
+
+        dialog.pin_verified.connect(on_pin_verified)
+        dialog.exec()
 
     # ==================================================================
     # Public API (for MainWindow / main.py)
