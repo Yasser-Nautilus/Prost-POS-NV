@@ -26,7 +26,7 @@ Define the **main application windows** — the navigation shell and the login s
   - Logout button: full logout → returns to login window (no fast switch — Option A)
   - Printer status indicator: small badge showing printer health
 - **Why**: Role-based navigation prevents cashiers from accessing management screens. The stacked widget approach means views are created once and swapped instantly — no re-creation lag.
-- **Status**: `Not started`
+- **Status**: `Done`
 
 ### 2. Login Window (`login_window.py`)
 
@@ -38,7 +38,7 @@ Define the **main application windows** — the navigation shell and the login s
   - On logout from main window: show login window again
   - On app start: always show login window first
 - **Why**: The window is a container only — all login UI logic (avatar tiles, PIN numpad, validation) lives in `login_view.py`. This separation keeps window management clean.
-- **Status**: `Not started`
+- **Status**: `Done`
 
 ---
 
