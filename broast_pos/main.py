@@ -5,28 +5,42 @@ Startup sequence:
     1. Configure logging
     2. Load config (restaurant.json)
     3. Initialise database + run migrations + seed if empty
-    4. Create service instances
+    4. Create service instances (order, financial, auth, product)
     5. Create QApplication, apply theme
     6. Show login window → on login → show main window
+    7. Wire order confirm flow end-to-end
 """
 
 from __future__ import annotations
 
 import logging
 import sys
-from typing import Optional
+from typing import Any, Optional
 
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from broast_pos.config.config import get_app_name
+from broast_pos.core.models.order import Order, OrderType
 from broast_pos.core.models.user import User
 from broast_pos.core.services.auth_service import AuthService
+from broast_pos.core.services.financial_service import FinancialService
+from broast_pos.core.services.order_service import OrderService
 from broast_pos.core.services.product_service import ProductService
 from broast_pos.data.database.connection import DatabaseConnection
 from broast_pos.data.database.migrations import initialise_database
 from broast_pos.data.database.seed import seed_database
+from broast_pos.data.repositories.audit_repository import AuditRepository
+from broast_pos.data.repositories.order_repository import OrderRepository
 from broast_pos.data.repositories.product_repository import ProductRepository
 from broast_pos.data.repositories.user_repository import UserRepository
+from broast_pos.data.repositories.financial_repository import FinancialRepository
+from broast_pos.features.order_lifecycle.order_controller import (
+    ConfirmResult,
+    OrderController,
+)
+from broast_pos.infrastructure.printing.print_triggers import PrintTriggers
+from broast_pos.infrastructure.printing.printer_manager import PrinterManager
+from broast_pos.ui.dialogs.payment_dialog import PaymentDialog
 from broast_pos.ui.styles.theme import apply_theme
 from broast_pos.ui.views.pos_view import PosView
 from broast_pos.ui.windows.login_window import LoginWindow
@@ -45,20 +59,31 @@ def _setup_logging() -> None:
 
 
 class AppController:
-    """Manages window lifecycle: login ↔ main window transitions.
+    """Manages window lifecycle and order confirm flow.
 
-    Owns both windows and handles the swap on login/logout.
+    Owns both windows, services, and the order controller.
+    Handles the full confirm → save → print → payment pipeline.
     """
 
     def __init__(
         self,
         auth_service: AuthService,
         product_service: ProductService,
+        order_service: OrderService,
+        financial_service: FinancialService,
+        print_triggers: PrintTriggers,
     ) -> None:
         self._auth = auth_service
         self._product_svc = product_service
+        self._order_svc = order_service
+        self._financial_svc = financial_service
+        self._print_triggers = print_triggers
+
         self._login_window = LoginWindow(auth_service)
         self._main_window: Optional[MainWindow] = None
+        self._pos_view: Optional[PosView] = None
+        self._order_ctrl: Optional[OrderController] = None
+        self._current_user: Optional[User] = None
 
         # Wire login → show main
         self._login_window.login_complete.connect(self._on_login)
@@ -72,24 +97,37 @@ class AppController:
         self._login_window.show()
 
     def _on_login(self, user: User) -> None:
-        """Login succeeded → hide login, create and show main window."""
+        """Login succeeded → hide login, create main window, wire confirm flow."""
         logger.info(
             "→ Logged in: %s (%s)", user.display_name, user.role.value
         )
+        self._current_user = user
         self._login_window.hide()
 
         # Create a fresh main window for this session
         self._main_window = MainWindow(user)
         self._main_window.logout_requested.connect(self._on_logout)
 
+        # Create order controller for this session
+        self._order_ctrl = OrderController(
+            order_service=self._order_svc,
+            financial_service=self._financial_svc,
+            auth_service=self._auth,
+            print_triggers=self._print_triggers,
+            cashier_slot=user.cashier_slot or 1,
+        )
+
         # Inject the POS view (replaces the placeholder)
-        pos_view = PosView(
+        self._pos_view = PosView(
             product_service=self._product_svc,
             user_id=user.id or 0,
             user_name=user.display_name or user.username,
             cashier_slot=user.cashier_slot or 1,
         )
-        self._main_window.set_view(NavPage.POS, pos_view)
+        self._main_window.set_view(NavPage.POS, self._pos_view)
+
+        # Wire confirm flow: PosView → AppController → OrderController
+        self._pos_view.order_confirmed.connect(self._on_order_confirmed)
 
         self._main_window.show()
 
@@ -98,6 +136,10 @@ class AppController:
         logger.info("← Logout — returning to login screen")
         self._auth.logout()
 
+        self._pos_view = None
+        self._order_ctrl = None
+        self._current_user = None
+
         if self._main_window is not None:
             self._main_window.close()
             self._main_window.deleteLater()
@@ -105,6 +147,90 @@ class AppController:
 
         self._login_window.reset()
         self._login_window.show()
+
+    # ------------------------------------------------------------------
+    # Order confirm flow
+    # ------------------------------------------------------------------
+
+    def _on_order_confirmed(self, order: Order) -> None:
+        """Handle the confirmed order from PosView.
+
+        Flow:
+            1. Feed the order to OrderController.confirm_order()
+            2. OrderController saves to DB + prints kitchen ticket
+            3. If takeaway → show PaymentDialog immediately
+            4. On payment → OrderController.complete_payment() → receipt
+        """
+        if self._order_ctrl is None or self._current_user is None:
+            return
+
+        user = self._current_user
+
+        # Transfer order to controller for save
+        self._order_ctrl._current_order = order
+        success, result = self._order_ctrl.confirm_order(
+            cashier_id=user.id or 0,
+            cashier_name=user.display_name or user.username,
+        )
+
+        if not success:
+            logger.warning("Order confirm failed: %s", result)
+            self._show_error(str(result))
+            return
+
+        result: ConfirmResult = result
+        logger.info(
+            "Order saved → invoice #%d (needs_payment=%s)",
+            result.invoice_no,
+            result.needs_immediate_payment,
+        )
+
+        # Takeaway → immediate payment dialog
+        if result.needs_immediate_payment and result.order_id:
+            self._show_payment_dialog(
+                order_id=result.order_id,
+                total=order.total,
+                order_type=order.order_type,
+            )
+
+    def _show_payment_dialog(
+        self,
+        order_id: int,
+        total: float,
+        order_type: OrderType,
+    ) -> None:
+        """Show payment dialog and handle the result."""
+        dialog = PaymentDialog(
+            total=total,
+            order_type=order_type,
+            parent=self._main_window,
+        )
+
+        def on_payment(method: str, amount: float) -> None:
+            if self._order_ctrl is None:
+                return
+            ok, msg = self._order_ctrl.complete_payment(
+                order_id=order_id,
+                payment_method=method,
+                amount_paid=amount,
+            )
+            if ok:
+                logger.info("Payment completed: %s", msg)
+            else:
+                logger.warning("Payment failed: %s", msg)
+                self._show_error(msg)
+
+        dialog.payment_confirmed.connect(on_payment)
+        dialog.exec()
+
+    def _show_error(self, message: str) -> None:
+        """Show a non-blocking error message."""
+        if self._main_window:
+            QMessageBox.warning(
+                self._main_window,
+                "خطأ",
+                message,
+            )
 
 
 def main() -> int:
@@ -125,15 +251,39 @@ def main() -> int:
         return 1
 
     # ------------------------------------------------------------------
-    # 2. Services
+    # 2. Repositories
     # ------------------------------------------------------------------
     user_repo = UserRepository(db)
     product_repo = ProductRepository(db)
-    auth_service = AuthService(user_repo)
-    product_service = ProductService(product_repo)
+    order_repo = OrderRepository(db)
+    audit_repo = AuditRepository(db)
+    financial_repo = FinancialRepository(db)
 
     # ------------------------------------------------------------------
-    # 3. Qt Application
+    # 3. Services
+    # ------------------------------------------------------------------
+    auth_service = AuthService(user_repo)
+    product_service = ProductService(product_repo)
+    financial_service = FinancialService(
+        financial_repo=financial_repo,
+        audit_repo=audit_repo,
+        auth_service=auth_service,
+    )
+    order_service = OrderService(
+        order_repo=order_repo,
+        audit_repo=audit_repo,
+        auth_service=auth_service,
+        financial_service=financial_service,
+    )
+
+    # ------------------------------------------------------------------
+    # 4. Printing infrastructure
+    # ------------------------------------------------------------------
+    printer_manager = PrinterManager()
+    print_triggers = PrintTriggers(printer_manager)
+
+    # ------------------------------------------------------------------
+    # 5. Qt Application
     # ------------------------------------------------------------------
     app = QApplication(sys.argv)
     app.setApplicationName(get_app_name())
@@ -142,9 +292,15 @@ def main() -> int:
     apply_theme(app)
 
     # ------------------------------------------------------------------
-    # 4. Window lifecycle controller
+    # 6. Window lifecycle controller (owns the full confirm flow)
     # ------------------------------------------------------------------
-    controller = AppController(auth_service, product_service)
+    controller = AppController(
+        auth_service=auth_service,
+        product_service=product_service,
+        order_service=order_service,
+        financial_service=financial_service,
+        print_triggers=print_triggers,
+    )
     controller.start()
 
     logger.info("Application ready — showing login window")
