@@ -112,6 +112,7 @@ class MainWindow(QWidget):
     """
 
     logout_requested = pyqtSignal()
+    shift_clicked = pyqtSignal()
 
     # Sidebar dimensions
     SIDEBAR_WIDTH = 200
@@ -227,6 +228,26 @@ class MainWindow(QWidget):
             margin-right: 8px;
         """)
         layout.addWidget(user_label)
+
+        # Shift button/badge
+        self._shift_btn = QPushButton("🔴  الوردية: مغلقة")
+        self._shift_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._shift_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: rgba(220, 53, 69, 0.15);
+                border: 1px solid {get_color('accent_red')};
+                color: {get_color('accent_red')};
+                border-radius: 8px;
+                padding: 4px 12px;
+                font-size: 13px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: rgba(220, 53, 69, 0.25);
+            }}
+        """)
+        self._shift_btn.clicked.connect(self.shift_clicked.emit)
+        layout.addWidget(self._shift_btn)
 
         # Printer status indicator
         self._printer_badge = QLabel("🖨")
@@ -455,3 +476,39 @@ class MainWindow(QWidget):
         else:
             self._printer_badge.setText("🖨⚠")
             self._printer_badge.setToolTip("الطابعة غير متصلة")
+
+    def update_shift_status(self, active: bool, shift_id: Optional[int] = None) -> None:
+        """Update the header shift badge."""
+        if active and shift_id is not None:
+            self._shift_btn.setText(f"🟢  الوردية: #{shift_id}")
+            self._shift_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: rgba(40, 167, 69, 0.15);
+                    border: 1px solid {get_color('accent_green')};
+                    color: {get_color('accent_green')};
+                    border-radius: 8px;
+                    padding: 4px 12px;
+                    font-size: 13px;
+                    font-weight: bold;
+                }}
+                QPushButton:hover {{
+                    background-color: rgba(40, 167, 69, 0.25);
+                }}
+            """)
+        else:
+            self._shift_btn.setText("🔴  الوردية: مغلقة")
+            self._shift_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: rgba(220, 53, 69, 0.15);
+                    border: 1px solid {get_color('accent_red')};
+                    color: {get_color('accent_red')};
+                    border-radius: 8px;
+                    padding: 4px 12px;
+                    font-size: 13px;
+                    font-weight: bold;
+                }}
+                QPushButton:hover {{
+                    background-color: rgba(220, 53, 69, 0.25);
+                }}
+            """)
+
