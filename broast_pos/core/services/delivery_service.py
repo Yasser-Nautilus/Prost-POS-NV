@@ -20,6 +20,7 @@ from broast_pos.core.models.order import OrderStatus, PaymentMethod
 from broast_pos.core.models.user import User
 from broast_pos.data.repositories.delivery_repository import DeliveryRepository
 from broast_pos.data.repositories.order_repository import OrderRepository
+from broast_pos.data.repositories.user_repository import UserRepository
 
 
 class DeliveryService:
@@ -29,9 +30,11 @@ class DeliveryService:
         self,
         delivery_repo: Optional[DeliveryRepository] = None,
         order_repo: Optional[OrderRepository] = None,
+        user_repo: Optional[UserRepository] = None,
     ) -> None:
         self._delivery = delivery_repo or DeliveryRepository()
         self._orders = order_repo or OrderRepository()
+        self._users = user_repo or UserRepository()
 
     # ------------------------------------------------------------------
     # Driver lifecycle
@@ -42,11 +45,7 @@ class DeliveryService:
 
         Creates an attendance record with check_in_at = now.
         """
-        attendance = DriverAttendance(
-            driver_id=driver_id,
-            check_in_at=datetime.now().isoformat(),
-        )
-        return self._delivery.save_attendance(attendance)
+        return self._delivery.check_in(driver_id)
 
     def check_out_driver(self, driver_id: int) -> None:
         """Mark a driver as off-duty.
@@ -70,11 +69,14 @@ class DeliveryService:
     # Trip management
     # ------------------------------------------------------------------
 
+    def get_trip(self, trip_id: int) -> Optional[DeliveryTrip]:
+        """Get a delivery trip by its ID."""
+        return self._delivery.get_by_id(trip_id)
+
     def create_trip(
         self,
-        order_ids: List[int],
         driver_id: int,
-        driver_name: str,
+        order_ids: List[int],
     ) -> DeliveryTrip:
         """Create a new delivery trip with selected orders.
 
@@ -90,13 +92,11 @@ class DeliveryService:
             if order is None:
                 raise ValueError(f"الطلب #{oid} غير موجود")
 
-        trip = DeliveryTrip(
-            driver_id=driver_id,
-            driver_name=driver_name,
-            order_ids=order_ids,
-            created_at=datetime.now().isoformat(),
-        )
-        return self._delivery.save_trip(trip)
+        # Get driver display name
+        driver = self._users.get_by_id(driver_id)
+        driver_name = driver.display_name if driver else f"سائق #{driver_id}"
+
+        return self._delivery.create_trip(driver_id, order_ids, driver_name)
 
     def mark_dispatched(self, trip_id: int) -> DeliveryTrip:
         """Record that the driver has left with the orders.
@@ -112,8 +112,7 @@ class DeliveryService:
         if trip.is_dispatched:
             raise ValueError("الرحلة تم إرسالها بالفعل")
 
-        trip.dispatched_at = datetime.now().isoformat()
-        saved = self._delivery.save_trip(trip)
+        self._delivery.mark_dispatched(trip_id)
 
         # Update order statuses
         for oid in trip.order_ids:
@@ -122,7 +121,8 @@ class DeliveryService:
                 order.status = OrderStatus.OUT_FOR_DELIVERY
                 self._orders.save(order)
 
-        return saved
+        updated_trip = self._delivery.get_trip_by_id(trip_id)
+        return updated_trip or trip
 
     def mark_returned(self, trip_id: int) -> DeliveryTrip:
         """Record that the driver has returned from the trip.
@@ -140,8 +140,7 @@ class DeliveryService:
         if trip.is_returned:
             raise ValueError("الرحلة مسجلة عودة بالفعل")
 
-        trip.returned_at = datetime.now().isoformat()
-        saved = self._delivery.save_trip(trip)
+        self._delivery.mark_returned(trip_id)
 
         # Update order statuses
         for oid in trip.order_ids:
@@ -150,7 +149,8 @@ class DeliveryService:
                 order.status = OrderStatus.DELIVERED
                 self._orders.save(order)
 
-        return saved
+        updated_trip = self._delivery.get_trip_by_id(trip_id)
+        return updated_trip or trip
 
     # ------------------------------------------------------------------
     # Order reassignment (transfer between drivers)
@@ -193,23 +193,24 @@ class DeliveryService:
             old_trip.is_settled = True
             old_trip.cash_collected = 0.0
             old_trip.total_delivery_fees = 0.0
-        self._delivery.save_trip(old_trip)
+            self._delivery.mark_settled(old_trip.id, 0.0, 0.0)
+        else:
+            # We don't have a direct raw save, but let's recalculate and settle/update the trip orders in join table
+            self._delivery._db.execute(
+                "DELETE FROM delivery_trip_orders WHERE trip_id = ? AND order_id = ?",
+                (old_trip.id, order_id)
+            )
+            self._delivery._db.commit()
 
         # Create a new trip for the new driver
-        new_trip = DeliveryTrip(
-            driver_id=new_driver_id,
-            driver_name=new_driver_name,
-            order_ids=[order_id],
-            created_at=datetime.now().isoformat(),
-        )
-        saved_trip = self._delivery.save_trip(new_trip)
+        new_trip = self._delivery.create_trip(new_driver_id, [order_id], new_driver_name)
 
         # Update order's driver info
         order.driver_id = new_driver_id
         order.driver_name = new_driver_name
         self._orders.save(order)
 
-        return saved_trip
+        return new_trip
 
     # ------------------------------------------------------------------
     # Settlement
@@ -241,14 +242,19 @@ class DeliveryService:
             if order:
                 if order.payment_method == PaymentMethod.CASH:
                     cash_total += order.total
-                fees_total += order.delivery_fee
+                fees_total += order.delivery_fee or 0.0
 
-        trip.cash_collected = cash_total
-        trip.total_delivery_fees = fees_total
-        trip.is_settled = True
-        trip.settled_at = datetime.now().isoformat()
+        self._delivery.mark_settled(trip_id, cash_total, fees_total)
 
-        return self._delivery.save_trip(trip)
+        # Update order statuses to COMPLETED
+        for oid in trip.order_ids:
+            order = self._orders.get_by_id(oid)
+            if order and order.status == OrderStatus.DELIVERED:
+                order.status = OrderStatus.COMPLETED
+                self._orders.save(order)
+
+        updated_trip = self._delivery.get_trip_by_id(trip_id)
+        return updated_trip or trip
 
     def get_unsettled_trips(self, driver_id: int) -> List[DeliveryTrip]:
         """Trips that are returned but not yet settled for a driver."""
