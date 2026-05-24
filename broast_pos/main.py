@@ -46,6 +46,7 @@ from broast_pos.ui.dialogs.expense_dialog import ExpenseDialog
 from broast_pos.ui.dialogs.pin_dialog import PinDialog
 from broast_pos.ui.styles.theme import apply_theme
 from broast_pos.ui.views.pos_view import PosView
+from broast_pos.ui.views.tracking_view import TrackingView
 from broast_pos.ui.windows.login_window import LoginWindow
 from broast_pos.ui.windows.main_window import MainWindow, NavPage
 from PyQt6.QtWidgets import QApplication, QMessageBox, QDialog
@@ -132,6 +133,12 @@ class AppController:
         )
         self._main_window.set_view(NavPage.POS, self._pos_view)
 
+        # Inject the Tracking view
+        self._tracking_view = TrackingView(
+            order_service=self._order_svc,
+        )
+        self._main_window.set_view(NavPage.TRACKING, self._tracking_view)
+
         # Wire confirm flow: PosView → AppController → OrderController
         self._pos_view.order_confirmed.connect(self._on_order_confirmed)
 
@@ -155,6 +162,7 @@ class AppController:
         self._auth.logout()
 
         self._pos_view = None
+        self._tracking_view = None
         self._order_ctrl = None
         self._current_user = None
 
