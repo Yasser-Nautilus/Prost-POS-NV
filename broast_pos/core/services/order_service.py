@@ -71,7 +71,7 @@ class OrderService:
         order.invoice_no = self._financial.get_next_invoice_number()
         order.created_by_id = cashier_id
         order.created_by_name = cashier_name
-        order.status = OrderStatus.ACTIVE
+        order.status = OrderStatus.NEW
 
         # Compute totals
         order.subtotal = sum(item.total_price for item in order.items)

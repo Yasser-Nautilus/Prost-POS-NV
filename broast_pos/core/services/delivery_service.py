@@ -118,7 +118,7 @@ class DeliveryService:
         # Update order statuses
         for oid in trip.order_ids:
             order = self._orders.get_by_id(oid)
-            if order and order.status == OrderStatus.ACTIVE:
+            if order and order.status == OrderStatus.NEW:
                 order.status = OrderStatus.OUT_FOR_DELIVERY
                 self._orders.save(order)
 
