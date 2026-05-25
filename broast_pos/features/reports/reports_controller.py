@@ -405,3 +405,82 @@ class ReportsController:
                 "discrepancy": 0.0,
                 "warnings": [f"فشل التحقق: {exc}"],
             }
+
+    # ------------------------------------------------------------------
+    # Monthly reports wrappers
+    # ------------------------------------------------------------------
+
+    def get_monthly_summary(self, year: int, month: int) -> Dict[str, Any]:
+        """Total sales + expenses + daily breakdown for a month."""
+        try:
+            return self._report_svc.generate_monthly_summary(year, month)
+        except Exception as exc:
+            logger.error("Failed to get monthly summary: %s", exc)
+            return {
+                "year": year,
+                "month": month,
+                "total_sales": 0.0,
+                "total_expenses": 0.0,
+                "daily": [],
+            }
+
+    def get_monthly_bestsellers(
+        self, year: int, month: int, limit: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """Top products by quantity sold for a month."""
+        try:
+            return self._report_svc.generate_monthly_bestsellers(year, month, limit)
+        except Exception as exc:
+            logger.error("Failed to get monthly bestsellers: %s", exc)
+            return []
+
+    def get_monthly_expenses(self, year: int, month: int) -> Dict[str, Any]:
+        """Expense breakdown by category for a month."""
+        try:
+            return self._report_svc.generate_monthly_expenses(year, month)
+        except Exception as exc:
+            logger.error("Failed to get monthly expenses: %s", exc)
+            return {
+                "year": year,
+                "month": month,
+                "categories": {},
+                "total": 0.0,
+            }
+
+    # ------------------------------------------------------------------
+    # Yearly reports wrappers
+    # ------------------------------------------------------------------
+
+    def get_yearly_summary(self, year: int) -> Dict[str, Any]:
+        """12-month sales + expenses overview."""
+        try:
+            return self._report_svc.generate_yearly_summary(year)
+        except Exception as exc:
+            logger.error("Failed to get yearly summary: %s", exc)
+            return {
+                "year": year,
+                "total_sales": 0.0,
+                "total_expenses": 0.0,
+                "months": [],
+            }
+
+    def get_yearly_bestsellers(
+        self, year: int, limit: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """Top products for the entire year."""
+        try:
+            return self._report_svc.generate_yearly_bestsellers(year, limit)
+        except Exception as exc:
+            logger.error("Failed to get yearly bestsellers: %s", exc)
+            return []
+
+    def get_active_shift_id(self) -> Optional[int]:
+        """Get current active shift ID."""
+        try:
+            shift = self._financial_svc._financial.get_active_shift()
+            return shift.id if shift else None
+        except Exception as exc:
+            logger.error("Failed to get active shift ID: %s", exc)
+            return None
+
+
