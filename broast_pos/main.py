@@ -175,6 +175,21 @@ class AppController:
         )
         self._main_window.set_view(NavPage.REPORTS, self._reports_view)
 
+        # Inject the Financial view
+        from broast_pos.features.financial.financial_controller import FinancialController
+        from broast_pos.ui.views.financial_view import FinancialView
+        self._financial_ctrl = FinancialController(
+            financial_service=self._financial_svc,
+            auth_service=self._auth,
+            printer_manager=self._printer_mgr,
+        )
+        self._financial_view = FinancialView(
+            financial_controller=self._financial_ctrl,
+            current_user_id=user.id or 0,
+        )
+        self._main_window.set_view(NavPage.FINANCIAL, self._financial_view)
+        self._financial_view.shift_status_changed.connect(self._update_shift_badge)
+
         # Wire confirm flow: PosView → AppController → OrderController
         self._pos_view.order_confirmed.connect(self._on_order_confirmed)
 
@@ -203,6 +218,8 @@ class AppController:
         self._delivery_ctrl = None
         self._reports_view = None
         self._reports_ctrl = None
+        self._financial_view = None
+        self._financial_ctrl = None
         self._order_ctrl = None
         self._current_user = None
 
