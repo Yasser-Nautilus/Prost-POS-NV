@@ -166,20 +166,20 @@ class DeliveryView(QWidget):
         layout.addWidget(self._driver_list, 1)
 
         # Action buttons
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(6)
+        btn_col = QVBoxLayout()
+        btn_col.setSpacing(6)
 
         self._checkin_btn = QPushButton("تسجيل حضور")
         self._checkin_btn.setProperty("class", "confirm")
         self._checkin_btn.clicked.connect(self._on_check_in)
-        btn_row.addWidget(self._checkin_btn)
+        btn_col.addWidget(self._checkin_btn)
 
         self._checkout_btn = QPushButton("تسجيل انصراف")
         self._checkout_btn.setProperty("class", "danger")
         self._checkout_btn.clicked.connect(self._on_check_out)
-        btn_row.addWidget(self._checkout_btn)
+        btn_col.addWidget(self._checkout_btn)
 
-        layout.addLayout(btn_row)
+        layout.addLayout(btn_col)
 
         return panel
 
