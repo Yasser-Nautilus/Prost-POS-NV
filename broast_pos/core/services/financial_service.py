@@ -274,6 +274,10 @@ class FinancialService:
         """Compute live shift summary (not stored — always fresh)."""
         return self._financial.get_shift_summary(shift_id)
 
+    def get_shift_history(self) -> List[Shift]:
+        """Past closed shifts, most recent first."""
+        return self._financial.get_shift_history()
+
     def mark_summary_printed(self, shift_id: int) -> None:
         """Record that the daily summary was printed (prerequisite for close)."""
         shift = self._financial.get_by_id(shift_id)
