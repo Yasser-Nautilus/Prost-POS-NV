@@ -81,7 +81,7 @@ class DeliveryController:
             return [
                 {
                     "id": d.id,
-                    "name": d.name,
+                    "name": d.display_name or d.username,
                     "status": self._get_driver_status(d.id),
                 }
                 for d in drivers
@@ -192,7 +192,10 @@ class DeliveryController:
             total_cash = 0.0
             total_fees = 0.0
 
-            for order in trip.orders:
+            for oid in trip.order_ids:
+                order = self._order_svc.get_order_by_id(oid)
+                if order is None:
+                    continue
                 is_cash = order.payment_method == PaymentMethod.CASH
                 collected = order.total if is_cash else 0.0
                 if is_cash:
@@ -262,10 +265,10 @@ class DeliveryController:
                 {
                     "id": t.id,
                     "driver_name": t.driver_name,
-                    "order_count": len(t.orders) if t.orders else 0,
+                    "order_count": len(t.order_ids) if t.order_ids else 0,
                     "dispatched_at": str(t.dispatched_at) if t.dispatched_at else "",
                     "returned_at": str(t.returned_at) if t.returned_at else "",
-                    "settled": t.settled,
+                    "is_settled": t.is_settled,
                 }
                 for t in trips
             ]
@@ -323,7 +326,7 @@ class DeliveryController:
                     all_trips.append({
                         "id": t.id,
                         "driver_name": t.driver_name,
-                        "order_count": len(t.orders) if t.orders else 0,
+                        "order_count": len(t.order_ids) if t.order_ids else 0,
                         "status": status,
                         "dispatched_at": str(t.dispatched_at) if t.dispatched_at else "",
                     })

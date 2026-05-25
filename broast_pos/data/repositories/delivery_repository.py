@@ -99,9 +99,59 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
 
         return DriverStatus.AVAILABLE
 
+    def check_out_driver(self, driver_id: int) -> None:
+        """Alias for check_out — used by DeliveryService."""
+        self.check_out(driver_id)
+
+    def get_active_drivers(self) -> list:
+        """Return User objects for all currently checked-in drivers.
+
+        Joins users table with driver_attendance to get full User data.
+        """
+        from broast_pos.core.models.user import User, UserRole
+
+        rows = self._db.fetch_all(
+            """SELECT u.* FROM users u
+               INNER JOIN driver_attendance da ON da.driver_id = u.id
+               WHERE da.check_out_at IS NULL AND u.is_active = 1
+               GROUP BY u.id
+               ORDER BY u.display_name"""
+        )
+        return [
+            User(
+                id=r["id"],
+                username=r["username"],
+                display_name=r["display_name"],
+                avatar_path=r["avatar_path"],
+                pin_hash=r["pin_hash"],
+                role=UserRole(r["role"]),
+                cashier_slot=r["cashier_slot"],
+                is_active=bool(r["is_active"]),
+                created_at=r["created_at"],
+            )
+            for r in rows
+        ]
+
     # ------------------------------------------------------------------
     # Trip lifecycle
     # ------------------------------------------------------------------
+
+    def get_trip_by_id(self, trip_id: int) -> Optional[DeliveryTrip]:
+        """Alias for get_by_id — used by DeliveryService."""
+        return self.get_by_id(trip_id)
+
+    def get_trip_for_order(self, order_id: int) -> Optional[DeliveryTrip]:
+        """Find the trip that currently contains a given order."""
+        row = self._db.fetch_one(
+            """SELECT dt.* FROM delivery_trips dt
+               INNER JOIN delivery_trip_orders dto ON dto.trip_id = dt.id
+               WHERE dto.order_id = ? AND dt.is_settled = 0
+               ORDER BY dt.created_at DESC LIMIT 1""",
+            (order_id,),
+        )
+        if row is None:
+            return None
+        return self._row_to_trip_with_orders(row)
 
     def create_trip(self, driver_id: int, order_ids: List[int],
                     driver_name: str = "") -> DeliveryTrip:
@@ -187,6 +237,20 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
     def get_trip_with_orders(self, trip_id: int) -> Optional[DeliveryTrip]:
         """Full trip detail including order list."""
         return self.get_by_id(trip_id)
+
+    def get_driver_trips_for_date(self, driver_id: int,
+                                   date_str: str) -> List[DeliveryTrip]:
+        """Alias for get_driver_daily_trips — used by DeliveryService."""
+        return self.get_driver_daily_trips(driver_id, date_str)
+
+    def get_created_trips(self) -> List[DeliveryTrip]:
+        """Trips created but not yet dispatched."""
+        rows = self._db.fetch_all(
+            """SELECT * FROM delivery_trips
+               WHERE dispatched_at IS NULL
+               ORDER BY created_at"""
+        )
+        return [self._row_to_trip_with_orders(r) for r in rows]
 
     # ------------------------------------------------------------------
     # End-of-day queries
