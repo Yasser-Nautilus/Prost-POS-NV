@@ -55,7 +55,7 @@ class ExpenseDialog(QDialog):
     def _setup_ui(self) -> None:
         self.setWindowTitle("إضافة مصروف")
         self.setModal(True)
-        self.setFixedSize(400, 520)
+        self.setFixedSize(400, 620)
 
         self.setStyleSheet(f"""
             QDialog {{
@@ -148,6 +148,9 @@ class ExpenseDialog(QDialog):
                         color: {get_color('text_primary')};
                         font-size: 18px;
                         font-weight: bold;
+                        min-width: 0px;
+                        min-height: 0px;
+                        padding: 0px;
                     }}
                     QPushButton:hover {{
                         background-color: rgba(255,255,255,0.08);
@@ -251,6 +254,29 @@ class ExpenseDialog(QDialog):
             """)
             return
         self.accept()
+
+    def keyPressEvent(self, event) -> None:
+        """Handle physical keyboard key presses for amount entry when not in description input."""
+        if self.focusWidget() == self._desc_input:
+            super().keyPressEvent(event)
+            return
+
+        text = event.text()
+        if (text.isdigit() and len(text) == 1) or text == ".":
+            self._on_numpad(text)
+            event.accept()
+        elif event.key() == Qt.Key.Key_Backspace:
+            self._on_numpad("⌫")
+            event.accept()
+        elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            if self._confirm_btn.isEnabled():
+                self._on_save()
+            event.accept()
+        elif event.key() == Qt.Key.Key_Escape:
+            self.reject()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
 
     def get_data(self) -> tuple[float, str, str]:
         """Return the user entered amount, category, and description."""
