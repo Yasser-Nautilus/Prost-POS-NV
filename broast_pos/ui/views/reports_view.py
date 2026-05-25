@@ -605,7 +605,7 @@ class ReportsView(QWidget):
         self._daily_cancelled_table = create_styled_table(["رقم الفاتورة", "المجموع", "الملغي بواسطة", "السبب"])
         right_col.addWidget(make_bento_box("❌  الفواتير الملغية وأسبابها", self._daily_cancelled_table))
 
-        split_layout.addLayout(right_col, 1.2)
+        split_layout.addLayout(right_col, 1)
 
         grid.addLayout(split_layout)
 
@@ -786,7 +786,7 @@ class ReportsView(QWidget):
         right_panel.addWidget(make_bento_box("💸  فئات المصروفات للشهر", self._month_expenses_table), 1)
 
         self._month_bestsellers_table = create_styled_table(["اسم الصنف", "الكمية المباعة", "القيمة"])
-        right_panel.addWidget(make_bento_box("🏆  الأصناف الأكثر مبيعاً للشهر", self._month_bestsellers_table), 1.2)
+        right_panel.addWidget(make_bento_box("🏆  الأصناف الأكثر مبيعاً للشهر", self._month_bestsellers_table), 1)
 
         dashboard_layout.addLayout(right_panel, 1)
 
