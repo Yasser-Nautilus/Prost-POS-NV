@@ -189,6 +189,11 @@ class PosView(QWidget):
                 border-radius: 6px;
                 font-size: 20px;
                 font-weight: bold;
+                min-width: 40px;
+                max-width: 40px;
+                min-height: 36px;
+                max-height: 36px;
+                padding: 0px;
             }}
             QPushButton#newOrderBtn:hover {{
                 background-color: {get_color('button_confirm')};
@@ -584,6 +589,8 @@ class PosView(QWidget):
                         padding: 0 12px;
                         font-size: 13px;
                         font-weight: bold;
+                        min-width: 0px;
+                        min-height: 0px;
                     }}
                 """)
             else:
@@ -595,6 +602,8 @@ class PosView(QWidget):
                         border-radius: 6px;
                         padding: 0 12px;
                         font-size: 13px;
+                        min-width: 0px;
+                        min-height: 0px;
                     }}
                     QPushButton:hover {{
                         background-color: rgba(255,255,255,0.08);
