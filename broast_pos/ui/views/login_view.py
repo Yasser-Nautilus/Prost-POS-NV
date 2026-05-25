@@ -101,6 +101,7 @@ class LoginView(QWidget):
         self._selected_user = user
         self._pin_page.set_user(user)
         self._stack.setCurrentIndex(1)
+        self._pin_page.setFocus()
 
     def _on_pin_submitted(self, pin: str) -> None:
         if self._selected_user is None:
@@ -345,6 +346,7 @@ class _PinEntryPage(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._pin = ""
         self._setup_ui()
 
@@ -571,3 +573,21 @@ class _PinEntryPage(QWidget):
         # Must keep a reference so it doesn't get GC'd
         self._shake_anim = anim
         anim.start()
+
+    def keyPressEvent(self, event) -> None:
+        """Handle physical keyboard key presses."""
+        text = event.text()
+        if text.isdigit() and len(text) == 1:
+            self._on_digit(text)
+            event.accept()
+        elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self._on_enter()
+            event.accept()
+        elif event.key() == Qt.Key.Key_Backspace:
+            self._on_backspace()
+            event.accept()
+        elif event.key() == Qt.Key.Key_Escape:
+            self._on_back()
+            event.accept()
+        else:
+            super().keyPressEvent(event)

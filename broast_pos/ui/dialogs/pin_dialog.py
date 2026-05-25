@@ -271,6 +271,21 @@ class PinDialog(QDialog):
         self._anim = anim
         anim.start()
 
+    def keyPressEvent(self, event) -> None:
+        """Handle physical keyboard key presses."""
+        text = event.text()
+        if text.isdigit() and len(text) == 1:
+            self._on_digit(text)
+            event.accept()
+        elif event.key() == Qt.Key.Key_Backspace:
+            self._on_backspace()
+            event.accept()
+        elif event.key() == Qt.Key.Key_Escape:
+            self.reject()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+
     # ------------------------------------------------------------------
     # Styling helpers
     # ------------------------------------------------------------------

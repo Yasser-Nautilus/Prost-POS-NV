@@ -383,6 +383,31 @@ class PaymentDialog(QDialog):
         self.payment_confirmed.emit(self._selected_method, amount)
         self.accept()
 
+    def keyPressEvent(self, event) -> None:
+        """Handle physical keyboard key presses."""
+        if self._selected_method == "cash" and self._cash_section.isVisible():
+            text = event.text()
+            if text and text in "0123456789.":
+                self._on_numpad(text)
+                event.accept()
+                return
+            elif event.key() == Qt.Key.Key_Backspace:
+                self._on_numpad("⌫")
+                event.accept()
+                return
+            elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+                if self._confirm_btn.isEnabled():
+                    self._on_confirm()
+                event.accept()
+                return
+
+        if event.key() == Qt.Key.Key_Escape:
+            self.reject()
+            event.accept()
+            return
+
+        super().keyPressEvent(event)
+
     # ------------------------------------------------------------------
     # Styling helpers
     # ------------------------------------------------------------------
