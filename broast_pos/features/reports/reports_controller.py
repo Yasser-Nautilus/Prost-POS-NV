@@ -474,3 +474,13 @@ class ReportsController:
             logger.error("Failed to get yearly bestsellers: %s", exc)
             return []
 
+    def get_active_shift_id(self) -> Optional[int]:
+        """Get current active shift ID."""
+        try:
+            shift = self._financial_svc._financial.get_active_shift()
+            return shift.id if shift else None
+        except Exception as exc:
+            logger.error("Failed to get active shift ID: %s", exc)
+            return None
+
+
