@@ -250,8 +250,9 @@ class ShiftDialog(QDialog):
 
         # Shift info bar
         info = QFrame()
+        info.setObjectName("infoFrame")
         info.setStyleSheet(f"""
-            QFrame {{
+            QFrame#infoFrame {{
                 background-color: rgba(40, 167, 69, 0.15);
                 border: 1px solid {get_color('accent_green')};
                 border-radius: 10px;
@@ -415,8 +416,9 @@ class ShiftDialog(QDialog):
     ) -> QFrame:
         """Build a single metric card for the dashboard."""
         card = QFrame()
+        card.setObjectName("metricCard")
         card.setStyleSheet(f"""
-            QFrame {{
+            QFrame#metricCard {{
                 background-color: {get_color('secondary_bg')};
                 border: 1px solid {get_color('border_color')};
                 border-radius: 10px;

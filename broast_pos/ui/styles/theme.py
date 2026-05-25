@@ -172,6 +172,7 @@ QLabel {{
     background: transparent;
     color: {c['text_primary']};
     font-size: {f_body}px;
+    border: none;
 }}
 
 QLabel[class="heading"] {{
