@@ -151,7 +151,7 @@ class FinancialController:
     ) -> bool:
         """Perform a mid-day cashier transfer."""
         try:
-            self._financial_svc.transfer_shift(
+            transfer_obj = self._financial_svc.transfer_shift(
                 from_user_id=from_user_id,
                 to_user_id=to_user_id,
                 manager_pin=manager_pin,
@@ -159,11 +159,30 @@ class FinancialController:
             # Try to print shift transfer report
             if self._printer:
                 try:
-                    active_shift = self._financial_svc._financial.get_active_shift()
-                    if active_shift:
-                        # Print transfer report
-                        # In dummy mode or actual printer, route to cashier slot
-                        pass
+                    import json
+                    snapshot = json.loads(transfer_obj.summary_snapshot)
+
+                    # Get cashier display names
+                    from_user = self._auth_svc._users.get_by_id(from_user_id)
+                    to_user = self._auth_svc._users.get_by_id(to_user_id)
+                    from_name = from_user.display_name if from_user else f"#{from_user_id}"
+                    to_name = to_user.display_name if to_user else f"#{to_user_id}"
+
+                    transfer_data = {
+                        "from_cashier": from_name,
+                        "to_cashier": to_name,
+                        "total_sales": snapshot.get("total_sales", 0.0),
+                        "total_expenses": snapshot.get("total_expenses", 0.0),
+                        "pending_delivery": snapshot.get("pending_delivery", 0.0),
+                        "pending_dinein": snapshot.get("pending_dinein", 0.0),
+                        "pending_kitchen": snapshot.get("pending_kitchen", 0.0),
+                        "expected_cash": snapshot.get("expected_cash", 0.0),
+                    }
+
+                    current_user = self._auth_svc.get_current_user()
+                    cashier_slot = current_user.cashier_slot if (current_user and current_user.cashier_slot) else 1
+
+                    self._printer.print_shift_transfer(transfer_data, cashier_slot=cashier_slot)
                 except Exception as pe:
                     logger.warning("Failed to print shift transfer report: %s", pe)
             return True
