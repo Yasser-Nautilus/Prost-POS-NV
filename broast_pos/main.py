@@ -34,6 +34,8 @@ from broast_pos.data.repositories.order_repository import OrderRepository
 from broast_pos.data.repositories.product_repository import ProductRepository
 from broast_pos.data.repositories.user_repository import UserRepository
 from broast_pos.data.repositories.financial_repository import FinancialRepository
+from broast_pos.core.services.report_service import ReportService
+
 from broast_pos.features.order_lifecycle.order_controller import (
     ConfirmResult,
     OrderController,
@@ -81,6 +83,7 @@ class AppController:
         order_service: OrderService,
         financial_service: FinancialService,
         delivery_service: DeliveryService,
+        report_service: ReportService,
         print_triggers: PrintTriggers,
         printer_manager: PrinterManager,
     ) -> None:
@@ -89,6 +92,7 @@ class AppController:
         self._order_svc = order_service
         self._financial_svc = financial_service
         self._delivery_svc = delivery_service
+        self._report_svc = report_service
         self._print_triggers = print_triggers
         self._printer_mgr = printer_manager
 
@@ -157,6 +161,20 @@ class AppController:
         )
         self._main_window.set_view(NavPage.DELIVERY, self._delivery_view)
 
+        # Inject the Reports view
+        from broast_pos.features.reports.reports_controller import ReportsController
+        from broast_pos.ui.views.reports_view import ReportsView
+        self._reports_ctrl = ReportsController(
+            report_service=self._report_svc,
+            financial_service=self._financial_svc,
+            printer_manager=self._printer_mgr,
+        )
+        self._reports_view = ReportsView(
+            reports_controller=self._reports_ctrl,
+            cashier_slot=user.cashier_slot or 1,
+        )
+        self._main_window.set_view(NavPage.REPORTS, self._reports_view)
+
         # Wire confirm flow: PosView → AppController → OrderController
         self._pos_view.order_confirmed.connect(self._on_order_confirmed)
 
@@ -183,6 +201,8 @@ class AppController:
         self._tracking_view = None
         self._delivery_view = None
         self._delivery_ctrl = None
+        self._reports_view = None
+        self._reports_ctrl = None
         self._order_ctrl = None
         self._current_user = None
 
@@ -429,6 +449,11 @@ def main() -> int:
         delivery_repository=delivery_repo,
         user_repository=user_repo,
     )
+    report_service = ReportService(
+        order_repo=order_repo,
+        financial_repo=financial_repo,
+        delivery_repo=delivery_repo,
+    )
 
     # ------------------------------------------------------------------
     # 4. Printing infrastructure
@@ -454,6 +479,7 @@ def main() -> int:
         order_service=order_service,
         financial_service=financial_service,
         delivery_service=delivery_service,
+        report_service=report_service,
         print_triggers=print_triggers,
         printer_manager=printer_manager,
     )
