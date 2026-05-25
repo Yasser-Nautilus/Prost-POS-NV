@@ -358,6 +358,11 @@ class OrderPanel(QWidget):
                 border-radius: 6px;
                 font-size: 14px;
                 font-weight: bold;
+                min-width: 32px;
+                max-width: 32px;
+                min-height: 32px;
+                max-height: 32px;
+                padding: 0px;
             }}
             QPushButton:hover {{
                 background-color: rgba(220, 53, 69, 0.2);
@@ -449,6 +454,11 @@ class OrderPanel(QWidget):
                 border-radius: 6px;
                 font-size: 18px;
                 font-weight: bold;
+                min-width: 36px;
+                max-width: 36px;
+                min-height: 36px;
+                max-height: 36px;
+                padding: 0px;
             }}
             QPushButton:hover {{
                 background-color: {get_color('accent_blue')};
