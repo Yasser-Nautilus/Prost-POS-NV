@@ -47,6 +47,10 @@ from broast_pos.ui.dialogs.pin_dialog import PinDialog
 from broast_pos.ui.styles.theme import apply_theme
 from broast_pos.ui.views.pos_view import PosView
 from broast_pos.ui.views.tracking_view import TrackingView
+from broast_pos.ui.views.delivery_view import DeliveryView
+from broast_pos.data.repositories.delivery_repository import DeliveryRepository
+from broast_pos.core.services.delivery_service import DeliveryService
+from broast_pos.features.delivery_system.delivery_controller import DeliveryController
 from broast_pos.ui.windows.login_window import LoginWindow
 from broast_pos.ui.windows.main_window import MainWindow, NavPage
 from PyQt6.QtWidgets import QApplication, QMessageBox, QDialog
@@ -76,6 +80,7 @@ class AppController:
         product_service: ProductService,
         order_service: OrderService,
         financial_service: FinancialService,
+        delivery_service: DeliveryService,
         print_triggers: PrintTriggers,
         printer_manager: PrinterManager,
     ) -> None:
@@ -83,6 +88,7 @@ class AppController:
         self._product_svc = product_service
         self._order_svc = order_service
         self._financial_svc = financial_service
+        self._delivery_svc = delivery_service
         self._print_triggers = print_triggers
         self._printer_mgr = printer_manager
 
@@ -139,6 +145,18 @@ class AppController:
         )
         self._main_window.set_view(NavPage.TRACKING, self._tracking_view)
 
+        # Inject the Delivery view
+        self._delivery_ctrl = DeliveryController(
+            delivery_service=self._delivery_svc,
+            order_service=self._order_svc,
+            print_triggers=self._print_triggers,
+            cashier_slot=user.cashier_slot or 1,
+        )
+        self._delivery_view = DeliveryView(
+            delivery_controller=self._delivery_ctrl,
+        )
+        self._main_window.set_view(NavPage.DELIVERY, self._delivery_view)
+
         # Wire confirm flow: PosView → AppController → OrderController
         self._pos_view.order_confirmed.connect(self._on_order_confirmed)
 
@@ -163,6 +181,8 @@ class AppController:
 
         self._pos_view = None
         self._tracking_view = None
+        self._delivery_view = None
+        self._delivery_ctrl = None
         self._order_ctrl = None
         self._current_user = None
 
@@ -387,6 +407,7 @@ def main() -> int:
     order_repo = OrderRepository(db)
     audit_repo = AuditRepository(db)
     financial_repo = FinancialRepository(db)
+    delivery_repo = DeliveryRepository(db)
 
     # ------------------------------------------------------------------
     # 3. Services
@@ -403,6 +424,10 @@ def main() -> int:
         audit_repo=audit_repo,
         auth_service=auth_service,
         financial_service=financial_service,
+    )
+    delivery_service = DeliveryService(
+        delivery_repository=delivery_repo,
+        user_repository=user_repo,
     )
 
     # ------------------------------------------------------------------
@@ -428,6 +453,7 @@ def main() -> int:
         product_service=product_service,
         order_service=order_service,
         financial_service=financial_service,
+        delivery_service=delivery_service,
         print_triggers=print_triggers,
         printer_manager=printer_manager,
     )
