@@ -446,8 +446,8 @@ def main() -> int:
         financial_service=financial_service,
     )
     delivery_service = DeliveryService(
-        delivery_repository=delivery_repo,
-        user_repository=user_repo,
+        delivery_repo=delivery_repo,
+        user_repo=user_repo,
     )
     report_service = ReportService(
         order_repo=order_repo,
