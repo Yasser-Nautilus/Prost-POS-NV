@@ -152,16 +152,16 @@ class MainWindow(QWidget):
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(0)
 
-        # Content area (fills remaining space) — added FIRST for RTL
+        # Sidebar (fixed width) — added FIRST (appears on right in RTL)
+        body.addWidget(self._build_sidebar())
+
+        # Content area (fills remaining space) — added SECOND for RTL
         self._stack = QStackedWidget()
         self._stack.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         self._register_placeholder_views()
         body.addWidget(self._stack, 1)
-
-        # Sidebar (fixed width) — added SECOND (appears on right in RTL)
-        body.addWidget(self._build_sidebar())
 
         root.addLayout(body, 1)
 

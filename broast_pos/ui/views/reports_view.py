@@ -408,6 +408,8 @@ def create_styled_table(headers: List[str]) -> QTableWidget:
     table.setFocusPolicy(Qt.FocusPolicy.NoFocus)
     table.setShowGrid(False)
     table.verticalHeader().setVisible(False)
+    table.verticalHeader().setDefaultSectionSize(40)
+    table.setMinimumHeight(240)
     table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
 
     table.setStyleSheet(f"""
