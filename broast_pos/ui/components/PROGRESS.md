@@ -95,7 +95,7 @@ Build **reusable UI building blocks** — widgets that multiple views share. Eve
     - If phone NOT found → create a minimal customer record (name + phone only, no address required)
     - Customer record is created so future orders can find them by phone
   - Signals: `customer_selected(customer)`, `address_selected(address)`
-- **Status**: `Not started`
+- **Status**: `Done`
 
 ### 6. Table Grid (`table_grid.py`)
 
