@@ -68,6 +68,13 @@ class UserRepository(BaseRepository[User]):
         )
         return [self._row_to_user(r) for r in rows]
 
+    def get_all(self) -> List[User]:
+        """All users (active and inactive) — for user management screen."""
+        rows = self._db.fetch_all(
+            "SELECT * FROM users ORDER BY display_name"
+        )
+        return [self._row_to_user(r) for r in rows]
+
     def get_drivers(self) -> List[User]:
         """All active users with cashier_slot IS NULL (drivers).
 

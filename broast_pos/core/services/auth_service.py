@@ -143,6 +143,100 @@ class AuthService:
             raise PermissionError("ليس لديك صلاحية لهذا الإجراء")
 
     # ------------------------------------------------------------------
+    # User management (admin only)
+    # ------------------------------------------------------------------
+
+    def get_users_for_management(self) -> List[User]:
+        """Return all users (active and inactive) for admin management."""
+        return self._users.get_all()
+
+    def create_user(
+        self,
+        username: str,
+        display_name: str,
+        role: UserRole,
+        pin: str,
+        cashier_slot: Optional[int] = None,
+        avatar_path: Optional[str] = None,
+    ) -> User:
+        """Create a new user. Validates username and unique PIN."""
+        username = username.strip()
+        display_name = display_name.strip()
+        if not username:
+            raise ValueError("اسم المستخدم مطلوب")
+        if not display_name:
+            raise ValueError("الاسم المعروض مطلوب")
+        if not pin:
+            raise ValueError("رمز PIN مطلوب")
+
+        pin_hash = self.hash_pin(pin)
+        if self._users.pin_exists(pin_hash):
+            raise ValueError("رمز PIN مستخدم بالفعل لمستخدم آخر")
+
+        user = User(
+            id=None,
+            username=username,
+            display_name=display_name,
+            role=role,
+            pin_hash=pin_hash,
+            cashier_slot=cashier_slot,
+            avatar_path=avatar_path,
+            is_active=True,
+        )
+        return self._users.save(user)
+
+    def update_user(
+        self,
+        user_id: int,
+        username: Optional[str] = None,
+        display_name: Optional[str] = None,
+        role: Optional[UserRole] = None,
+        pin: Optional[str] = None,
+        cashier_slot: Optional[int] = -1,  # use -1 as sentinel
+        avatar_path: Optional[str] = None,
+        is_active: Optional[bool] = None,
+    ) -> User:
+        """Update an existing user. Validates unique PIN if changed."""
+        user = self._users.get_by_id(user_id)
+        if user is None:
+            raise ValueError("المستخدم غير موجود")
+
+        if username is not None:
+            username = username.strip()
+            if not username:
+                raise ValueError("اسم المستخدم مطلوب")
+            user.username = username
+
+        if display_name is not None:
+            display_name = display_name.strip()
+            if not display_name:
+                raise ValueError("الاسم المعروض مطلوب")
+            user.display_name = display_name
+
+        if role is not None:
+            user.role = role
+
+        if pin is not None:
+            pin = pin.strip()
+            if not pin:
+                raise ValueError("رمز PIN لا يمكن أن يكون فارغاً")
+            pin_hash = self.hash_pin(pin)
+            if self._users.pin_exists(pin_hash, exclude_user_id=user_id):
+                raise ValueError("رمز PIN مستخدم بالفعل لمستخدم آخر")
+            user.pin_hash = pin_hash
+
+        if cashier_slot != -1:
+            user.cashier_slot = cashier_slot
+
+        if avatar_path is not None:
+            user.avatar_path = avatar_path
+
+        if is_active is not None:
+            user.is_active = is_active
+
+        return self._users.save(user)
+
+    # ------------------------------------------------------------------
     # PIN hashing
     # ------------------------------------------------------------------
 

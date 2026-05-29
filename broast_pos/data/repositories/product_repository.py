@@ -78,6 +78,13 @@ class ProductRepository(BaseRepository[Product]):
         )
         self._db.commit()
 
+    def get_all_categories(self) -> List[Category]:
+        """All categories (active and inactive) — for category management screen."""
+        rows = self._db.fetch_all(
+            "SELECT * FROM categories ORDER BY sort_order, name"
+        )
+        return [self._row_to_category(r) for r in rows]
+
     # ------------------------------------------------------------------
     # Product queries
     # ------------------------------------------------------------------
@@ -104,6 +111,13 @@ class ProductRepository(BaseRepository[Product]):
         """All active products — for product management screen."""
         rows = self._db.fetch_all(
             "SELECT * FROM products WHERE is_active = 1 ORDER BY category_id, sort_order"
+        )
+        return [self._row_to_product(r) for r in rows]
+
+    def get_all_products(self) -> List[Product]:
+        """All products (active and inactive) — for product management screen."""
+        rows = self._db.fetch_all(
+            "SELECT * FROM products ORDER BY category_id, sort_order"
         )
         return [self._row_to_product(r) for r in rows]
 
