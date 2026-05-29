@@ -25,7 +25,7 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   - Failure handling: log error + return `False` — **never raise, never block**
   - Status indicator: expose `is_printer_available(key)` for UI warning badge
 - **Why**: The system is useless without printing. The kitchen never sees a screen — they rely entirely on printed tickets. If the printer fails, the cashier must still be able to create orders (log the failure, retry later).
-- **Status**: `To Review`
+- **Status**: `Done`
 
 ### 2. ESC/POS Adapter (`escpos_printer.py`)
 
@@ -40,7 +40,7 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   - Arabic text encoding support (CP864 or UTF-8 depending on printer model)
   - Auto-reconnect on connection loss
 - **Why**: Different printers connect differently. USB is common for cashier printers, Network/TCP is common for kitchen printers located across the restaurant.
-- **Status**: `To Review`
+- **Status**: `Done`
 
 ### 3. Receipt Templates (`receipt_templates.py`)
 
@@ -273,7 +273,7 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
 - **No modifiers system** — each product variation is a separate product in the menu
 - **Notes per item**: shown as `ملاحظة: {text}` below the item line if present
 
-- **Status**: `To Review`
+- **Status**: `Done`
 
 ### 4. Silent Printing Flow
 
@@ -290,7 +290,7 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   - **No Qt print dialog ever** — all printing goes directly to ESC/POS
   - If printer unavailable: log warning, show small badge icon in UI, continue
 - **Why**: The old system opened a Qt print dialog for every single print — this is completely unusable in a busy shift. Silent printing is a hard requirement.
-- **Status**: `To Review`
+- **Status**: `Done`
 
 ### 5. Printer Configuration (`printer_config.py`)
 
@@ -307,7 +307,7 @@ Provide **reliable, silent thermal printing (ESC/POS)** for kitchen tickets, cus
   - Load at app startup
   - Future: setup screen in admin panel to configure without editing files
 - **Why**: Printer addresses change when hardware is swapped. The config must be editable without touching code.
-- **Status**: `To Review`
+- **Status**: `Done`
 
 ---
 

@@ -82,7 +82,7 @@ class PaymentDialog(QDialog):
     def _setup_ui(self) -> None:
         self.setWindowTitle("الدفع")
         self.setModal(True)
-        self.setFixedSize(420, 560)
+        self.setFixedSize(420, 640)
 
         self.setStyleSheet(f"""
             QDialog {{
@@ -129,6 +129,7 @@ class PaymentDialog(QDialog):
             btn = QPushButton(label)
             btn.setObjectName(f"pay_{method_key}")
             btn.setEnabled(enabled)
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setMinimumHeight(50)
             btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -177,6 +178,7 @@ class PaymentDialog(QDialog):
         for amt in quick_amounts:
             qbtn = QPushButton(str(amt))
             qbtn.setMinimumHeight(40)
+            qbtn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             qbtn.setCursor(Qt.CursorShape.PointingHandCursor)
             qbtn.setStyleSheet(f"""
                 QPushButton {{
@@ -185,6 +187,9 @@ class PaymentDialog(QDialog):
                     border-radius: 6px;
                     color: {get_color('text_primary')};
                     font-size: 15px;
+                    min-width: 0px;
+                    min-height: 0px;
+                    padding: 0px;
                 }}
                 QPushButton:hover {{
                     background-color: {get_color('accent_blue')};
@@ -196,6 +201,7 @@ class PaymentDialog(QDialog):
         # Exact amount button
         exact_btn = QPushButton("المبلغ بالضبط")
         exact_btn.setMinimumHeight(40)
+        exact_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         exact_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         exact_btn.setStyleSheet(f"""
             QPushButton {{
@@ -204,6 +210,9 @@ class PaymentDialog(QDialog):
                 border-radius: 6px;
                 color: #ffffff;
                 font-size: 14px;
+                min-width: 0px;
+                min-height: 0px;
+                padding: 0px;
             }}
             QPushButton:hover {{
                 background-color: {get_color('accent_blue')};
@@ -222,6 +231,7 @@ class PaymentDialog(QDialog):
             for c, key in enumerate(row_keys):
                 nbtn = QPushButton(key)
                 nbtn.setMinimumSize(60, 50)
+                nbtn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
                 nbtn.setCursor(Qt.CursorShape.PointingHandCursor)
                 nbtn.setStyleSheet(f"""
                     QPushButton {{
@@ -231,6 +241,9 @@ class PaymentDialog(QDialog):
                         color: {get_color('text_primary')};
                         font-size: 20px;
                         font-weight: bold;
+                        min-width: 0px;
+                        min-height: 0px;
+                        padding: 0px;
                     }}
                     QPushButton:hover {{
                         background-color: rgba(255,255,255,0.08);
@@ -252,6 +265,7 @@ class PaymentDialog(QDialog):
 
         cancel_btn = QPushButton("✕  إلغاء")
         cancel_btn.setObjectName("cancelBtn")
+        cancel_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         cancel_btn.setMinimumHeight(48)
         cancel_btn.clicked.connect(self.reject)
@@ -259,6 +273,7 @@ class PaymentDialog(QDialog):
 
         self._confirm_btn = QPushButton("✓  تأكيد الدفع")
         self._confirm_btn.setObjectName("confirmBtn")
+        self._confirm_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self._confirm_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._confirm_btn.setMinimumHeight(48)
         self._confirm_btn.setEnabled(False)
@@ -423,6 +438,8 @@ class PaymentDialog(QDialog):
                     border-radius: 10px;
                     font-size: 15px;
                     font-weight: bold;
+                    min-width: 0px;
+                    padding: 6px;
                 }}
             """
         if active:
@@ -434,6 +451,8 @@ class PaymentDialog(QDialog):
                     border-radius: 10px;
                     font-size: 15px;
                     font-weight: bold;
+                    min-width: 0px;
+                    padding: 6px;
                 }}
                 QPushButton:hover {{
                     background-color: {get_color('accent_blue')};
@@ -447,6 +466,8 @@ class PaymentDialog(QDialog):
                 border-radius: 10px;
                 font-size: 15px;
                 font-weight: bold;
+                min-width: 0px;
+                padding: 6px;
             }}
             QPushButton:hover {{
                 border-color: {get_color('accent_blue')};

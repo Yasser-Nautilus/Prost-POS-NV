@@ -14,13 +14,12 @@ Build **reusable UI building blocks** — widgets that multiple views share. Eve
 - **Details**:
   - Receives product list from POS view (cached, no DB calls)
   - Large buttons: product name + price, minimum 80x60px
-  - Color-coded by category (optional)
   - Responsive grid: adjusts columns based on window width
   - Click signal emits `product_id` → product goes **directly to order** (no popup)
   - Fast rendering: no heavy widget recreation on category switch
 - **Why**: This is the most-tapped component. At 300+ orders/day × ~5 items = 1,500+ taps daily. Must be instant.
 - **Important**: No modifier popup — tap product = add to order immediately.
-- **Status**: `Not started`
+- **Status**: `Done`
 
 ### 2. Order Panel (`order_panel.py`)
 
@@ -35,7 +34,7 @@ Build **reusable UI building blocks** — widgets that multiple views share. Eve
   - Real-time update on every change
   - Signals: `item_added`, `item_removed`, `quantity_changed`, `note_changed`
 - **Why**: The cashier needs instant visual feedback. Tap a product → appears immediately.
-- **Status**: `Not started`
+- **Status**: `Done`
 
 ### 3. Payment Dialog (`payment_dialog.py`)
 
@@ -49,7 +48,7 @@ Build **reusable UI building blocks** — widgets that multiple views share. Eve
   - Quick cash buttons: exact amount, round up (50, 100, 200, 500)
   - Confirm button → calls `order_service.complete_order()`
   - Cancel button → return to order (don't discard)
-- **Status**: `Not started`
+- **Status**: `Done`
 
 ### ~~4. Modifier Dialog~~ — **REMOVED**
 
@@ -67,7 +66,7 @@ Build **reusable UI building blocks** — widgets that multiple views share. Eve
   - Show clear error message if PIN is invalid or user lacks permission
   - On success: records WHO authorized it (for audit trail)
   - Auto-close on successful verification
-- **Status**: `Not started`
+- **Status**: `Done`
 
 ### 5. Customer Panel (`customer_panel.py`)
 
@@ -113,7 +112,7 @@ Build **reusable UI building blocks** — widgets that multiple views share. Eve
     - `table_selected_new(table_number)` → start new order
     - `table_selected_existing(order_id)` → load saved order for edit/payment
 - **Why**: The cashier clicks on the table to either create a new order or return to an existing dine-in order for payment or amendments.
-- **Status**: `Not started`
+- **Status**: `Done`
 
 ---
 

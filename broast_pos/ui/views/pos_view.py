@@ -189,6 +189,11 @@ class PosView(QWidget):
                 border-radius: 6px;
                 font-size: 20px;
                 font-weight: bold;
+                min-width: 40px;
+                max-width: 40px;
+                min-height: 36px;
+                max-height: 36px;
+                padding: 0px;
             }}
             QPushButton#newOrderBtn:hover {{
                 background-color: {get_color('button_confirm')};
@@ -572,6 +577,7 @@ class PosView(QWidget):
             tab = QPushButton(label)
             tab.setCursor(Qt.CursorShape.PointingHandCursor)
             tab.setFixedHeight(36)
+            tab.setProperty("class", "compact")
 
             is_active = idx == self._active_order_idx
             if is_active:
@@ -581,9 +587,12 @@ class PosView(QWidget):
                         color: #ffffff;
                         border: none;
                         border-radius: 6px;
-                        padding: 0 12px;
+                        padding: 4px 14px;
                         font-size: 13px;
                         font-weight: bold;
+                        min-width: 0px;
+                        min-height: 0px;
+                        max-height: 36px;
                     }}
                 """)
             else:
@@ -593,8 +602,11 @@ class PosView(QWidget):
                         color: {get_color('text_secondary')};
                         border: none;
                         border-radius: 6px;
-                        padding: 0 12px;
+                        padding: 4px 14px;
                         font-size: 13px;
+                        min-width: 0px;
+                        min-height: 0px;
+                        max-height: 36px;
                     }}
                     QPushButton:hover {{
                         background-color: rgba(255,255,255,0.08);

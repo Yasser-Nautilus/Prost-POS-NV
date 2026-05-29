@@ -191,17 +191,17 @@ QLabel[class="muted"] {{
 }}
 
 /* ================================================================
-   BUTTONS — minimum 60×60px, rounded, hover/press states
+   BUTTONS — large touch-targets, rounded, hover/press states
    ================================================================ */
 QPushButton {{
     background-color: {c['button_neutral']};
     color: {c['text_primary']};
     border: none;
     border-radius: 8px;
-    padding: 10px 20px;
+    padding: 8px 16px;
     font-size: {f_button}px;
-    min-height: 44px;
-    min-width: 60px;
+    min-height: 40px;
+    min-width: 48px;
 }}
 
 QPushButton:hover {{
@@ -215,6 +215,15 @@ QPushButton:pressed {{
 QPushButton:disabled {{
     background-color: {c['border_color']};
     color: {c['text_muted']};
+}}
+
+/* Compact buttons — reset constraints for small inline controls */
+QPushButton[class="compact"] {{
+    min-height: 0px;
+    max-height: 9999px;
+    min-width: 0px;
+    max-width: 9999px;
+    padding: 0px;
 }}
 
 /* Confirm / action button */

@@ -20,7 +20,7 @@ Implement all **main screens** (business flows). Each view is a `QWidget` that o
   - **No username typing** — user taps their avatar, then enters PIN
   - If only 1 active user → show their tile alone (still require PIN)
 - **Why**: Fast login for restaurant staff. Avatar-based tiles are easier than typing usernames with greasy hands.
-- **Status**: `Not started`
+- **Status**: `Done`
 
 ### 1. POS View (`pos_view.py`) — 🔥 MOST IMPORTANT
 
@@ -60,7 +60,7 @@ Implement all **main screens** (business flows). Each view is a `QWidget` that o
     - Products cached in memory at view creation
     - No database calls during item selection
     - Instant response to every tap
-- **Status**: `Not started`
+- **Status**: `Done`
 
 ### 2. Tracking View (`tracking_view.py`)
 
@@ -78,7 +78,7 @@ Implement all **main screens** (business flows). Each view is a `QWidget` that o
   - Delivery orders → completed when driver confirms delivery
   - Search by invoice number
   - Auto-refresh every 10 seconds
-- **Status**: `Not started`
+- **Status**: `Done`
 
 ### 3. Delivery View (`delivery_view.py`)
 
@@ -115,7 +115,7 @@ Implement all **main screens** (business flows). Each view is a `QWidget` that o
       - Driver name, trip count, order count, total fees earned
     - Grand total: sum of all delivery fee expenses
     - "Print Summary" button → prints multi-driver summary
-- **Status**: `Not started`
+- **Status**: `Done`
 
 ### 4. Reports View (`reports_view.py`) — Manager Only
 
@@ -141,7 +141,7 @@ Implement all **main screens** (business flows). Each view is a `QWidget` that o
     - Print any report (daily summary, driver summary) — thermal printer, silent
     - View on-screen (tables + simple charts)
     - Data is always stored — even if not exported yet (future: Google Sheets)
-- **Status**: `Not started`
+- **Status**: `Done`
 
 ### 5. Products View (`products_view.py`) — Manager Only
 
@@ -213,7 +213,7 @@ Implement all **main screens** (business flows). Each view is a `QWidget` that o
       ```
     - Confirm → shift closed → next open resets invoices to #1
   - **Shift history**: past shifts with summaries (read-only)
-- **Status**: `Not started`
+- **Status**: `Done`
 
 ### ~~8. Reports View~~ — **MERGED into Task #4 above**
 
