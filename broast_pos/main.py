@@ -23,6 +23,7 @@ from broast_pos.config.config import get_app_name
 from broast_pos.core.models.order import Order, OrderType
 from broast_pos.core.models.user import User
 from broast_pos.core.services.auth_service import AuthService
+from broast_pos.core.services.customer_service import CustomerService
 from broast_pos.core.services.financial_service import FinancialService
 from broast_pos.core.services.order_service import OrderService
 from broast_pos.core.services.product_service import ProductService
@@ -30,6 +31,7 @@ from broast_pos.data.database.connection import DatabaseConnection
 from broast_pos.data.database.migrations import initialise_database
 from broast_pos.data.database.seed import seed_database
 from broast_pos.data.repositories.audit_repository import AuditRepository
+from broast_pos.data.repositories.customer_repository import CustomerRepository
 from broast_pos.data.repositories.order_repository import OrderRepository
 from broast_pos.data.repositories.product_repository import ProductRepository
 from broast_pos.data.repositories.user_repository import UserRepository
@@ -83,6 +85,7 @@ class AppController:
         order_service: OrderService,
         financial_service: FinancialService,
         delivery_service: DeliveryService,
+        customer_service: CustomerService,
         report_service: ReportService,
         print_triggers: PrintTriggers,
         printer_manager: PrinterManager,
@@ -92,6 +95,7 @@ class AppController:
         self._order_svc = order_service
         self._financial_svc = financial_service
         self._delivery_svc = delivery_service
+        self._customer_svc = customer_service
         self._report_svc = report_service
         self._print_triggers = print_triggers
         self._printer_mgr = printer_manager
@@ -190,6 +194,21 @@ class AppController:
         self._main_window.set_view(NavPage.FINANCIAL, self._financial_view)
         self._financial_view.shift_status_changed.connect(self._update_shift_badge)
 
+        # Inject the Products view
+        from broast_pos.ui.views.products_view import ProductsView
+        self._products_view = ProductsView(
+            product_service=self._product_svc,
+            customer_service=self._customer_svc,
+        )
+        self._main_window.set_view(NavPage.PRODUCTS, self._products_view)
+
+        # Inject the Users view
+        from broast_pos.ui.views.users_view import UsersView
+        self._users_view = UsersView(
+            auth_service=self._auth,
+        )
+        self._main_window.set_view(NavPage.USERS, self._users_view)
+
         # Wire confirm flow: PosView → AppController → OrderController
         self._pos_view.order_confirmed.connect(self._on_order_confirmed)
 
@@ -220,6 +239,8 @@ class AppController:
         self._reports_ctrl = None
         self._financial_view = None
         self._financial_ctrl = None
+        self._products_view = None
+        self._users_view = None
         self._order_ctrl = None
         self._current_user = None
 
@@ -445,12 +466,14 @@ def main() -> int:
     audit_repo = AuditRepository(db)
     financial_repo = FinancialRepository(db)
     delivery_repo = DeliveryRepository(db)
+    customer_repo = CustomerRepository(db)
 
     # ------------------------------------------------------------------
     # 3. Services
     # ------------------------------------------------------------------
     auth_service = AuthService(user_repo)
     product_service = ProductService(product_repo)
+    customer_service = CustomerService(customer_repo)
     financial_service = FinancialService(
         financial_repo=financial_repo,
         audit_repo=audit_repo,
@@ -496,6 +519,7 @@ def main() -> int:
         order_service=order_service,
         financial_service=financial_service,
         delivery_service=delivery_service,
+        customer_service=customer_service,
         report_service=report_service,
         print_triggers=print_triggers,
         printer_manager=printer_manager,
