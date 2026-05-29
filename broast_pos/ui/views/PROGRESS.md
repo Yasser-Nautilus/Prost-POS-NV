@@ -157,7 +157,7 @@ Implement all **main screens** (business flows). Each view is a `QWidget` that o
     - List of all zones with fees — table format
   - **Auto-complete timeout setting**: configurable minutes for takeaway auto-highlight (default 20)
   - Table/grid view with inline editing
-- **Status**: `Not started`
+- **Status**: `Done`
 
 ### 6. Users View (`users_view.py`) — Admin Only
 
@@ -170,7 +170,7 @@ Implement all **main screens** (business flows). Each view is a `QWidget` that o
   - Reset PIN
   - **PIN must be unique** — system validates on save
   - Adding drivers to system also happens here (create user with driver flag)
-- **Status**: `Not started`
+- **Status**: `Done`
 
 ### 7. Financial View (`financial_view.py`) — Manager for close/transfer
 

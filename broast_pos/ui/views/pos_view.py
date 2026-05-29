@@ -31,6 +31,7 @@ from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -46,6 +47,8 @@ from broast_pos.config.config import (
 from broast_pos.core.models.order import Order, OrderItem, OrderType
 from broast_pos.core.models.product import Category, Product
 from broast_pos.core.services.product_service import ProductService
+from broast_pos.core.services.customer_service import CustomerService
+from broast_pos.ui.components.customer_panel import CustomerPanel
 from broast_pos.ui.components.order_panel import OrderPanel
 from broast_pos.ui.components.product_grid import ProductGrid
 from broast_pos.ui.components.table_grid import TableGrid
@@ -86,6 +89,7 @@ class PosView(QWidget):
     def __init__(
         self,
         product_service: ProductService,
+        customer_service: CustomerService,
         user_id: int,
         user_name: str,
         cashier_slot: int = 1,
@@ -93,6 +97,7 @@ class PosView(QWidget):
     ) -> None:
         super().__init__(parent)
         self._product_svc = product_service
+        self._customer_svc = customer_service
         self._user_id = user_id
         self._user_name = user_name
         self._cashier_slot = cashier_slot
@@ -137,13 +142,26 @@ class PosView(QWidget):
         # We want: Categories (right) | Products (centre) | Order (left)
         # In code (LTR order): Order panel | Products | Categories
 
-        # Order panel (will appear on the visual LEFT in RTL = right side of screen)
+        # Left panel container (Order & Customer info)
+        left_container = QWidget()
+        left_container.setFixedWidth(340)
+        left_layout = QVBoxLayout(left_container)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(0)
+
+        self._customer_panel = CustomerPanel(self._customer_svc)
+        self._customer_panel.customer_selected.connect(self._on_customer_selected)
+        self._customer_panel.address_selected.connect(self._on_address_selected)
+        self._customer_panel.clear_customer.connect(self._on_clear_customer)
+        left_layout.addWidget(self._customer_panel)
+
         self._order_panel = OrderPanel()
-        self._order_panel.setFixedWidth(340)
         self._order_panel.quantity_changed.connect(self._on_qty_changed)
         self._order_panel.item_removed.connect(self._on_item_removed)
         self._order_panel.note_changed.connect(self._on_note_changed)
-        body.addWidget(self._order_panel)
+        left_layout.addWidget(self._order_panel, 1)
+
+        body.addWidget(left_container)
 
         # Product grid (centre — stretch)
         self._product_grid = ProductGrid()
@@ -459,8 +477,17 @@ class PosView(QWidget):
             return
 
         order.order_type = otype
+        if otype not in (OrderType.DELIVERY, OrderType.PICKUP):
+            order.customer_id = None
+            order.customer_name = None
+            order.customer_phone = None
+            order.customer_address = None
+            order.customer_zone = None
+            order.delivery_fee = 0.0
+
         self._refresh_type_buttons()
         self._refresh_order_panel()
+        self._sync_customer_panel()
         logger.debug("Order type set to %s", otype.value)
 
     def _refresh_type_buttons(self) -> None:
@@ -521,6 +548,7 @@ class PosView(QWidget):
         self._refresh_parked_tabs()
         self._refresh_order_panel()
         self._refresh_type_buttons()
+        self._sync_customer_panel()
         logger.debug("New order created (parked #%d)", self._active_order_idx)
 
     def _switch_to_order(self, idx: int) -> None:
@@ -530,6 +558,7 @@ class PosView(QWidget):
             self._refresh_parked_tabs()
             self._refresh_order_panel()
             self._refresh_type_buttons()
+            self._sync_customer_panel()
 
     def _close_order(self, idx: int) -> None:
         """Remove a parked order tab. If it was the active one, switch."""
@@ -555,6 +584,7 @@ class PosView(QWidget):
         self._refresh_parked_tabs()
         self._refresh_order_panel()
         self._refresh_type_buttons()
+        self._sync_customer_panel()
 
     def _refresh_parked_tabs(self) -> None:
         """Rebuild parked order tab buttons."""
@@ -725,6 +755,26 @@ class PosView(QWidget):
             logger.warning("Cannot confirm: no items in order")
             return
 
+        # Delivery: validate phone, name, address, zone
+        if order.order_type == OrderType.DELIVERY:
+            if not order.customer_phone or not order.customer_name or not order.customer_address or not order.customer_zone:
+                QMessageBox.warning(
+                    self,
+                    "تنبيه",
+                    "بيانات العميل غير مكتملة للطلب الدليفري.\nيرجى تحديد العميل وعنوان التوصيل أولاً."
+                )
+                return
+
+        # Pickup: validate phone, name
+        if order.order_type == OrderType.PICKUP:
+            if not order.customer_phone or not order.customer_name:
+                QMessageBox.warning(
+                    self,
+                    "تنبيه",
+                    "بيانات العميل غير مكتملة لطلب الاستلام.\nيرجى تحديد العميل أولاً."
+                )
+                return
+
         # Dine-in: show table selection grid
         if order.order_type == OrderType.DINE_IN and order.table_no is None:
             self._show_table_grid()
@@ -771,6 +821,89 @@ class PosView(QWidget):
         # Clear the order
         self._close_order(self._active_order_idx)
         logger.info("In-memory order discarded")
+
+    # ==================================================================
+    # Customer Panel Event Handlers and Sync
+    # ==================================================================
+
+    def _on_customer_selected(self, customer: Customer) -> None:
+        order = self._current_order()
+        if order is None:
+            return
+        order.customer_id = customer.id
+        order.customer_name = customer.name
+        order.customer_phone = customer.phone
+
+    def _on_address_selected(self, address: CustomerAddress) -> None:
+        order = self._current_order()
+        if order is None:
+            return
+        order.customer_address = address.street_name
+        order.customer_zone = address.zone_name
+        order.delivery_fee = address.delivery_fee
+        order.recalculate()
+        self._refresh_order_panel()
+
+    def _on_clear_customer(self) -> None:
+        order = self._current_order()
+        if order is None:
+            return
+        order.customer_id = None
+        order.customer_name = None
+        order.customer_phone = None
+        order.customer_address = None
+        order.customer_zone = None
+        order.delivery_fee = 0.0
+        order.recalculate()
+        self._refresh_order_panel()
+
+    def _sync_customer_panel(self) -> None:
+        order = self._current_order()
+        if order is None:
+            self._customer_panel.hide()
+            return
+
+        self._customer_panel.blockSignals(True)
+        try:
+            if order.order_type in (OrderType.DELIVERY, OrderType.PICKUP):
+                self._customer_panel.show()
+                self._customer_panel.set_pickup_only(order.order_type == OrderType.PICKUP)
+                
+                # Restore phone input
+                self._customer_panel._phone_input.setText(order.customer_phone or "")
+                
+                # If there's a phone, trigger lookup to populate cards and status
+                if order.customer_phone:
+                    try:
+                        customer = self._customer_svc.find_by_phone(order.customer_phone)
+                        if customer:
+                            self._customer_panel._status_lbl.setText("✓")
+                            self._customer_panel._status_lbl.setStyleSheet(f"color: {get_color('accent_green')};")
+                            self._customer_panel._display_customer(customer)
+                            
+                            # Restore selected address highlight
+                            if order.order_type == OrderType.DELIVERY and order.customer_address:
+                                # Look for matching address card
+                                for addr in customer.addresses:
+                                    if addr.street_name == order.customer_address and addr.zone_name == order.customer_zone:
+                                        self._customer_panel._select_address(addr)
+                                        break
+                        else:
+                            self._customer_panel._status_lbl.setText("✗")
+                            self._customer_panel._status_lbl.setStyleSheet(f"color: {get_color('accent_red')};")
+                            self._customer_panel._clear_ui_states()
+                    except ValueError:
+                        self._customer_panel._status_lbl.setText("✗")
+                        self._customer_panel._status_lbl.setStyleSheet(f"color: {get_color('accent_red')};")
+                        self._customer_panel._clear_ui_states()
+                else:
+                    self._customer_panel._status_lbl.setText("")
+                    self._customer_panel._info_widget.hide()
+                    self._customer_panel._clear_address_cards()
+            else:
+                self._customer_panel.hide()
+        finally:
+            self._customer_panel.blockSignals(False)
 
     def _on_discount(self) -> None:
         """Discount button pressed — show PIN dialog for manager override."""
