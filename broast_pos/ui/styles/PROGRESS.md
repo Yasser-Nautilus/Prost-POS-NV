@@ -33,7 +33,7 @@ Define the **global visual theme** for the entire application — colors, fonts,
     - Dialogs: centered, dimmed background overlay
   - **RTL support**: layout direction for Arabic text
 - **Why**: A consistent dark theme is appropriate for restaurant environments. High contrast improves readability. Centralized styling prevents inconsistent UI across views.
-- **Status**: `Not started`
+- **Status**: `Done`
 
 ---
 
