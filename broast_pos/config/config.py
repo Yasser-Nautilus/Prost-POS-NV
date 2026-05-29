@@ -111,3 +111,29 @@ def get_app_name() -> str:
     """Return the Arabic restaurant name for use as app title."""
     info = get_restaurant_info()
     return info.get("name_ar", "Prost POS")
+
+
+def get_takeaway_auto_complete_minutes() -> int:
+    """Return the takeaway auto complete minutes from restaurant.json or fallback to 20."""
+    return load_restaurant_config().get("restaurant", {}).get("takeaway_auto_complete_minutes", 20)
+
+
+def update_takeaway_auto_complete_minutes(minutes: int) -> None:
+    """Save the takeaway auto complete minutes setting to restaurant.json and reload cache."""
+    global _restaurant_cache
+    # Ensure cache is loaded
+    load_restaurant_config()
+    config_data = _restaurant_cache.copy()
+    if "restaurant" not in config_data:
+        config_data["restaurant"] = {}
+    config_data["restaurant"]["takeaway_auto_complete_minutes"] = minutes
+
+    config_path = Path(RESTAURANT_CONFIG_PATH)
+    try:
+        with config_path.open("w", encoding="utf-8") as f:
+            json.dump(config_data, f, indent=2, ensure_ascii=False)
+        _restaurant_cache = config_data
+        logger.info("Saved takeaway_auto_complete_minutes=%d to %s", minutes, config_path.name)
+    except Exception as e:
+        logger.exception("Failed to write restaurant config to %s", config_path)
+
