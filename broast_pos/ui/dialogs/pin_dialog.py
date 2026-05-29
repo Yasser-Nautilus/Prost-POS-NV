@@ -163,6 +163,7 @@ class PinDialog(QDialog):
             for c, key in enumerate(row_keys):
                 btn = QPushButton(key)
                 btn.setMinimumSize(70, 56)
+                btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
                 btn.setCursor(Qt.CursorShape.PointingHandCursor)
 
                 if key == "✕":

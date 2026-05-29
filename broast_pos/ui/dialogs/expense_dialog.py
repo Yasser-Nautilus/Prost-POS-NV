@@ -13,14 +13,15 @@ import logging
 from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QDoubleValidator
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
-    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -28,13 +29,6 @@ from PyQt6.QtWidgets import (
 from broast_pos.ui.styles.theme import get_color
 
 logger = logging.getLogger(__name__)
-
-_NUMPAD_KEYS = [
-    ("7", "8", "9"),
-    ("4", "5", "6"),
-    ("1", "2", "3"),
-    (".", "0", "⌫"),
-]
 
 
 class ExpenseDialog(QDialog):
@@ -49,13 +43,13 @@ class ExpenseDialog(QDialog):
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self._input_str = ""
         self._setup_ui()
 
     def _setup_ui(self) -> None:
         self.setWindowTitle("إضافة مصروف")
         self.setModal(True)
-        self.setFixedSize(400, 620)
+        self.setMinimumWidth(420)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
 
         self.setStyleSheet(f"""
             QDialog {{
@@ -66,37 +60,46 @@ class ExpenseDialog(QDialog):
         """)
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(20, 16, 20, 20)
-        root.setSpacing(12)
+        root.setContentsMargins(24, 20, 24, 20)
+        root.setSpacing(14)
 
         # Header
-        header = QLabel("📤  تسجيل مصروف جديد")
+        header = QLabel("💰  تسجيل مصروف جديد")
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         header.setStyleSheet(f"""
             font-size: 18px;
             font-weight: bold;
             color: {get_color('text_primary')};
+            padding-bottom: 4px;
         """)
         root.addWidget(header)
 
-        # Amount Display/Input
+        # Amount Input
         amount_lbl = QLabel("المبلغ:")
         amount_lbl.setStyleSheet(f"font-size: 13px; color: {get_color('text_secondary')};")
         root.addWidget(amount_lbl)
 
-        self._amount_display = QLabel("0")
-        self._amount_display.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._amount_display.setStyleSheet(f"""
-            font-size: 24px;
-            font-weight: bold;
-            color: {get_color('text_primary')};
-            background-color: {get_color('input_bg')};
-            border: 2px solid {get_color('border_color')};
-            border-radius: 8px;
-            padding: 8px;
-            min-height: 40px;
+        self._amount_input = QLineEdit()
+        self._amount_input.setPlaceholderText("0")
+        self._amount_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._amount_input.setValidator(QDoubleValidator(0.0, 999999.99, 2))
+        self._amount_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {get_color('input_bg')};
+                color: {get_color('text_primary')};
+                border: 2px solid {get_color('border_color')};
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 22px;
+                font-weight: bold;
+                min-height: 36px;
+            }}
+            QLineEdit:focus {{
+                border-color: {get_color('accent_blue')};
+            }}
         """)
-        root.addWidget(self._amount_display)
+        self._amount_input.textChanged.connect(self._validate)
+        root.addWidget(self._amount_input)
 
         # Category
         cat_lbl = QLabel("الفئة:")
@@ -132,36 +135,7 @@ class ExpenseDialog(QDialog):
         """)
         root.addWidget(self._desc_input)
 
-        # Numpad (for amount)
-        numpad = QGridLayout()
-        numpad.setSpacing(6)
-        for r, row_keys in enumerate(_NUMPAD_KEYS):
-            for c, key in enumerate(row_keys):
-                btn = QPushButton(key)
-                btn.setMinimumSize(50, 44)
-                btn.setCursor(Qt.CursorShape.PointingHandCursor)
-                btn.setStyleSheet(f"""
-                    QPushButton {{
-                        background-color: {get_color('secondary_bg')};
-                        border: 1px solid {get_color('border_color')};
-                        border-radius: 8px;
-                        color: {get_color('text_primary')};
-                        font-size: 18px;
-                        font-weight: bold;
-                        min-width: 0px;
-                        min-height: 0px;
-                        padding: 0px;
-                    }}
-                    QPushButton:hover {{
-                        background-color: rgba(255,255,255,0.08);
-                    }}
-                    QPushButton:pressed {{
-                        background-color: rgba(255,255,255,0.15);
-                    }}
-                """)
-                btn.clicked.connect(lambda _, k=key: self._on_numpad(k))
-                numpad.addWidget(btn, r, c)
-        root.addLayout(numpad)
+        root.addStretch()
 
         # Actions
         bottom = QHBoxLayout()
@@ -213,27 +187,13 @@ class ExpenseDialog(QDialog):
 
         root.addLayout(bottom)
 
-    def _on_numpad(self, key: str) -> None:
-        """Handle amount numpad clicks."""
-        if key == "⌫":
-            self._input_str = self._input_str[:-1]
-        elif key == ".":
-            if "." not in self._input_str:
-                self._input_str += "."
-        else:
-            if "." in self._input_str:
-                parts = self._input_str.split(".")
-                if len(parts[1]) >= 2:
-                    return
-            self._input_str += key
-
-        display_val = self._input_str or "0"
-        self._amount_display.setText(display_val)
-        self._validate()
+        # Focus the amount input on open
+        self._amount_input.setFocus()
 
     def _validate(self) -> None:
         try:
-            amt = float(self._input_str) if self._input_str else 0.0
+            text = self._amount_input.text().strip()
+            amt = float(text) if text else 0.0
         except ValueError:
             amt = 0.0
         self._confirm_btn.setEnabled(amt > 0)
@@ -256,19 +216,8 @@ class ExpenseDialog(QDialog):
         self.accept()
 
     def keyPressEvent(self, event) -> None:
-        """Handle physical keyboard key presses for amount entry when not in description input."""
-        if self.focusWidget() == self._desc_input:
-            super().keyPressEvent(event)
-            return
-
-        text = event.text()
-        if (text.isdigit() and len(text) == 1) or text == ".":
-            self._on_numpad(text)
-            event.accept()
-        elif event.key() == Qt.Key.Key_Backspace:
-            self._on_numpad("⌫")
-            event.accept()
-        elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+        """Handle Enter/Escape for dialog-level shortcuts."""
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             if self._confirm_btn.isEnabled():
                 self._on_save()
             event.accept()
@@ -280,7 +229,8 @@ class ExpenseDialog(QDialog):
 
     def get_data(self) -> tuple[float, str, str]:
         """Return the user entered amount, category, and description."""
-        amt = float(self._input_str) if self._input_str else 0.0
+        text = self._amount_input.text().strip()
+        amt = float(text) if text else 0.0
         cat = self._cat_combo.currentData()
         desc = self._desc_input.text().strip()
         return amt, cat, desc
@@ -292,3 +242,4 @@ def _lighten(hex_color: str, amount: int = 10) -> str:
     g = min(255, int(hex_color[2:4], 16) + amount)
     b = min(255, int(hex_color[4:6], 16) + amount)
     return f"#{r:02x}{g:02x}{b:02x}"
+
