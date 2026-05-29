@@ -306,6 +306,7 @@ class OrderPanel(QWidget):
         minus_btn = QPushButton("−")
         minus_btn.setFixedSize(36, 36)
         minus_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        minus_btn.setProperty("class", "compact")
         minus_btn.setStyleSheet(self._qty_btn_style())
         minus_btn.clicked.connect(
             lambda _, pid=item.product_id, qty=item.quantity:
@@ -328,6 +329,7 @@ class OrderPanel(QWidget):
         plus_btn = QPushButton("+")
         plus_btn.setFixedSize(36, 36)
         plus_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        plus_btn.setProperty("class", "compact")
         plus_btn.setStyleSheet(self._qty_btn_style())
         plus_btn.clicked.connect(
             lambda _, pid=item.product_id, qty=item.quantity:
@@ -348,20 +350,21 @@ class OrderPanel(QWidget):
 
         # Remove button
         remove_btn = QPushButton("✕")
-        remove_btn.setFixedSize(32, 32)
+        remove_btn.setFixedSize(28, 28)
         remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        remove_btn.setProperty("class", "compact")
         remove_btn.setStyleSheet(f"""
             QPushButton {{
                 background-color: transparent;
                 color: {get_color('accent_red')};
                 border: 1px solid {get_color('accent_red')};
-                border-radius: 6px;
-                font-size: 14px;
+                border-radius: 4px;
+                font-size: 12px;
                 font-weight: bold;
-                min-width: 32px;
-                max-width: 32px;
-                min-height: 32px;
-                max-height: 32px;
+                min-width: 0px;
+                max-width: 28px;
+                min-height: 0px;
+                max-height: 28px;
                 padding: 0px;
             }}
             QPushButton:hover {{
