@@ -141,6 +141,7 @@ class AppController:
         # Inject the POS view (replaces the placeholder)
         self._pos_view = PosView(
             product_service=self._product_svc,
+            customer_service=self._customer_svc,
             user_id=user.id or 0,
             user_name=user.display_name or user.username,
             cashier_slot=user.cashier_slot or 1,
