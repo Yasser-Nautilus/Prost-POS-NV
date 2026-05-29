@@ -116,6 +116,13 @@ class CustomerRepository(BaseRepository[Customer]):
         )
         return [self._row_to_zone(r) for r in rows]
 
+    def get_zones(self) -> List[Zone]:
+        """All zones (active and inactive) — for zone management screen."""
+        rows = self._db.fetch_all(
+            "SELECT * FROM zones ORDER BY name"
+        )
+        return [self._row_to_zone(r) for r in rows]
+
     def get_zone_by_id(self, zone_id: int) -> Optional[Zone]:
         """Fetch a single zone."""
         row = self._db.fetch_one("SELECT * FROM zones WHERE id = ?", (zone_id,))

@@ -117,8 +117,12 @@ class CustomerService:
     # ------------------------------------------------------------------
 
     def get_all_zones(self) -> List[Zone]:
-        """All active zones for dropdown selection."""
+        """All zones (active and inactive) for management."""
         return self._customers.get_zones()
+
+    def get_active_zones(self) -> List[Zone]:
+        """All active zones for dropdown selection."""
+        return self._customers.get_all_active_zones()
 
     def create_zone(self, name: str, delivery_fee: float) -> Zone:
         """Create a new delivery zone.
@@ -140,6 +144,7 @@ class CustomerService:
         zone_id: int,
         name: Optional[str] = None,
         delivery_fee: Optional[float] = None,
+        is_active: Optional[bool] = None,
     ) -> Zone:
         """Update an existing zone.
 
@@ -165,6 +170,9 @@ class CustomerService:
                     "رسوم التوصيل يجب أن تكون أكبر من أو تساوي صفر"
                 )
             zone.delivery_fee = delivery_fee
+
+        if is_active is not None:
+            zone.is_active = is_active
 
         return self._customers.save_zone(zone)
 

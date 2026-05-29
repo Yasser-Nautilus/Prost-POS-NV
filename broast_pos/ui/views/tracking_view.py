@@ -48,7 +48,7 @@ from PyQt6.QtWidgets import (
 )
 
 from broast_pos.config.config import (
-    TAKEAWAY_AUTO_COMPLETE_MINUTES,
+    get_takeaway_auto_complete_minutes,
     TRACKING_REFRESH_SECONDS,
 )
 from broast_pos.core.models.order import Order, OrderStatus, OrderType
@@ -331,7 +331,7 @@ class OrderCard(QFrame):
             self._elapsed_label.setText(f"⏱ {minutes:02d}:{seconds:02d}")
 
             # Change colour if past threshold
-            threshold_min = TAKEAWAY_AUTO_COMPLETE_MINUTES
+            threshold_min = get_takeaway_auto_complete_minutes()
             if minutes >= threshold_min:
                 self._elapsed_label.setStyleSheet(f"""
                     font-size: 14px;
@@ -632,7 +632,7 @@ class TrackingView(QWidget):
         try:
             created = datetime.fromisoformat(order.created_at)
             elapsed_min = (datetime.now() - created).total_seconds() / 60
-            return elapsed_min >= TAKEAWAY_AUTO_COMPLETE_MINUTES
+            return elapsed_min >= get_takeaway_auto_complete_minutes()
         except (ValueError, TypeError):
             return False
 

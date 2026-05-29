@@ -30,6 +30,10 @@ class ProductService:
         """Sorted list of active categories for POS grid tabs."""
         return self._products.get_categories()
 
+    def get_all_categories(self) -> List[Category]:
+        """Sorted list of all categories (active and inactive)."""
+        return self._products.get_all_categories()
+
     def create_category(self, name: str, sort_order: int = 0) -> Category:
         """Create a new product category.
 
@@ -48,6 +52,7 @@ class ProductService:
         category_id: int,
         name: Optional[str] = None,
         sort_order: Optional[int] = None,
+        is_active: Optional[bool] = None,
     ) -> Category:
         """Update an existing category.
 
@@ -66,6 +71,9 @@ class ProductService:
 
         if sort_order is not None:
             cat.sort_order = sort_order
+
+        if is_active is not None:
+            cat.is_active = is_active
 
         return self._products.save_category(cat)
 
@@ -95,6 +103,10 @@ class ProductService:
     def get_products_by_category(self, category_id: int) -> List[Product]:
         """Sorted products for a specific category grid."""
         return self._products.get_products_by_category(category_id)
+
+    def get_all_products(self) -> List[Product]:
+        """All products (active and inactive)."""
+        return self._products.get_all_products()
 
     def search_products(self, query: str) -> List[Product]:
         """Fast text search across product names."""
@@ -137,6 +149,7 @@ class ProductService:
         price: Optional[float] = None,
         category_id: Optional[int] = None,
         sort_order: Optional[int] = None,
+        is_active: Optional[bool] = None,
     ) -> Product:
         """Update an existing product.
 
@@ -166,6 +179,9 @@ class ProductService:
 
         if sort_order is not None:
             product.sort_order = sort_order
+
+        if is_active is not None:
+            product.is_active = is_active
 
         return self._products.save(product)
 
