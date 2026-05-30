@@ -74,9 +74,9 @@ class ShiftDialog(QDialog):
         self._financial = financial_service
         self._user_id = user_id
         self._user_name = user_name
-        self._on_add_expense = on_add_expense
-        self._on_close_shift = on_close_shift
-        self._on_print_summary = on_print_summary
+        self._add_expense_cb = on_add_expense
+        self._close_shift_cb = on_close_shift
+        self._print_summary_cb = on_print_summary
 
         self._active_shift: Optional[Shift] = None
         self._summary: Optional[ShiftSummary] = None
@@ -472,15 +472,9 @@ class ShiftDialog(QDialog):
 
     def _on_add_expense(self) -> None:
         """Delegate to expense callback (opens ExpenseDialog)."""
-        if self._on_add_expense_callback:
-            self._on_add_expense_callback()
-        elif self._on_add_expense:
-            self._on_add_expense()
+        if self._add_expense_cb:
+            self._add_expense_cb()
         self._refresh()
-
-    @property
-    def _on_add_expense_callback(self) -> Optional[Callable]:
-        return self._on_add_expense if callable(self._on_add_expense) else None
 
     def _on_print_summary(self) -> None:
         """Mark summary as printed (prerequisite for close)."""
@@ -489,16 +483,16 @@ class ShiftDialog(QDialog):
         try:
             self._financial.mark_summary_printed(self._active_shift.id)
             logger.info("Summary marked as printed for shift #%d", self._active_shift.id)
-            if self._on_print_summary:
-                self._on_print_summary(self._active_shift.id)
+            if self._print_summary_cb:
+                self._print_summary_cb(self._active_shift.id)
             self._refresh()
         except Exception as exc:
             logger.warning("Print summary failed: %s", exc)
 
     def _on_close_shift(self) -> None:
         """Close shift — delegates to callback which shows PIN dialog."""
-        if self._on_close_shift:
-            self._on_close_shift()
+        if self._close_shift_cb:
+            self._close_shift_cb()
         self._refresh()
 
 
