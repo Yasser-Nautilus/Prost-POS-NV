@@ -31,7 +31,7 @@ from PyQt6.QtWidgets import (
 )
 
 from broast_pos.features.financial.financial_controller import FinancialController
-from broast_pos.ui.styles.theme import get_color, get_font_family
+from broast_pos.ui.styles.theme import get_color, get_font_family, _lighten
 from broast_pos.ui.dialogs.pin_dialog import PinDialog
 from broast_pos.ui.views.reports_view import (
     MetricCard,
@@ -280,15 +280,15 @@ class FinancialView(QWidget):
         add_expense_btn.setFixedHeight(40)
         add_expense_btn.setStyleSheet(f"""
             QPushButton {{
-                background-color: {get_color('button_neutral')};
+                background-color: {get_color('button_confirm')};
                 color: #ffffff;
                 font-weight: bold;
-                border-radius: 6px;
+                border-radius: 8px;
                 padding-left: 16px;
                 padding-right: 16px;
             }}
             QPushButton:hover {{
-                background-color: rgba(255, 255, 255, 0.15);
+                background-color: {_lighten(get_color('button_confirm'), 10)};
             }}
         """)
         add_expense_btn.clicked.connect(self._on_add_expense_clicked)
