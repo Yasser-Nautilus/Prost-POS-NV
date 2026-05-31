@@ -600,7 +600,7 @@ class OrderController:
             "invoice_no": order.invoice_no,
             "order_type": order.order_type.value if order.order_type else "dine_in",
             "table_no": order.table_no or "",
-            "cashier_name": order.cashier_name or "",
+            "cashier_name": order.created_by_name or "",
             "cashier_slot": order.cashier_slot or self._cashier_slot,
             "customer_name": order.customer_name or "",
             "customer_phone": order.customer_phone or "",
