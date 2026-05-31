@@ -104,22 +104,29 @@ class OrderPanel(QWidget):
         # --- Scrollable items area ---
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
 
         self._items_container = QWidget()
+        self._items_container.setStyleSheet(
+            "background: transparent; border: none;"
+        )
         self._items_layout = QVBoxLayout(self._items_container)
         self._items_layout.setContentsMargins(8, 8, 8, 8)
         self._items_layout.setSpacing(6)
         self._items_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
         # Empty state
-        self._empty_lbl = QLabel("اضغط على منتج لإضافته")
+        self._empty_lbl = QLabel("🛒\nاضغط على منتج لإضافته")
         self._empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_lbl.setWordWrap(True)
         self._empty_lbl.setStyleSheet(f"""
             font-size: 14px;
             color: {get_color('text_muted')};
-            padding: 40px 0;
+            padding: 48px 16px;
+            background: transparent;
+            border: none;
         """)
         self._items_layout.addWidget(self._empty_lbl)
 
