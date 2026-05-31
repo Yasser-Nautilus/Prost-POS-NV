@@ -82,7 +82,7 @@ class PaymentDialog(QDialog):
     def _setup_ui(self) -> None:
         self.setWindowTitle("الدفع")
         self.setModal(True)
-        self.setFixedSize(420, 640)
+        self.setMinimumSize(400, 580)
 
         self.setStyleSheet(f"""
             QDialog {{
