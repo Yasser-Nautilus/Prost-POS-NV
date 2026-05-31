@@ -258,6 +258,10 @@ class ShiftDialog(QDialog):
                 border-radius: 10px;
                 padding: 10px;
             }}
+            QFrame#infoFrame QLabel {{
+                background: transparent;
+                border: none;
+            }}
         """)
         info_layout = QHBoxLayout(info)
         info_layout.setContentsMargins(12, 8, 12, 8)
@@ -411,18 +415,44 @@ class ShiftDialog(QDialog):
         close_shift_btn.clicked.connect(self._on_close_shift)
         self._content.addWidget(close_shift_btn)
 
+    _metric_card_counter = 0  # unique ID per card
+
     def _build_metric_card(
         self, icon: str, label: str, value: str, color_key: str
     ) -> QFrame:
         """Build a single metric card for the dashboard."""
+        ShiftDialog._metric_card_counter += 1
+        obj_name = f"metricCard_{ShiftDialog._metric_card_counter}"
+
+        color_val = get_color(color_key)
         card = QFrame()
-        card.setObjectName("metricCard")
+        card.setObjectName(obj_name)
+        # All child QLabel styles are scoped inside this single stylesheet
+        # to avoid specificity conflicts with global QSS or inline styles.
         card.setStyleSheet(f"""
-            QFrame#metricCard {{
+            QFrame#{obj_name} {{
                 background-color: {get_color('secondary_bg')};
                 border: 1px solid {get_color('border_color')};
                 border-radius: 10px;
-                padding: 12px;
+                padding: 10px;
+                min-height: 60px;
+            }}
+            QFrame#{obj_name} QLabel {{
+                background: transparent;
+                border: none;
+                color: {get_color('text_secondary')};
+            }}
+            QFrame#{obj_name} QLabel#icon_{obj_name} {{
+                font-size: 18px;
+            }}
+            QFrame#{obj_name} QLabel#name_{obj_name} {{
+                font-size: 13px;
+                color: {get_color('text_secondary')};
+            }}
+            QFrame#{obj_name} QLabel#val_{obj_name} {{
+                font-size: 20px;
+                font-weight: bold;
+                color: {color_val};
             }}
         """)
 
@@ -433,25 +463,18 @@ class ShiftDialog(QDialog):
         # Icon + label row
         top = QHBoxLayout()
         icon_lbl = QLabel(icon)
-        icon_lbl.setStyleSheet("font-size: 18px;")
+        icon_lbl.setObjectName(f"icon_{obj_name}")
         top.addWidget(icon_lbl)
 
         name_lbl = QLabel(label)
-        name_lbl.setStyleSheet(f"""
-            font-size: 13px;
-            color: {get_color('text_secondary')};
-        """)
+        name_lbl.setObjectName(f"name_{obj_name}")
         top.addWidget(name_lbl)
         top.addStretch()
         layout.addLayout(top)
 
         # Value
         val_lbl = QLabel(f"{value} ج.م")
-        val_lbl.setStyleSheet(f"""
-            font-size: 20px;
-            font-weight: bold;
-            color: {get_color(color_key)};
-        """)
+        val_lbl.setObjectName(f"val_{obj_name}")
         layout.addWidget(val_lbl)
 
         return card
