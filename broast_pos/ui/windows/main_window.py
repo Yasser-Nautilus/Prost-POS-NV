@@ -114,9 +114,11 @@ class MainWindow(QWidget):
     logout_requested = pyqtSignal()
     shift_clicked = pyqtSignal()
 
-    # Sidebar dimensions
-    SIDEBAR_WIDTH = 200
-    HEADER_HEIGHT = 56
+    # Sidebar dimensions (min/max for flexible layout)
+    SIDEBAR_MIN_WIDTH = 180
+    SIDEBAR_MAX_WIDTH = 240
+    HEADER_MIN_HEIGHT = 48
+    HEADER_MAX_HEIGHT = 64
 
     def __init__(self, user: User, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -171,7 +173,8 @@ class MainWindow(QWidget):
 
     def _build_header(self) -> QFrame:
         header = QFrame()
-        header.setFixedHeight(self.HEADER_HEIGHT)
+        header.setMinimumHeight(self.HEADER_MIN_HEIGHT)
+        header.setMaximumHeight(self.HEADER_MAX_HEIGHT)
         header.setStyleSheet(f"""
             QFrame {{
                 background-color: {get_color('secondary_bg')};
@@ -267,7 +270,11 @@ class MainWindow(QWidget):
 
     def _build_sidebar(self) -> QFrame:
         sidebar = QFrame()
-        sidebar.setFixedWidth(self.SIDEBAR_WIDTH)
+        sidebar.setMinimumWidth(self.SIDEBAR_MIN_WIDTH)
+        sidebar.setMaximumWidth(self.SIDEBAR_MAX_WIDTH)
+        sidebar.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
+        )
         sidebar.setStyleSheet(f"""
             QFrame {{
                 background-color: {get_color('secondary_bg')};
