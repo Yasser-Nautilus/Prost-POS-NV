@@ -91,7 +91,10 @@ class UsersView(QWidget):
         header = self._users_table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Interactive)
+        self._users_table.setColumnWidth(4, 110)
+        self._users_table.setColumnWidth(5, 100)
 
         self._users_table.setStyleSheet(f"""
             QTableWidget {{
@@ -137,11 +140,16 @@ class UsersView(QWidget):
             # Name
             self._users_table.setItem(row, 1, QTableWidgetItem(u.display_name))
             # Role translation
-            role_display = {
-                UserRole.MANAGER: "مدير",
-                UserRole.ADMIN: "مسؤول النظام",
-                UserRole.CASHIER: "كاشير"
-            }.get(u.role, "كاشير")
+            if u.role == UserRole.CASHIER:
+                if u.cashier_slot:
+                    role_display = f"كاشير (نقطة {u.cashier_slot})"
+                else:
+                    role_display = "سائق / دليفري"
+            else:
+                role_display = {
+                    UserRole.MANAGER: "مدير",
+                    UserRole.ADMIN: "مسؤول النظام",
+                }.get(u.role, str(u.role.value))
             self._users_table.setItem(row, 2, QTableWidgetItem(role_display))
             # PIN Code (masked for security)
             self._users_table.setItem(row, 3, QTableWidgetItem("****"))
@@ -153,24 +161,8 @@ class UsersView(QWidget):
             status_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             status_btn = QPushButton("نشط" if u.is_active else "غير نشط")
-            status_btn.setProperty("class", "compact")
-            status_btn.setFixedSize(70, 28)
-            if u.is_active:
-                status_btn.setStyleSheet(f"""
-                    background-color: {get_color('accent_green')}30;
-                    color: {get_color('accent_green')};
-                    border: 1px solid {get_color('accent_green')};
-                    border-radius: 4px;
-                    font-size: 12px;
-                """)
-            else:
-                status_btn.setStyleSheet(f"""
-                    background-color: {get_color('text_muted')}30;
-                    color: {get_color('text_muted')};
-                    border: 1px solid {get_color('text_muted')};
-                    border-radius: 4px;
-                    font-size: 12px;
-                """)
+            status_btn.setProperty("class", "status-active" if u.is_active else "status-inactive")
+            status_btn.setFixedSize(85, 28)
             status_btn.clicked.connect(lambda checked, uid=u.id, act=u.is_active: self._toggle_user_status(uid, act))
             status_layout.addWidget(status_btn)
             self._users_table.setCellWidget(row, 4, status_widget)
@@ -182,15 +174,8 @@ class UsersView(QWidget):
             actions_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             edit_btn = QPushButton("تعديل")
-            edit_btn.setProperty("class", "compact")
-            edit_btn.setFixedSize(50, 28)
-            edit_btn.setStyleSheet(f"""
-                background-color: {get_color('accent_blue')}30;
-                color: {get_color('accent_blue')};
-                border: 1px solid {get_color('accent_blue')};
-                border-radius: 4px;
-                font-size: 12px;
-            """)
+            edit_btn.setProperty("class", "edit-action")
+            edit_btn.setFixedSize(72, 28)
             edit_btn.clicked.connect(lambda checked, user=u: self._on_edit_user(user))
             actions_layout.addWidget(edit_btn)
 
@@ -207,7 +192,7 @@ class UsersView(QWidget):
         dialog = UserFormDialog(parent=self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             try:
-                name, role, pin = dialog.get_data()
+                name, role, pin, cashier_slot = dialog.get_data()
                 # Verify PIN uniqueness
                 existing_users = self._auth.get_users_for_management()
                 pin_hash = AuthService.hash_pin(pin)
@@ -219,7 +204,8 @@ class UsersView(QWidget):
                     username=name,
                     display_name=name,
                     role=UserRole(role),
-                    pin=pin
+                    pin=pin,
+                    cashier_slot=cashier_slot
                 )
                 self.refresh_users()
             except Exception as e:
@@ -229,7 +215,7 @@ class UsersView(QWidget):
         dialog = UserFormDialog(user, parent=self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             try:
-                name, role, pin = dialog.get_data()
+                name, role, pin, cashier_slot = dialog.get_data()
                 # Verify PIN uniqueness if a new one is set
                 if pin:
                     existing_users = self._auth.get_users_for_management()
@@ -243,7 +229,8 @@ class UsersView(QWidget):
                     username=name,
                     display_name=name,
                     role=UserRole(role),
-                    pin=pin if pin else None
+                    pin=pin if pin else None,
+                    cashier_slot=cashier_slot
                 )
                 self.refresh_users()
             except Exception as e:
@@ -293,6 +280,27 @@ class UserFormDialog(QDialog):
                 self._role_combo.setCurrentIndex(index)
         form.addRow("الدور / الصلاحية:", self._role_combo)
 
+        # Cashier Slot ComboBox
+        self._slot_combo = QComboBox()
+        self._slot_combo.addItem("سائق / دليفري (لا يوجد)", None)
+        self._slot_combo.addItem("نقطة بيع 1", 1)
+        self._slot_combo.addItem("نقطة بيع 2", 2)
+        if user:
+            index = self._slot_combo.findData(user.cashier_slot)
+            if index != -1:
+                self._slot_combo.setCurrentIndex(index)
+        form.addRow("مكان العمل / نقطة البيع:", self._slot_combo)
+
+        # Connect role change to enable/disable slot selection
+        def update_slot_combo_state():
+            is_cashier = self._role_combo.currentData() == "cashier"
+            self._slot_combo.setEnabled(is_cashier)
+            if not is_cashier:
+                self._slot_combo.setCurrentIndex(0)
+
+        self._role_combo.currentIndexChanged.connect(update_slot_combo_state)
+        update_slot_combo_state()
+
         # PIN Code Input (4 digits only)
         self._pin_edit = QLineEdit()
         self._pin_edit.setMaxLength(4)
@@ -309,7 +317,7 @@ class UserFormDialog(QDialog):
 
         # Dialog Buttons
         buttons = QDialogButtonBox(
-            QDialogButtonBox.ButtonRole.AcceptRole | QDialogButtonBox.ButtonRole.RejectRole
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         accept_btn = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if accept_btn:
@@ -324,11 +332,12 @@ class UserFormDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-    def get_data(self) -> tuple[str, str, str]:
+    def get_data(self) -> tuple[str, str, str, Optional[int]]:
         return (
             self._name_edit.text().strip(),
             self._role_combo.currentData(),
             self._pin_edit.text().strip(),
+            self._slot_combo.currentData(),
         )
 
     def accept(self) -> None:

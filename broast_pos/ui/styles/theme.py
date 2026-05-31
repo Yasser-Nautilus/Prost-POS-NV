@@ -226,6 +226,76 @@ QPushButton[class="compact"] {{
     padding: 0px;
 }}
 
+/* Styled compact action buttons inside tables */
+QPushButton[class="edit-action"] {{
+    background-color: rgba(0, 123, 255, 0.12);
+    color: {c['accent_blue']};
+    border: 1px solid rgba(0, 123, 255, 0.5);
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+    min-height: 28px;
+    max-height: 28px;
+    min-width: 72px;
+    max-width: 72px;
+    padding: 0px;
+}}
+QPushButton[class="edit-action"]:hover {{
+    background-color: {c['accent_blue']};
+    color: #ffffff;
+    border-color: {c['accent_blue']};
+}}
+QPushButton[class="edit-action"]:pressed {{
+    background-color: {_darken(c['accent_blue'], 10)};
+    border-color: {_darken(c['accent_blue'], 10)};
+}}
+
+QPushButton[class="status-active"] {{
+    background-color: rgba(40, 167, 69, 0.12);
+    color: {c['accent_green']};
+    border: 1px solid rgba(40, 167, 69, 0.5);
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+    min-height: 28px;
+    max-height: 28px;
+    min-width: 85px;
+    max-width: 85px;
+    padding: 0px;
+}}
+QPushButton[class="status-active"]:hover {{
+    background-color: {c['accent_green']};
+    color: #ffffff;
+    border-color: {c['accent_green']};
+}}
+QPushButton[class="status-active"]:pressed {{
+    background-color: {_darken(c['accent_green'], 10)};
+    border-color: {_darken(c['accent_green'], 10)};
+}}
+
+QPushButton[class="status-inactive"] {{
+    background-color: rgba(108, 117, 125, 0.12);
+    color: {c['text_secondary']};
+    border: 1px solid rgba(108, 117, 125, 0.5);
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+    min-height: 28px;
+    max-height: 28px;
+    min-width: 85px;
+    max-width: 85px;
+    padding: 0px;
+}}
+QPushButton[class="status-inactive"]:hover {{
+    background-color: {c['text_muted']};
+    color: #ffffff;
+    border-color: {c['text_muted']};
+}}
+QPushButton[class="status-inactive"]:pressed {{
+    background-color: {_darken(c['text_muted'], 10)};
+    border-color: {_darken(c['text_muted'], 10)};
+}}
+
 /* Confirm / action button */
 QPushButton[class="confirm"],
 QPushButton#confirmBtn {{
