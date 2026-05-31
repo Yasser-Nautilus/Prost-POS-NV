@@ -225,8 +225,20 @@ class PosView(QWidget):
         new_btn.clicked.connect(self._new_order)
         self._parked_layout.addWidget(new_btn)
 
-        # Spacer to push tabs left (visually right in RTL)
+        # Spacer between "+" and parked tabs
         self._parked_layout.addStretch()
+
+        # --- Order type selector buttons (right side of top bar) ---
+        self._type_buttons: Dict[OrderType, QPushButton] = {}
+        for otype in OrderType:
+            icon = _ORDER_TYPE_ICONS[otype]
+            label = _ORDER_TYPE_LABELS[otype]
+            btn = QPushButton(f"{icon}  {label}")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setMinimumHeight(34)
+            btn.clicked.connect(lambda _, t=otype: self._set_order_type(t))
+            self._type_buttons[otype] = btn
+            self._parked_layout.addWidget(btn)
 
         return bar
 
@@ -299,18 +311,6 @@ class PosView(QWidget):
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(12, 8, 12, 8)
         layout.setSpacing(8)
-
-        # Order type selector buttons
-        self._type_buttons: Dict[OrderType, QPushButton] = {}
-        for otype in OrderType:
-            icon = _ORDER_TYPE_ICONS[otype]
-            label = _ORDER_TYPE_LABELS[otype]
-            btn = QPushButton(f"{icon}  {label}")
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setMinimumHeight(44)
-            btn.clicked.connect(lambda _, t=otype: self._set_order_type(t))
-            self._type_buttons[otype] = btn
-            layout.addWidget(btn)
 
         layout.addStretch()
 
