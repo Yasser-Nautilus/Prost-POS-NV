@@ -75,7 +75,8 @@ class OrderPanel(QWidget):
 
         # --- Header ---
         header = QFrame()
-        header.setFixedHeight(48)
+        header.setMinimumHeight(40)
+        header.setMaximumHeight(56)
         header.setStyleSheet(f"""
             QFrame {{
                 background-color: {get_color('secondary_bg')};
@@ -175,7 +176,8 @@ class OrderPanel(QWidget):
 
         # Separator
         sep = QFrame()
-        sep.setFixedHeight(1)
+        sep.setMinimumHeight(1)
+        sep.setMaximumHeight(1)
         sep.setStyleSheet(f"background-color: {get_color('border_color')};")
         layout.addWidget(sep)
 
@@ -311,7 +313,7 @@ class OrderPanel(QWidget):
 
         # Minus button
         minus_btn = QPushButton("−")
-        minus_btn.setFixedSize(36, 36)
+        minus_btn.setMinimumSize(32, 32)
         minus_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         minus_btn.setProperty("class", "compact")
         minus_btn.setStyleSheet(self._qty_btn_style())
@@ -324,7 +326,7 @@ class OrderPanel(QWidget):
         # Quantity label
         qty_lbl = QLabel(str(item.quantity))
         qty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        qty_lbl.setFixedWidth(36)
+        qty_lbl.setMinimumWidth(28)
         qty_lbl.setStyleSheet(f"""
             font-size: 16px;
             font-weight: bold;
@@ -334,7 +336,7 @@ class OrderPanel(QWidget):
 
         # Plus button
         plus_btn = QPushButton("+")
-        plus_btn.setFixedSize(36, 36)
+        plus_btn.setMinimumSize(32, 32)
         plus_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         plus_btn.setProperty("class", "compact")
         plus_btn.setStyleSheet(self._qty_btn_style())
@@ -357,7 +359,7 @@ class OrderPanel(QWidget):
 
         # Remove button
         remove_btn = QPushButton("✕")
-        remove_btn.setFixedSize(28, 28)
+        remove_btn.setMinimumSize(24, 24)
         remove_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         remove_btn.setProperty("class", "compact")
         remove_btn.setStyleSheet(f"""
@@ -368,10 +370,10 @@ class OrderPanel(QWidget):
                 border-radius: 4px;
                 font-size: 12px;
                 font-weight: bold;
-                min-width: 0px;
-                max-width: 28px;
-                min-height: 0px;
-                max-height: 28px;
+                min-width: 24px;
+                max-width: 36px;
+                min-height: 24px;
+                max-height: 36px;
                 padding: 0px;
             }}
             QPushButton:hover {{
@@ -464,10 +466,10 @@ class OrderPanel(QWidget):
                 border-radius: 6px;
                 font-size: 18px;
                 font-weight: bold;
-                min-width: 36px;
-                max-width: 36px;
-                min-height: 36px;
-                max-height: 36px;
+                min-width: 32px;
+                max-width: 44px;
+                min-height: 32px;
+                max-height: 44px;
                 padding: 0px;
             }}
             QPushButton:hover {{

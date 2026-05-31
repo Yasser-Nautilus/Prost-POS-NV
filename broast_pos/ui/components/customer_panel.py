@@ -215,7 +215,7 @@ class CustomerPanel(QFrame):
 
         self._search_btn = QPushButton("🔍")
         self._search_btn.setProperty("class", "compact")
-        self._search_btn.setFixedSize(36, 36)
+        self._search_btn.setMinimumSize(32, 32)
         self._search_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._search_btn.setStyleSheet(f"""
             QPushButton {{
@@ -231,7 +231,7 @@ class CustomerPanel(QFrame):
         search_layout.addWidget(self._search_btn)
 
         self._status_lbl = QLabel("")
-        self._status_lbl.setFixedWidth(24)
+        self._status_lbl.setMinimumWidth(20)
         self._status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._status_lbl.setStyleSheet("font-size: 16px; font-weight: bold;")
         search_layout.addWidget(self._status_lbl)

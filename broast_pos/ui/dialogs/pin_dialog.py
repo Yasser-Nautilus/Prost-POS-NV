@@ -127,7 +127,7 @@ class PinDialog(QDialog):
         for _ in range(_PIN_LENGTH):
             dot = QLabel("○")
             dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            dot.setFixedSize(40, 40)
+            dot.setMinimumSize(36, 36)
             dot.setStyleSheet(f"""
                 font-size: 28px;
                 color: {get_color('text_muted')};

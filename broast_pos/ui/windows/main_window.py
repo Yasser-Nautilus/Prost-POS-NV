@@ -296,7 +296,8 @@ class MainWindow(QWidget):
 
         # Separator
         sep = QFrame()
-        sep.setFixedHeight(1)
+        sep.setMinimumHeight(1)
+        sep.setMaximumHeight(1)
         sep.setStyleSheet(f"background-color: {get_color('border_color')};")
         layout.addWidget(sep)
 

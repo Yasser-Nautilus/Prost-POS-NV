@@ -202,7 +202,7 @@ class PosView(QWidget):
         # "+" new order button
         new_btn = QPushButton("+")
         new_btn.setObjectName("newOrderBtn")
-        new_btn.setFixedSize(40, 36)
+        new_btn.setMinimumSize(36, 32)
         new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         new_btn.setStyleSheet(f"""
             QPushButton#newOrderBtn {{
@@ -212,10 +212,10 @@ class PosView(QWidget):
                 border-radius: 6px;
                 font-size: 20px;
                 font-weight: bold;
-                min-width: 40px;
-                max-width: 40px;
-                min-height: 36px;
-                max-height: 36px;
+                min-width: 36px;
+                max-width: 48px;
+                min-height: 32px;
+                max-height: 44px;
                 padding: 0px;
             }}
             QPushButton#newOrderBtn:hover {{
@@ -617,7 +617,7 @@ class PosView(QWidget):
 
             tab = QPushButton(label)
             tab.setCursor(Qt.CursorShape.PointingHandCursor)
-            tab.setFixedHeight(36)
+            tab.setMinimumHeight(32)
             tab.setProperty("class", "compact")
 
             is_active = idx == self._active_order_idx
