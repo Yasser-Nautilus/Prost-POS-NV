@@ -16,6 +16,7 @@ from typing import Dict, List, Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QFrame,
     QGridLayout,
     QLabel,
     QPushButton,
@@ -67,6 +68,7 @@ class ProductGrid(QWidget):
         # Scrollable container so the grid never gets clipped
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._scroll.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAlwaysOff
         )

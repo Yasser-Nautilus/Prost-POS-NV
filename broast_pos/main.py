@@ -475,20 +475,21 @@ def main() -> int:
     auth_service = AuthService(user_repo)
     product_service = ProductService(product_repo)
     customer_service = CustomerService(customer_repo)
+    delivery_service = DeliveryService(
+        delivery_repo=delivery_repo,
+        user_repo=user_repo,
+    )
     financial_service = FinancialService(
         financial_repo=financial_repo,
         audit_repo=audit_repo,
         auth_service=auth_service,
+        delivery_service=delivery_service,
     )
     order_service = OrderService(
         order_repo=order_repo,
         audit_repo=audit_repo,
         auth_service=auth_service,
         financial_service=financial_service,
-    )
-    delivery_service = DeliveryService(
-        delivery_repo=delivery_repo,
-        user_repo=user_repo,
     )
     report_service = ReportService(
         order_repo=order_repo,

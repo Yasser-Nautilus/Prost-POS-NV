@@ -1,10 +1,10 @@
 # 📦 Prost POS — Complete Project Structure + Progress
 
-> **Last Updated**: 2026-05-08
+> **Last Updated**: 2026-06-02
 > **Tech**: Python 3 · PyQt6 · SQLite (WAL) · ESC/POS · White-Label
 > **Restaurant**: بروستش / Prostsh (configurable via restaurant.json)
-> **Overall Status**: 🔴 **0% implemented** — Architecture complete, all tasks Not Started
-> **Existing Code**: Only `__init__.py` placeholder files in all packages
+> **Overall Status**: 🟢 **~95% implemented** — 85/89 tasks Done, 4 deferred (sync module)
+> **Codebase**: 79 Python files · ~19,645 lines of code · Working application
 
 > **⚠️ Note**: Multi-device mode (secondary PC over network) is **DEFERRED to v2**. V1 is single-PC only.
 
@@ -12,25 +12,27 @@
 
 # 📊 Progress Summary Dashboard
 
-| Module | Files Planned | Tasks | Status |
-|--------|:---:|:---:|:---:|
-| config/ | 4 | 5 | 🔴 Not Started |
-| core/models/ | 6 | 7 | 🔴 Not Started |
-| core/services/ | 7 | 7 | 🔴 Not Started |
-| data/database/ | 4 | 5 | 🔴 Not Started |
-| data/repositories/ | 8 | 8 | 🔴 Not Started |
-| infrastructure/printing/ | 4 | 5 | 🔴 Not Started |
-| infrastructure/sync/ | 2 | 4 | 🔴 Not Started |
-| ui/styles/ | 1 | 1 | 🔴 Not Started |
-| ui/windows/ | 2 | 2 | 🔴 Not Started |
-| ui/views/ | 8 | 9 | 🔴 Not Started |
-| ui/components/ | 6 | 6 | 🔴 Not Started |
-| **feature/order_lifecycle** | cross-cutting | 8 | 🔴 Not Started |
-| **feature/delivery_system** | cross-cutting | 8 | 🔴 Not Started |
-| **feature/printing_flow** | cross-cutting | 5 | 🔴 Not Started |
-| **feature/reports** | cross-cutting | 4 | 🔴 Not Started |
-| **feature/user_permissions** | cross-cutting | 5 | 🔴 Not Started |
-| **TOTAL** | ~51 files | ~89 tasks | 🔴 **0/89** |
+| Module | Files Planned | Files Done | Tasks | Status |
+|--------|:---:|:---:|:---:|:---:|
+| config/ | 4 | 4 | 5/5 | 🟢 Done |
+| core/models/ | 6 | 6 | 7/7 | 🟢 Done |
+| core/services/ | 7 | 7 | 7/7 | 🟢 Done |
+| data/database/ | 4 | 4 | 5/5 | 🟢 Done |
+| data/repositories/ | 8 | 8 | 8/8 | 🟢 Done |
+| infrastructure/printing/ | 4 | 5 | 5/5 | 🟢 Done |
+| infrastructure/sync/ | 2 | 0 | 0/4 | 🔴 Deferred to v2 |
+| ui/styles/ | 1 | 1 | 1/1 | 🟢 Done |
+| ui/windows/ | 2 | 2 | 2/2 | 🟢 Done |
+| ui/views/ | 8 | 8 | 8/8 | 🟢 Done |
+| ui/components/ | 4 | 4 | 4/4 | 🟢 Done |
+| ui/dialogs/ | 4 | 4 | 4/4 | 🟢 Done |
+| features/ (controllers) | 6 | 8 | 8/8 | 🟢 Done |
+| **feature/order_lifecycle** | cross-cutting | — | 8/8 | 🟢 Done |
+| **feature/delivery_system** | cross-cutting | — | 8/8 | 🟢 Done |
+| **feature/printing_flow** | cross-cutting | — | 5/5 | 🟢 Done |
+| **feature/reports** | cross-cutting | — | 4/4 | 🟢 Done |
+| **feature/user_permissions** | cross-cutting | — | 5/5 | 🟢 Done |
+| **TOTAL** | ~51 files | 79 files | **85/89** | 🟢 **95%** |
 
 ---
 
@@ -38,359 +40,369 @@
 
 ```
 broast_pos/
-├── main.py                          # Entry point: load config → init DB + migrations → seed if empty → create services → start QApplication → show login
+├── main.py                          # Entry point (536 lines): load config → init DB → seed → create services → start QApplication → show login
 ├── config/
-│   ├── restaurant.json         # White-label identity (name, logo, colors, fonts)
-│   ├── config.py               # APP_NAME, VERSION, ENVIRONMENT, DEBUG
-│   ├── printers.json           # Printer role → device mapping
-│   └── business_rules.py      # TAX, MAX_DISCOUNT, AUTO_PRINT, timers
+│   ├── restaurant.json              # ✅ White-label identity (name, logo, colors, fonts)
+│   ├── config.py                    # ✅ APP_NAME, VERSION, ENVIRONMENT, DEBUG, business rules
+│   └── printers.json                # ✅ Printer role → device mapping
 ├── core/
-│   ├── models/                 # Pure dataclasses — NO DB, NO UI
-│   │   ├── order.py            # Order, OrderItem, OrderStatus, OrderType, PaymentMethod
-│   │   ├── user.py             # User, UserRole (CASHIER/MANAGER/ADMIN)
-│   │   ├── product.py          # Product, Category (NO modifiers)
-│   │   ├── customer.py         # Customer, CustomerAddress, Zone
-│   │   ├── delivery.py         # DeliveryTrip, DriverAttendance, DriverStatus
-│   │   └── financial.py        # Shift, ShiftTransfer, CashTransaction, ShiftSummary
-│   └── services/               # Business logic — calls repos, never DB directly
-│       ├── order_service.py    # Create, amend(تابع), complete, cancel
-│       ├── auth_service.py     # Login, session, verify_pin (manager override)
-│       ├── delivery_service.py # Check-in/out, trips, settlement, daily summary
-│       ├── product_service.py  # CRUD, search (<100ms)
-│       ├── customer_service.py # Phone lookup, addresses, zones
-│       ├── financial_service.py# Shift lifecycle, expenses, invoice counter
-│       └── report_service.py   # Daily/monthly/yearly reports
+│   ├── models/                      # ✅ Pure dataclasses — NO DB, NO UI
+│   │   ├── order.py                 # ✅ Order, OrderItem, OrderStatus, OrderType, PaymentMethod (195 lines)
+│   │   ├── user.py                  # ✅ User, UserRole (CASHIER/MANAGER/ADMIN)
+│   │   ├── product.py               # ✅ Product, Category (NO modifiers)
+│   │   ├── customer.py              # ✅ Customer, CustomerAddress, Zone
+│   │   ├── delivery.py              # ✅ DeliveryTrip, DriverAttendance, DriverStatus
+│   │   └── financial.py             # ✅ Shift, ShiftTransfer, CashTransaction, ShiftSummary
+│   └── services/                    # ✅ Business logic — calls repos, never DB directly
+│       ├── order_service.py         # ✅ Create, amend(تابع), complete, cancel (363 lines)
+│       ├── auth_service.py          # ✅ Login, session, verify_pin (manager override) (246 lines)
+│       ├── delivery_service.py      # ✅ Check-in/out, trips, settlement, daily summary (302 lines)
+│       ├── product_service.py       # ✅ CRUD, search (<100ms) (197 lines)
+│       ├── customer_service.py      # ✅ Phone lookup, addresses, zones (202 lines)
+│       ├── financial_service.py     # ✅ Shift lifecycle, expenses, invoice counter (304 lines)
+│       └── report_service.py        # ✅ Daily/monthly/yearly reports (327 lines)
 ├── data/
 │   ├── database/
-│   │   ├── connection.py       # SQLite singleton, WAL mode, foreign keys
-│   │   ├── schema.sql          # 14 tables (NO modifier tables)
-│   │   ├── migrations.py       # Version-tracked schema updates
-│   │   └── seed.py             # Default admin + sample data
-│   └── repositories/           # Abstract DB access — enables future sync
-│       ├── base_repository.py  # Generic ABC: get_by_id, save, delete
-│       ├── order_repository.py
-│       ├── user_repository.py
-│       ├── product_repository.py
-│       ├── customer_repository.py
-│       ├── delivery_repository.py   # Trips, attendance, settlement
-│       ├── financial_repository.py  # Shifts, expenses, pending calculations
-│       └── audit_repository.py      # Audit trail logging + queries
+│   │   ├── connection.py            # ✅ SQLite singleton, WAL mode, foreign keys (190 lines)
+│   │   ├── schema.sql               # ✅ 14 tables (NO modifier tables)
+│   │   ├── migrations.py            # ✅ Version-tracked schema updates (149 lines)
+│   │   └── seed.py                  # ✅ Default admin + sample data (164 lines)
+│   └── repositories/                # ✅ Abstract DB access — enables future sync
+│       ├── base_repository.py       # ✅ Generic ABC
+│       ├── order_repository.py      # ✅ (383 lines)
+│       ├── user_repository.py       # ✅ (170 lines)
+│       ├── product_repository.py    # ✅ (168 lines)
+│       ├── customer_repository.py   # ✅ (184 lines)
+│       ├── delivery_repository.py   # ✅ (338 lines)
+│       ├── financial_repository.py  # ✅ (369 lines)
+│       └── audit_repository.py      # ✅ (168 lines)
+├── features/                        # ✅ Cross-cutting controllers
+│   ├── order_lifecycle/
+│   │   ├── order_controller.py      # ✅ Full order lifecycle (636 lines)
+│   │   ├── amendment_tracker.py     # ✅ Snapshot + diff for edits (126 lines)
+│   │   ├── payment_coordinator.py   # ✅ Payment method validation (124 lines)
+│   │   └── invoice_manager.py       # ✅ Race-safe invoice numbers (73 lines)
+│   ├── delivery_system/
+│   │   └── delivery_controller.py   # ✅ Driver lifecycle + settlement (347 lines)
+│   ├── printing_flow/
+│   │   └── printing_controller.py   # ✅ Silent print orchestration (212 lines)
+│   ├── reports/
+│   │   └── reports_controller.py    # ✅ Report generation + validation (486 lines)
+│   ├── financial/
+│   │   └── financial_controller.py  # ✅ Shift lifecycle UI orchestration (219 lines)
+│   └── user_permissions/
+│       └── permissions_controller.py # ✅ Role-based access + audit logging (437 lines)
 ├── infrastructure/
 │   ├── printing/
-│   │   ├── printer_manager.py  # Routes to KITCHEN / CASHIER_1 / CASHIER_2
-│   │   ├── escpos_printer.py   # USB/Network/Serial thermal adapter
-│   │   ├── receipt_templates.py# 10 print layouts
-│   │   └── printer_config.py   # JSON config loader
-│   └── sync/                   # Future Google Sheets
-│       ├── sync_interface.py   # Abstract contract
-│       └── sheets_sync.py      # No-op stub
-└── ui/                         # PyQt6 — ZERO business logic
-    ├── app.py
+│   │   ├── printer_manager.py       # ✅ Routes to KITCHEN / CASHIER_1 / CASHIER_2 (224 lines)
+│   │   ├── escpos_printer.py        # ✅ USB/Network/Serial thermal adapter (219 lines)
+│   │   ├── receipt_templates.py     # ✅ 10 print layouts (572 lines)
+│   │   ├── printer_config.py        # ✅ JSON config loader
+│   │   └── print_triggers.py        # ✅ Auto-trigger hooks (159 lines)
+│   └── sync/                        # 🔴 DEFERRED to v2
+│       └── __init__.py              # Placeholder only
+└── ui/                              # ✅ PyQt6 — ZERO business logic
     ├── styles/
-    │   └── theme.py            # Dark navy QSS, Arabic fonts, RTL
+    │   └── theme.py                 # ✅ Dark navy QSS, Arabic fonts, RTL (521 lines)
     ├── windows/
-    │   ├── main_window.py      # Sidebar navigation shell (role-based)
-    │   └── login_window.py     # Avatar tiles + PIN
+    │   ├── main_window.py           # ✅ Sidebar navigation shell (role-based) (552 lines)
+    │   └── login_window.py          # ✅ Window container for login (wraps login_view)
     ├── views/
-    │   ├── login_view.py       # User avatar tiles → PIN → session
-    │   ├── pos_view.py         # 🔥 Main cashier screen (3-column)
-    │   ├── tracking_view.py    # Active orders, timers, auto-complete visual
-    │   ├── delivery_view.py    # 3-panel: drivers | trips | settlement
-    │   ├── reports_view.py     # Reports dashboard + print
-    │   ├── products_view.py    # Products/categories/zones (Manager)
-    │   ├── users_view.py       # User management (Admin)
-    │   └── financial_view.py   # Shift/expenses/reconciliation (Manager)
-    └── components/             # 6 reusable widgets
-        ├── product_grid.py     # Tap = add to order (NO popup)
-        ├── order_panel.py      # Live items, +/-, notes, totals
-        ├── payment_dialog.py   # كاش / فيزا / اونلاين
-        ├── pin_dialog.py       # Manager override numpad
-        ├── table_grid.py       # Green=free / Red=occupied (shared)
-        └── customer_panel.py   # Phone → auto-fill → address cards
+    │   ├── login_view.py            # ✅ User avatar tiles → PIN → session (593 lines)
+    │   ├── pos_view.py              # ✅ 🔥 Main cashier screen (3-column) (944 lines)
+    │   ├── tracking_view.py         # ✅ Active orders, timers, auto-complete visual (688 lines)
+    │   ├── delivery_view.py         # ✅ 3-panel: drivers | trips | settlement (792 lines)
+    │   ├── reports_view.py          # ✅ Reports dashboard + print (999 lines)
+    │   ├── products_view.py         # ✅ Products/categories/zones (Manager) (827 lines)
+    │   ├── users_view.py            # ✅ User management (Admin) (360 lines)
+    │   └── financial_view.py        # ✅ Shift/expenses/reconciliation (Manager) (667 lines)
+    ├── components/                   # ✅ Reusable widgets
+    │   ├── product_grid.py          # ✅ Tap = add to order (NO popup) (226 lines)
+    │   ├── order_panel.py           # ✅ Live items, +/-, notes, totals (481 lines)
+    │   ├── customer_panel.py        # ✅ Phone → auto-fill → address cards (413 lines)
+    │   └── table_grid.py            # ✅ Green=free / Red=occupied (204 lines)
+    └── dialogs/                      # ✅ Modal dialogs
+        ├── payment_dialog.py        # ✅ كاش / فيزا / اونلاين (476 lines)
+        ├── pin_dialog.py            # ✅ Manager override numpad (331 lines)
+        ├── shift_dialog.py          # ✅ Shift transfer/close flows (539 lines)
+        └── expense_dialog.py        # ✅ Expense entry form (245 lines)
 ```
 
 ---
 
-# 📁 MODULE-LEVEL PROGRESS
+# 📁 MODULE-LEVEL STATUS
 
 ---
 
-## 📁 config/ — Configuration
+## 📁 config/ — 🟢 DONE (5/5)
 
-**Goal**: Centralize all system configuration. White-label ready: one `restaurant.json` swap = new restaurant.
-
-| # | Task | Details | Status |
-|---|------|---------|:---:|
-| 1 | Restaurant Branding (`restaurant.json`) | name_ar/en, logo, slogan, receipt_footer, theme colors, category_colors[], fonts | 🔴 |
-| 2 | General Settings (`config.py`) | APP_NAME (from JSON), VERSION, ENVIRONMENT, DEBUG, LANGUAGE=ar | 🔴 |
-| 3 | Printer Config (`printers.json`) | kitchen: network, cashier_1/2: USB. Loaded at startup | 🔴 |
-| 4 | Business Rules | TAX_RATE=0, MAX_DISCOUNT=100, AUTO_PRINT=True, TRACKING_REFRESH=10s | 🔴 |
-| 5 | Paths & Files | DATABASE_PATH, LOGS_PATH, FONTS_PATH, BRANDING_PATH | 🔴 |
-
-**Notes**: No logic here. Theme colors → Qt StyleSheet at startup. Category colors rotate.
+| # | Task | Status |
+|---|------|:---:|
+| 1 | Restaurant Branding (`restaurant.json`) | 🟢 Done |
+| 2 | General Settings (`config.py`) | 🟢 Done |
+| 3 | Printer Config (`printers.json`) | 🟢 Done |
+| 4 | Business Rules | 🟢 Done |
+| 5 | Paths & Files | 🟢 Done |
 
 ---
 
-## 📁 core/models/ — Data Models
+## 📁 core/models/ — 🟢 DONE (7/7)
 
-**Goal**: Pure Python dataclasses. NO database, NO UI imports.
-
-| # | Task | Key Details | Status |
-|---|------|-------------|:---:|
-| 1 | Order Model | 4 types (صالة/تيك اواي/دليفري/استلام محل), 3 payments (كاش/فيزا/اونلاين), computed totals, cancellation fields | 🔴 |
-| 2 | OrderItem | product_id, name, qty (**int**), unit_price, notes (str). **NO modifiers list** | 🔴 |
-| 3 | User Model | UserRole enum (CASHIER/MANAGER/ADMIN), PIN hash (SHA-256, **UNIQUE**), cashier_slot (1/2) | 🔴 |
-| 4 | Product Model | Product + Category. NO Modifier model. Each variation = separate product | 🔴 |
-| 5 | Customer Model | Phone (11-digit Egyptian, unique), CustomerAddress, Zone (fixed delivery_fee) | 🔴 |
-| 6 | Delivery Model | DeliveryTrip (lifecycle: created→dispatched→returned→settled), DriverAttendance, DriverStatus | 🔴 |
-| 7 | Financial Model | Shift (invoice counter resets to #1), ShiftTransfer (snapshot), CashTransaction (**immutable, expense-only**) | 🔴 |
-
-**Key Rules**:
-- `is_prepaid`: True for اونلاين, False for كاش/فيزا
-- Visa NOT available for delivery
-- `restaurant_revenue` = total - delivery_fee (critical for shift reports)
-- Quantity is **int** — no 0.5 chickens
+| # | Task | Status |
+|---|------|:---:|
+| 1 | Order Model (Order, OrderItem, OrderStatus, OrderType, PaymentMethod) | 🟢 Done |
+| 2 | OrderItem Model (inside order.py) | 🟢 Done |
+| 3 | User Model (User, UserRole) | 🟢 Done |
+| 4 | Product Model (Product, Category) | 🟢 Done |
+| 5 | Customer Model (Customer, CustomerAddress, Zone) | 🟢 Done |
+| 6 | Delivery Model (DeliveryTrip, DriverAttendance, DriverStatus) | 🟢 Done |
+| 7 | Financial Model (Shift, ShiftTransfer, CashTransaction, ShiftSummary) | 🟢 Done |
 
 ---
 
-## 📁 core/services/ — Business Logic
+## 📁 core/services/ — 🟢 DONE (7/7)
 
-**Goal**: All rules, validations, workflows. Services → repositories. **Never** talk to UI.
-
-| # | Service | Key Responsibilities | Status |
-|---|---------|---------------------|:---:|
-| 1 | OrderService | create (shift guard), amend (تابع, manager PIN for removals), complete, cancel (PIN+reason), apply_discount (PIN) | 🔴 |
-| 2 | AuthService | get_all_users (avatar tiles), login, logout, verify_pin (manager override → returns WHO), check_permission | 🔴 |
-| 3 | DeliveryService | check_in/out, create_trip, mark_dispatched/returned, settle_trip (cash vs online logic), daily_summary | 🔴 |
-| 4 | ProductService | get_categories, get_products_by_category, search (<100ms), CRUD (manager only) | 🔴 |
-| 5 | CustomerService | find_by_phone (exact 11-digit), create_customer+address, zone CRUD (manager), validation | 🔴 |
-| 6 | FinancialService | open_shift (reset invoice #1), transfer (snapshot), close (prerequisites: all settled + summary printed), add_expense (immutable) | 🔴 |
-| 7 | ReportService | daily (type breakdown), payment breakdown, cancelled orders, product sales, driver summary, monthly, yearly | 🔴 |
-
-**Key Rules**:
-- Shift must be active to create orders
-- Takeaway: save triggers immediate Payment Dialog
-- Delivery (online): auto-marked paid at save
-- Adding items = free. Removing items = manager PIN
-- Print failures logged but **never block** the cashier
+| # | Service | Status |
+|---|---------|:---:|
+| 1 | OrderService | 🟢 Done |
+| 2 | AuthService | 🟢 Done |
+| 3 | DeliveryService | 🟢 Done |
+| 4 | ProductService | 🟢 Done |
+| 5 | CustomerService | 🟢 Done |
+| 6 | FinancialService | 🟢 Done |
+| 7 | ReportService | 🟢 Done |
 
 ---
 
-## 📁 data/database/ — SQLite Database
+## 📁 data/database/ — 🟢 DONE (5/5)
 
-**Goal**: Connection, schema, migrations, seed data.
-
-| # | Task | Details | Status |
-|---|------|---------|:---:|
-| 1 | Connection (`connection.py`) | Singleton, WAL mode, check_same_thread=False, foreign keys, Row factory | 🔴 |
-| 2 | Schema (`schema.sql`) | 14 tables: users, categories, products, customers, zones, customer_addresses, orders, order_items, delivery_trips, delivery_trip_orders, driver_attendance, shifts, shift_transfers, cash_transactions, audit_log | 🔴 |
-| 3 | Indexes | 11 performance indexes (orders_status, customers_phone, products_category, etc.) | 🔴 |
-| 4 | Migrations (`migrations.py`) | schema_version table, auto-run at startup, ALTER TABLE only | 🔴 |
-| 5 | Seed Data (`seed.py`) | Default admin (PIN: 1234 hashed), sample categories + products. Idempotent | 🔴 |
-
-**Notes**: No modifier tables (3 tables eliminated). order_items.quantity = INTEGER. PIN hash is UNIQUE.
+| # | Task | Status |
+|---|------|:---:|
+| 1 | Connection (WAL, singleton, Row factory) | 🟢 Done |
+| 2 | Schema (14 tables, no modifier tables) | 🟢 Done |
+| 3 | Indexes (11 performance indexes) | 🟢 Done |
+| 4 | Migrations (version-tracked, auto-run) | 🟢 Done |
+| 5 | Seed Data (admin, categories, products, zones) | 🟢 Done |
 
 ---
 
-## 📁 data/repositories/ — Data Access Layer
+## 📁 data/repositories/ — 🟢 DONE (8/8)
 
-**Goal**: Abstract all DB access. Services → repos → SQLite. Enables future Google Sheets sync.
-
-| # | Repository | Key Methods | Status |
-|---|-----------|-------------|:---:|
-| 1 | BaseRepository | Abstract: get_by_id, save (insert/update), delete (soft) | 🔴 |
-| 2 | OrderRepository | get_by_id/invoice/table, save, get_active, get_unassigned_deliveries, get_next_invoice_number | 🔴 |
-| 3 | UserRepository | get_by_id/username/pin, save, get_all_active, get_drivers | 🔴 |
-| 4 | ProductRepository | get_categories, get_products_by_category, search, save_product/category | 🔴 |
-| 5 | CustomerRepository | find_by_phone (exact), save_customer, get/save_address, zone CRUD | 🔴 |
-| 6 | DeliveryRepository | check_in/out, create/dispatch/return/settle trip, get_active/unsettled, daily_summary | 🔴 |
-| 7 | FinancialRepository | open/close_shift, get_active_shift, add_expense (immutable), pending calculations, has_unsettled_trips | 🔴 |
-
-**Notes**: All SQL lives ONLY here. Parameterized queries only. No modifier joins needed.
+| # | Repository | Status |
+|---|-----------|:---:|
+| 1 | BaseRepository (ABC, Generic CRUD) | 🟢 Done |
+| 2 | OrderRepository | 🟢 Done |
+| 3 | UserRepository | 🟢 Done |
+| 4 | ProductRepository | 🟢 Done |
+| 5 | CustomerRepository | 🟢 Done |
+| 6 | DeliveryRepository | 🟢 Done |
+| 7 | FinancialRepository | 🟢 Done |
+| 8 | AuditRepository | 🟢 Done |
 
 ---
 
-## 📁 infrastructure/printing/ — Thermal Printing
+## 📁 infrastructure/printing/ — 🟢 DONE (5/5)
 
-**Goal**: Reliable, silent ESC/POS printing. 2 cashier printers + 1 shared kitchen. **Never block cashier.**
-
-| # | Task | Details | Status |
-|---|------|---------|:---:|
-| 1 | PrinterManager | Route: KITCHEN (shared), CASHIER_1, CASHIER_2. Never raise, never block | 🔴 |
-| 2 | ESC/POS Adapter | USB/Network/Serial via python-escpos. Arabic encoding. Auto-reconnect | 🔴 |
-| 3 | Receipt Templates | **10 layouts**: 4 customer receipts (dine-in/delivery/takeaway/pickup), kitchen ticket, amendment ticket (تابع), daily sales report, shift transfer report, driver settlement, driver summary | 🔴 |
-| 4 | Silent Printing | Auto-trigger: create→kitchen, amend→amendment, complete→receipt, close→summary. Zero dialogs | 🔴 |
-| 5 | Printer Config | JSON config loaded at startup. Future: admin UI | 🔴 |
-
-**Key**: Kitchen ticket has NO prices, NO customer info. Order number in LARGE BOLD. Notes shown as `ملاحظة: {text}`.
+| # | Task | Status |
+|---|------|:---:|
+| 1 | PrinterManager (route to KITCHEN / CASHIER_1 / CASHIER_2) | 🟢 Done |
+| 2 | ESC/POS Adapter (USB/Network/Serial/Dummy) | 🟢 Done |
+| 3 | Receipt Templates (10 layouts) | 🟢 Done |
+| 4 | Silent Printing (auto-trigger, zero dialogs) | 🟢 Done |
+| 5 | Printer Config (JSON loader) | 🟢 Done |
 
 ---
 
-## 📁 infrastructure/sync/ — Future Google Sheets
+## 📁 infrastructure/sync/ — 🔴 DEFERRED (0/4)
 
-**Goal**: Define contracts now, implement later. Offline-first.
+| # | Task | Status |
+|---|------|:---:|
+| 1 | Sync Interface (abstract contract) | 🔴 Deferred |
+| 2 | Event Hooks (design only) | 🔴 Deferred |
+| 3 | Sheets Adapter (stub) | 🔴 Deferred |
+| 4 | Background Worker (future) | 🔴 Deferred |
 
-| # | Task | Details | Status |
-|---|------|---------|:---:|
-| 1 | Sync Interface | Abstract: sync_order, sync_expense, sync_report, is_connected | 🔴 |
-| 2 | Event Hooks (design only) | After create/cancel/settle/close → non-blocking sync triggers | 🔴 |
-| 3 | Sheets Adapter (stub) | No-op methods, logs "sync not configured" | 🔴 |
-| 4 | Background Worker | Queue-based, retry, offline-safe. **FUTURE — do not implement now** | 🔴 |
-
----
-
-## 📁 ui/styles/ — Theme
-
-| # | Task | Details | Status |
-|---|------|---------|:---:|
-| 1 | Global Theme (`theme.py`) | Dark navy (#1a1d23), Arabic fonts (Cairo/Tajawal), RTL, 48px min buttons, consistent spacing | 🔴 |
+> **Note**: Sync is intentionally deferred. Local system must be stable first.
 
 ---
 
-## 📁 ui/windows/ — App Windows
+## 📁 ui/styles/ — 🟢 DONE (1/1)
 
-| # | Task | Details | Status |
-|---|------|---------|:---:|
-| 1 | Main Window | Sidebar: POS, Tracking, Delivery (all), Reports, Products, Financial (manager), Users (admin). QStackedWidget | 🔴 |
-| 2 | Login Window | Avatar tiles + masked PIN + numpad. 5-second login goal | 🔴 |
-
----
-
-## 📁 ui/views/ — Screens
-
-| # | View | Details | Status |
-|---|------|---------|:---:|
-| 0 | Login View | Avatar tiles for active users → PIN entry → session created → navigate to POS | 🔴 |
-| 1 | **POS View** 🔥 | 3-column (categories|products|order panel), parked orders bar, order type selector, table grid (dine-in), customer panel (delivery) | 🔴 |
-| 2 | Tracking View | Tab filters by type, order cards with live timers, takeaway auto-highlight at 20min (visual only), auto-refresh 10s | 🔴 |
-| 3 | Delivery View | 3-panel: drivers (check-in/out) | orders+trips (assign/dispatch/return) | settlement (cash vs online breakdown) + end-of-day summary | 🔴 |
-| 4 | Reports View | Daily (type breakdown, payment split, cancelled, product ranking, driver summary), monthly (charts, bestsellers), yearly. Print any report | 🔴 |
-| 5 | Products View | Category/product CRUD, zone management (name + delivery_fee), sort order. Manager only | 🔴 |
-| 6 | Users View | User CRUD, avatar upload, role assign, cashier_slot, PIN (unique), driver setup. Admin only | 🔴 |
-| 7 | Financial View | Open shift (any role), expense entry (immutable), shift transfer (manager PIN, snapshot, print), close shift (prerequisites check, final summary) | 🔴 |
+| # | Task | Status |
+|---|------|:---:|
+| 1 | Global Theme (dark navy, Arabic fonts, RTL, 521 lines QSS) | 🟢 Done |
 
 ---
 
-## 📁 ui/components/ — Reusable Widgets (6 total)
+## 📁 ui/windows/ — 🟢 DONE (2/2)
 
-| # | Component | Details | Status |
-|---|-----------|---------|:---:|
-| 1 | Product Grid | Large buttons (80×60px min), category-colored, tap = add directly (NO popup) | 🔴 |
-| 2 | Order Panel | Scrollable items, +/- buttons (not QSpinBox), per-item notes, live totals (subtotal, service, discount, delivery_fee, grand total) | 🔴 |
-| 3 | Payment Dialog | 3 methods (كاش/فيزا/اونلاين), Visa disabled for delivery, cash: amount+change, quick buttons (50/100/200/500) | 🔴 |
-| 4 | PIN Dialog | Masked input (any length), on-screen numpad, verify_pin → returns user if MANAGER/ADMIN, audit trail | 🔴 |
-| 5 | Table Grid | Green=free (new order), Red=occupied (load existing). Shared across cashiers. Shows order # + cashier name | 🔴 |
-| 6 | Customer Panel | Phone (11-digit) → exact match → auto-fill name/addresses. Address cards (colored). Zone dropdown → auto-fill fee (read-only) | 🔴 |
-
-**Removed**: ~~Modifier Dialog~~ — no modifier system exists.
+| # | Task | Status |
+|---|------|:---:|
+| 1 | Main Window (sidebar nav, role-based, collapsible) | 🟢 Done |
+| 2 | Login Window (container for login_view) | 🟢 Done |
 
 ---
 
-# 🧩 FEATURE-LEVEL PROGRESS
+## 📁 ui/views/ — 🟢 DONE (8/8)
 
-These track **end-to-end business features** across multiple modules.
-
----
-
-## 📦 feature/order_lifecycle — Full Order Flow
-
-| # | Task | Details | Status |
-|---|------|---------|:---:|
-| 1 | Create Order (In-Memory) | Select type → add items (tap=add, no popup) → notes → live totals. NOT in DB yet | 🔴 |
-| 2 | Parked Orders | Multi-order buffer (tabs), in-memory only, lost on crash (acceptable v1) | 🔴 |
-| 3 | Validate & Save | Business rules enforced → invoice # generated → kitchen ticket auto-prints → takeaway: immediate payment | 🔴 |
-| 4 | Payment Flow | Separate from save. Dine-in: click table → pay. Pickup: find order → pay. Delivery cash: via settlement | 🔴 |
-| 5 | Edit Saved Order (تابع) | Add items = free. Remove items = manager PIN. Amendment kitchen ticket (changes only) | 🔴 |
-| 6 | Status Transitions | Non-delivery: ACTIVE→COMPLETED. Delivery: ACTIVE→OUT→DELIVERED→COMPLETED. CANCELLED from any non-completed | 🔴 |
-| 7 | Cancel Order | Manager PIN + reason → audit trail. Cannot cancel completed orders | 🔴 |
-| 8 | Invoice Numbers | Sequential int, resets to #1 on open_shift, race-safe for 2 cashiers | 🔴 |
-
-### Order Flow Per Type:
-- **Dine-In (صالة)**: Select table → add items → confirm → kitchen prints → [eat] → click table → pay → receipt → table free
-- **Takeaway (تيك اواي)**: Add items → confirm → kitchen prints → **immediate payment dialog** → receipt → tracking shows timer
-- **Delivery Cash (دليفري+كاش)**: Phone → address → items → confirm → kitchen prints → assign driver → dispatch → deliver+collect → return → settle
-- **Delivery Online (دليفري+اونلاين)**: Same but auto-marked PAID at save, driver collects nothing
-- **Pickup (استلام محل)**: Phone+name → items → confirm → kitchen prints → [customer arrives] → find order → pay → receipt
+| # | View | Lines | Status |
+|---|------|:---:|:---:|
+| 0 | Login View (avatar tiles + PIN) | 593 | 🟢 Done |
+| 1 | **POS View** 🔥 (3-column cashier screen) | 944 | 🟢 Done |
+| 2 | Tracking View (timers, auto-highlight) | 688 | 🟢 Done |
+| 3 | Delivery View (3-panel driver management) | 792 | 🟢 Done |
+| 4 | Reports View (daily/monthly/yearly + print) | 999 | 🟢 Done |
+| 5 | Products View (CRUD + zones, manager only) | 827 | 🟢 Done |
+| 6 | Users View (admin only) | 360 | 🟢 Done |
+| 7 | Financial View (shift lifecycle + expenses) | 667 | 🟢 Done |
 
 ---
 
-## 🚚 feature/delivery_system — Driver Lifecycle & Settlement
+## 📁 ui/components/ — 🟢 DONE (4/4)
 
-| # | Task | Details | Status |
-|---|------|---------|:---:|
-| 1 | Driver Management | Manager adds (via Users), cashier check-in/out. Only checked-in drivers in dispatch list | 🔴 |
-| 2 | Assign Driver to Trip | Manual selection of orders → select driver → create trip. Cross-cashier trips OK | 🔴 |
-| 3 | Mark Out for Delivery | Record dispatched_at, orders → OUT_FOR_DELIVERY, driver status → "out" | 🔴 |
-| 4 | Mark Returned | Record returned_at, orders → DELIVERED, driver → "available". **No settlement blocking** | 🔴 |
-| 5 | **Per-Trip Settlement** 🔥 | cash_collected = Σ(order_total WHERE كاش). total_fees = Σ(delivery_fee ALL). No shortage tracking | 🔴 |
-| 6 | Settlement Receipt | Per-trip: orders list with payment method + collected amount, summary totals | 🔴 |
-| 7 | **End-of-Day Summary** 🔥 | All drivers: trips, orders, fees earned. Grand total = total driver expenses | 🔴 |
-| 8 | Expense Entry (v1) | Manual: amount + description + category. Immutable. Future: auto from settlement | 🔴 |
-
-### Settlement Rules:
-| Payment | Driver Collects | Driver Hands Over |
-|---------|----------------|-------------------|
-| كاش | food + delivery_fee (everything) | everything |
-| اونلاين | nothing (prepaid) | nothing |
-| فيزا | ❌ NOT AVAILABLE FOR DELIVERY | — |
+| # | Component | Lines | Status |
+|---|-----------|:---:|:---:|
+| 1 | Product Grid (tap = add directly) | 226 | 🟢 Done |
+| 2 | Order Panel (live items, +/-, notes, totals) | 481 | 🟢 Done |
+| 3 | Customer Panel (phone → auto-fill → address cards) | 413 | 🟢 Done |
+| 4 | Table Grid (green=free, red=occupied) | 204 | 🟢 Done |
 
 ---
 
-## 🖨️ feature/printing_flow — Silent Thermal Printing
+## 📁 ui/dialogs/ — 🟢 DONE (4/4)
 
-| # | Task | Details | Status |
-|---|------|---------|:---:|
-| 1 | Kitchen Ticket | Auto on save. NO prices, NO customer info. Order # in LARGE BOLD. Per-item notes | 🔴 |
-| 2 | Customer Receipt (4 variants) | Dine-in (table), Delivery (customer+driver+fee), Takeaway (انتظار banner), Pickup (customer+phone) | 🔴 |
-| 3 | Daily Summary | Matches receipt photo format. Must print before shift close allowed | 🔴 |
-| 4 | Driver Settlement | Per-trip receipt for cash accountability | 🔴 |
-| 5 | Failure Handling | Log + badge icon. **Never show dialog, never block cashier** | 🔴 |
-
----
-
-## 📊 feature/reports — Financial Summaries
-
-| # | Task | Details | Status |
-|---|------|---------|:---:|
-| 1 | Aggregate by Type | صالة/تيك اواي/دليفري/استلام محل → count + revenue | 🔴 |
-| 2 | Daily Summary | Shift-based, structured data (not print format) | 🔴 |
-| 3 | Print Integration | Send to thermal printer, silent, exact format | 🔴 |
-| 4 | Consistency Checks | Cross-validate sums, handle edge cases, no double-counting | 🔴 |
+| # | Dialog | Lines | Status |
+|---|--------|:---:|:---:|
+| 1 | Payment Dialog (كاش/فيزا/اونلاين, quick buttons) | 476 | 🟢 Done |
+| 2 | PIN Dialog (manager override, on-screen numpad) | 331 | 🟢 Done |
+| 3 | Shift Dialog (transfer + close flows) | 539 | 🟢 Done |
+| 4 | Expense Dialog (amount + category + description) | 245 | 🟢 Done |
 
 ---
 
-## 🔐 feature/user_permissions — Role-Based Access
+# 🧩 FEATURE-LEVEL STATUS
 
-| # | Task | Details | Status |
-|---|------|---------|:---:|
-| 1 | Role Model | CASHIER (orders, tracking, delivery), MANAGER (+reports, products, financial), ADMIN (+users) | 🔴 |
-| 2 | PIN Storage | SHA-256 hash, UNIQUE per user, no recovery (admin resets) | 🔴 |
-| 3 | Manager Override | PIN dialog → verify → action proceeds with audit trail. Per-action, doesn't change session | 🔴 |
-| 4 | Audit Logging | Cancel, discount, shift open/close, user changes → audit_log table (JSON details) | 🔴 |
-| 5 | Navigation Access | Sidebar items shown/hidden by role | 🔴 |
+---
+
+## 📦 feature/order_lifecycle — 🟢 DONE (8/8)
+
+| # | Task | Status |
+|---|------|:---:|
+| 1 | Create Order (in-memory → validate → save) | 🟢 Done |
+| 2 | Parked Orders (multi-order tabs, in-memory) | 🟢 Done |
+| 3 | Validate & Save (shift guard, kitchen print, takeaway auto-pay) | 🟢 Done |
+| 4 | Payment Flow (separate from save, 3 methods) | 🟢 Done |
+| 5 | Edit Saved Order (تابع, manager PIN for removals) | 🟢 Done |
+| 6 | Status Transitions (simplified: ACTIVE → COMPLETED / delivery chain) | 🟢 Done |
+| 7 | Cancel Order (manager PIN + reason + audit) | 🟢 Done |
+| 8 | Invoice Numbers (race-safe, resets per shift) | 🟢 Done |
+
+**Controllers**: `order_controller.py` (636), `amendment_tracker.py` (126), `payment_coordinator.py` (124), `invoice_manager.py` (73)
+
+---
+
+## 🚚 feature/delivery_system — 🟢 DONE (8/8)
+
+| # | Task | Status |
+|---|------|:---:|
+| 1 | Driver Management (check-in/out, status tracking) | 🟢 Done |
+| 2 | Assign Driver to Trip (manual order selection) | 🟢 Done |
+| 3 | Mark Out for Delivery (dispatch timestamp) | 🟢 Done |
+| 4 | Mark Returned (driver back, orders → DELIVERED) | 🟢 Done |
+| 5 | Per-Trip Settlement 🔥 (cash vs online breakdown) | 🟢 Done |
+| 6 | Settlement Receipt (per-trip print) | 🟢 Done |
+| 7 | End-of-Day Summary 🔥 (all drivers aggregate) | 🟢 Done |
+| 8 | Expense Entry (manual v1) | 🟢 Done |
+
+**Controller**: `delivery_controller.py` (347 lines)
+
+---
+
+## 🖨️ feature/printing_flow — 🟢 DONE (5/5)
+
+| # | Task | Status |
+|---|------|:---:|
+| 1 | Kitchen Ticket (auto on save, NO prices) | 🟢 Done |
+| 2 | Customer Receipt (4 variants by order type) | 🟢 Done |
+| 3 | Daily Summary (matches receipt format) | 🟢 Done |
+| 4 | Driver Settlement Receipt | 🟢 Done |
+| 5 | Failure Handling (log, badge, never block) | 🟢 Done |
+
+**Controller**: `printing_controller.py` (212 lines)
+
+---
+
+## 📊 feature/reports — 🟢 DONE (4/4)
+
+| # | Task | Status |
+|---|------|:---:|
+| 1 | Aggregate by Type (صالة/تيك اواي/دليفري/استلام محل) | 🟢 Done |
+| 2 | Daily Summary (shift-based structured data) | 🟢 Done |
+| 3 | Print Integration (thermal, silent) | 🟢 Done |
+| 4 | Consistency Checks (cross-validate sums) | 🟢 Done |
+
+**Controller**: `reports_controller.py` (486 lines)
+
+---
+
+## 🔐 feature/user_permissions — 🟢 DONE (5/5)
+
+| # | Task | Status |
+|---|------|:---:|
+| 1 | Role Model (CASHIER/MANAGER/ADMIN hierarchy) | 🟢 Done |
+| 2 | PIN Storage (SHA-256 hash, UNIQUE) | 🟢 Done |
+| 3 | Manager Override (PIN → verify → audit trail) | 🟢 Done |
+| 4 | Audit Logging (cancel, discount, shift events) | 🟢 Done |
+| 5 | Navigation Access (sidebar by role) | 🟢 Done |
+
+**Controller**: `permissions_controller.py` (437 lines)
 
 ---
 
 # 🧭 EXECUTION ROADMAP
 
-| Phase | Scope | Depends On | Status |
-|:---:|-------|:---:|:---:|
-| **1** | Database + Models + Connection | — | 🔴 |
-| **2** | Repositories + Base CRUD | Phase 1 | 🔴 |
-| **3** | Auth Service + Login UI | Phase 2 | 🔴 |
-| **4** | Product Service + POS View (core) | Phase 2 | 🔴 |
-| **5** | Order Service + Kitchen Printing | Phase 4 | 🔴 |
-| **6** | Payment Flow + Receipt Printing | Phase 5 | 🔴 |
-| **7** | Tracking View + Status Transitions | Phase 5 | 🔴 |
-| **8** | Customer/Delivery Service + Delivery View | Phase 5 | 🔴 |
-| **9** | Financial Service + Shift Lifecycle | Phase 6 | 🔴 |
-| **10** | Reports + Daily Summary | Phase 9 | 🔴 |
-| **11** | Permissions + Audit + PIN Override | Phase 3 | 🔴 |
-| **12** | Polish: Theme, White-Label, Config | All | 🔴 |
+| Phase | Scope | Status |
+|:---:|-------|:---:|
+| **1** | Database + Models + Connection | 🟢 Done |
+| **2** | Repositories + Base CRUD | 🟢 Done |
+| **3** | Auth Service + Login UI | 🟢 Done |
+| **4** | Product Service + POS View (core) | 🟢 Done |
+| **5** | Order Service + Kitchen Printing | 🟢 Done |
+| **6** | Payment Flow + Receipt Printing | 🟢 Done |
+| **7** | Tracking View + Status Transitions | 🟢 Done |
+| **8** | Customer/Delivery Service + Delivery View | 🟢 Done |
+| **9** | Financial Service + Shift Lifecycle | 🟢 Done |
+| **10** | Reports + Daily Summary | 🟢 Done |
+| **11** | Permissions + Audit + PIN Override | 🟢 Done |
+| **12** | Polish: Theme, White-Label, Config | 🟢 Done |
 
-> ⚠️ **Note**: Manager PIN override is needed starting **Phase 5** (cancel/discount in OrderService), even though the full permission system comes in Phase 11. Implement `verify_pin()` in AuthService during Phase 3 so it’s available for Phase 5+.
+---
 
-**Rule**: Never move to next phase if current one is unstable. Test in real workflow after each phase.
+# 🔧 Recent Fixes & Refinements (Latest Commits)
+
+| Commit | Description |
+|--------|-------------|
+| `50cecfd` | Collapsible sidebar + order type buttons moved to top parked-orders bar |
+| `faff188` | All internal components made flexible (responsive sizing) |
+| `db1f891` | PIN and Payment dialogs made flexible |
+| `590eb02` | Main window sidebar and header made flexible |
+| `029628e` | POS view 3-column layout with stretch factors |
+| `04015fb` | Inject delivery_service into FinancialService for driver settlement check |
+| `3a1417b` | `_recalc_totals()` delegates to `Order.recalculate()` |
+| `6b1b4b6` | Fix order_controller references to non-existent attributes |
+| `955750e` | Eliminate dashed border in empty order state |
+
+---
+
+# 📌 What's Left (v1 Polish)
+
+| Item | Priority | Notes |
+|------|:---:|-------|
+| Real hardware printer testing | 🔴 High | Test with actual ESC/POS thermal printers |
+| End-to-end order flow testing | 🔴 High | Full workflow: login → create → pay → print |
+| Edge case handling | 🟡 Medium | Network errors, concurrent access, corrupt data |
+| Sync module stubs | 🟡 Low | Interface + no-op adapter for future Google Sheets |
+| Performance profiling | 🟡 Low | Verify <100ms product search at scale |
 
 ---
 
@@ -411,21 +423,6 @@ These track **end-to-end business features** across multiple modules.
 | فيزا | ✅ | ✅ | ✅ | ❌ NOT available |
 | اونلاين | ✅ | ✅ | ✅ | ✅ driver collects NOTHING |
 
-### Permission Matrix
-| Action | CASHIER | MANAGER | ADMIN |
-|--------|:---:|:---:|:---:|
-| Create order | ✅ | ✅ | ✅ |
-| Apply discount | ❌ (override) | ✅ | ✅ |
-| Cancel order | ❌ (override) | ✅ | ✅ |
-| Remove item from saved order | ❌ (override) | ✅ | ✅ |
-| Manage products | ❌ | ✅ | ✅ |
-| Check-in/out drivers | ✅ | ✅ | ✅ |
-| Add drivers | ❌ | ✅ | ✅ |
-| Open shift | ✅ | ✅ | ✅ |
-| Close/transfer shift | ❌ | ✅ | ✅ |
-| View reports | ❌ | ✅ | ✅ |
-| Manage users | ❌ | ❌ | ✅ |
-
 ### Financial Formulas
 ```
 subtotal         = Σ(qty × unit_price) for all items
@@ -433,12 +430,9 @@ service          = subtotal × (SERVICE_CHARGE_PCT / 100)
 discount_amount  = value (if flat) OR subtotal × (value / 100) (if percent)
 total            = subtotal + service - discount_amount + delivery_fee
 change           = max(0, paid - total)
-restaurant_revenue = total - delivery_fee   ← restaurant’s actual income
-gross_revenue    = total                    ← includes delivery fee (driver’s money)
+restaurant_revenue = total - delivery_fee   ← restaurant's actual income
 expected_cash    = total_sales - total_expenses - pending_delivery - pending_dinein - pending_kitchen
 ```
-
-> **⚠️ Revenue distinction**: `restaurant_revenue` excludes delivery fees (driver earns those). Daily reports should show both `gross_revenue` (total) and `restaurant_revenue` (total - delivery_fee) to avoid misrepresenting income.
 
 ---
 
@@ -457,4 +451,4 @@ expected_cash    = total_sales - total_expenses - pending_delivery - pending_din
 
 ---
 
-✅ **ARCHITECTURE COMPLETE — READY FOR IMPLEMENTATION**
+✅ **IMPLEMENTATION ~95% COMPLETE — READY FOR TESTING & POLISH**

@@ -325,24 +325,8 @@ class ProductsView(QWidget):
             status_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             status_btn = QPushButton("نشط" if p.is_active else "غير نشط")
-            status_btn.setProperty("class", "compact")
-            status_btn.setFixedSize(70, 28)
-            if p.is_active:
-                status_btn.setStyleSheet(f"""
-                    background-color: {get_color('accent_green')}30;
-                    color: {get_color('accent_green')};
-                    border: 1px solid {get_color('accent_green')};
-                    border-radius: 4px;
-                    font-size: 12px;
-                """)
-            else:
-                status_btn.setStyleSheet(f"""
-                    background-color: {get_color('text_muted')}30;
-                    color: {get_color('text_muted')};
-                    border: 1px solid {get_color('text_muted')};
-                    border-radius: 4px;
-                    font-size: 12px;
-                """)
+            status_btn.setProperty("class", "status-active" if p.is_active else "status-inactive")
+            status_btn.setFixedSize(85, 28)
             status_btn.clicked.connect(lambda checked, pid=p.id, act=p.is_active: self._toggle_product_status(pid, act))
             status_layout.addWidget(status_btn)
             self._products_table.setCellWidget(row, 5, status_widget)
@@ -354,15 +338,8 @@ class ProductsView(QWidget):
             actions_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             edit_btn = QPushButton("تعديل")
-            edit_btn.setProperty("class", "compact")
-            edit_btn.setFixedSize(50, 28)
-            edit_btn.setStyleSheet(f"""
-                background-color: {get_color('accent_blue')}30;
-                color: {get_color('accent_blue')};
-                border: 1px solid {get_color('accent_blue')};
-                border-radius: 4px;
-                font-size: 12px;
-            """)
+            edit_btn.setProperty("class", "edit-action")
+            edit_btn.setFixedSize(72, 28)
             edit_btn.clicked.connect(lambda checked, prod=p: self._on_edit_product(prod))
             actions_layout.addWidget(edit_btn)
 
@@ -391,24 +368,8 @@ class ProductsView(QWidget):
             status_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             status_btn = QPushButton("نشط" if c.is_active else "غير نشط")
-            status_btn.setProperty("class", "compact")
-            status_btn.setFixedSize(70, 28)
-            if c.is_active:
-                status_btn.setStyleSheet(f"""
-                    background-color: {get_color('accent_green')}30;
-                    color: {get_color('accent_green')};
-                    border: 1px solid {get_color('accent_green')};
-                    border-radius: 4px;
-                    font-size: 12px;
-                """)
-            else:
-                status_btn.setStyleSheet(f"""
-                    background-color: {get_color('text_muted')}30;
-                    color: {get_color('text_muted')};
-                    border: 1px solid {get_color('text_muted')};
-                    border-radius: 4px;
-                    font-size: 12px;
-                """)
+            status_btn.setProperty("class", "status-active" if c.is_active else "status-inactive")
+            status_btn.setFixedSize(85, 28)
             status_btn.clicked.connect(lambda checked, cid=c.id, act=c.is_active: self._toggle_category_status(cid, act))
             status_layout.addWidget(status_btn)
             self._categories_table.setCellWidget(row, 3, status_widget)
@@ -420,15 +381,8 @@ class ProductsView(QWidget):
             actions_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             edit_btn = QPushButton("تعديل")
-            edit_btn.setProperty("class", "compact")
-            edit_btn.setFixedSize(50, 28)
-            edit_btn.setStyleSheet(f"""
-                background-color: {get_color('accent_blue')}30;
-                color: {get_color('accent_blue')};
-                border: 1px solid {get_color('accent_blue')};
-                border-radius: 4px;
-                font-size: 12px;
-            """)
+            edit_btn.setProperty("class", "edit-action")
+            edit_btn.setFixedSize(72, 28)
             edit_btn.clicked.connect(lambda checked, cat=c: self._on_edit_category(cat))
             actions_layout.addWidget(edit_btn)
 
@@ -457,24 +411,8 @@ class ProductsView(QWidget):
             status_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             status_btn = QPushButton("نشط" if z.is_active else "غير نشط")
-            status_btn.setProperty("class", "compact")
-            status_btn.setFixedSize(70, 28)
-            if z.is_active:
-                status_btn.setStyleSheet(f"""
-                    background-color: {get_color('accent_green')}30;
-                    color: {get_color('accent_green')};
-                    border: 1px solid {get_color('accent_green')};
-                    border-radius: 4px;
-                    font-size: 12px;
-                """)
-            else:
-                status_btn.setStyleSheet(f"""
-                    background-color: {get_color('text_muted')}30;
-                    color: {get_color('text_muted')};
-                    border: 1px solid {get_color('text_muted')};
-                    border-radius: 4px;
-                    font-size: 12px;
-                """)
+            status_btn.setProperty("class", "status-active" if z.is_active else "status-inactive")
+            status_btn.setFixedSize(85, 28)
             status_btn.clicked.connect(lambda checked, zid=z.id, act=z.is_active: self._toggle_zone_status(zid, act))
             status_layout.addWidget(status_btn)
             self._zones_table.setCellWidget(row, 3, status_widget)
@@ -486,15 +424,8 @@ class ProductsView(QWidget):
             actions_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             edit_btn = QPushButton("تعديل")
-            edit_btn.setProperty("class", "compact")
-            edit_btn.setFixedSize(50, 28)
-            edit_btn.setStyleSheet(f"""
-                background-color: {get_color('accent_blue')}30;
-                color: {get_color('accent_blue')};
-                border: 1px solid {get_color('accent_blue')};
-                border-radius: 4px;
-                font-size: 12px;
-            """)
+            edit_btn.setProperty("class", "edit-action")
+            edit_btn.setFixedSize(72, 28)
             edit_btn.clicked.connect(lambda checked, zone=z: self._on_edit_zone(zone))
             actions_layout.addWidget(edit_btn)
 
@@ -626,7 +557,14 @@ class ProductsView(QWidget):
         header = table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(len(headers) - 1, QHeaderView.ResizeMode.ResizeToContents)
+        
+        last_col = len(headers) - 1
+        status_col = len(headers) - 2
+        
+        header.setSectionResizeMode(status_col, QHeaderView.ResizeMode.Interactive)
+        header.setSectionResizeMode(last_col, QHeaderView.ResizeMode.Interactive)
+        table.setColumnWidth(status_col, 110)
+        table.setColumnWidth(last_col, 100)
 
         table.setStyleSheet(f"""
             QTableWidget {{
@@ -720,7 +658,7 @@ class ProductFormDialog(QDialog):
 
         # Dialog Buttons
         buttons = QDialogButtonBox(
-            QDialogButtonBox.ButtonRole.AcceptRole | QDialogButtonBox.ButtonRole.RejectRole
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         # Custom Arabic labels
         accept_btn = buttons.button(QDialogButtonBox.StandardButton.Ok)
@@ -791,7 +729,7 @@ class CategoryFormDialog(QDialog):
 
         # Dialog Buttons
         buttons = QDialogButtonBox(
-            QDialogButtonBox.ButtonRole.AcceptRole | QDialogButtonBox.ButtonRole.RejectRole
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         accept_btn = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if accept_btn:
@@ -861,7 +799,7 @@ class ZoneFormDialog(QDialog):
 
         # Dialog Buttons
         buttons = QDialogButtonBox(
-            QDialogButtonBox.ButtonRole.AcceptRole | QDialogButtonBox.ButtonRole.RejectRole
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         accept_btn = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if accept_btn:

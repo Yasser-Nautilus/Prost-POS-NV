@@ -28,7 +28,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from broast_pos.core.models.user import User
+from broast_pos.core.models.user import User, UserRole
 from broast_pos.core.services.auth_service import AuthService
 from broast_pos.ui.styles.theme import get_color, get_font_family
 
@@ -91,7 +91,10 @@ class UsersView(QWidget):
         header = self._users_table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeMode.Interactive)
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Interactive)
+        self._users_table.setColumnWidth(4, 110)
+        self._users_table.setColumnWidth(5, 100)
 
         self._users_table.setStyleSheet(f"""
             QTableWidget {{
@@ -121,7 +124,7 @@ class UsersView(QWidget):
     def refresh_users(self) -> None:
         """Repopulate user list table from repository/service."""
         try:
-            users = self._auth.get_all_users()
+            users = self._auth.get_users_for_management()
         except Exception as e:
             logger.exception("Failed to load users")
             QMessageBox.critical(self, "خطأ", f"فشل تحميل بيانات المستخدمين: {str(e)}")
@@ -135,12 +138,21 @@ class UsersView(QWidget):
             # ID
             self._users_table.setItem(row, 0, QTableWidgetItem(str(u.id)))
             # Name
-            self._users_table.setItem(row, 1, QTableWidgetItem(u.name))
+            self._users_table.setItem(row, 1, QTableWidgetItem(u.display_name))
             # Role translation
-            role_display = "مدير" if u.role == "manager" else "كاشير"
+            if u.role == UserRole.CASHIER:
+                if u.cashier_slot:
+                    role_display = f"كاشير (نقطة {u.cashier_slot})"
+                else:
+                    role_display = "سائق / دليفري"
+            else:
+                role_display = {
+                    UserRole.MANAGER: "مدير",
+                    UserRole.ADMIN: "مسؤول النظام",
+                }.get(u.role, str(u.role.value))
             self._users_table.setItem(row, 2, QTableWidgetItem(role_display))
-            # PIN Code (masked or clear, let's keep it visible for management screen)
-            self._users_table.setItem(row, 3, QTableWidgetItem(u.pin))
+            # PIN Code (masked for security)
+            self._users_table.setItem(row, 3, QTableWidgetItem("****"))
 
             # Status Toggle Button
             status_widget = QWidget()
@@ -149,24 +161,8 @@ class UsersView(QWidget):
             status_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             status_btn = QPushButton("نشط" if u.is_active else "غير نشط")
-            status_btn.setProperty("class", "compact")
-            status_btn.setFixedSize(70, 28)
-            if u.is_active:
-                status_btn.setStyleSheet(f"""
-                    background-color: {get_color('accent_green')}30;
-                    color: {get_color('accent_green')};
-                    border: 1px solid {get_color('accent_green')};
-                    border-radius: 4px;
-                    font-size: 12px;
-                """)
-            else:
-                status_btn.setStyleSheet(f"""
-                    background-color: {get_color('text_muted')}30;
-                    color: {get_color('text_muted')};
-                    border: 1px solid {get_color('text_muted')};
-                    border-radius: 4px;
-                    font-size: 12px;
-                """)
+            status_btn.setProperty("class", "status-active" if u.is_active else "status-inactive")
+            status_btn.setFixedSize(85, 28)
             status_btn.clicked.connect(lambda checked, uid=u.id, act=u.is_active: self._toggle_user_status(uid, act))
             status_layout.addWidget(status_btn)
             self._users_table.setCellWidget(row, 4, status_widget)
@@ -178,15 +174,8 @@ class UsersView(QWidget):
             actions_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
             edit_btn = QPushButton("تعديل")
-            edit_btn.setProperty("class", "compact")
-            edit_btn.setFixedSize(50, 28)
-            edit_btn.setStyleSheet(f"""
-                background-color: {get_color('accent_blue')}30;
-                color: {get_color('accent_blue')};
-                border: 1px solid {get_color('accent_blue')};
-                border-radius: 4px;
-                font-size: 12px;
-            """)
+            edit_btn.setProperty("class", "edit-action")
+            edit_btn.setFixedSize(72, 28)
             edit_btn.clicked.connect(lambda checked, user=u: self._on_edit_user(user))
             actions_layout.addWidget(edit_btn)
 
@@ -203,14 +192,21 @@ class UsersView(QWidget):
         dialog = UserFormDialog(parent=self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             try:
-                name, role, pin = dialog.get_data()
+                name, role, pin, cashier_slot = dialog.get_data()
                 # Verify PIN uniqueness
-                existing_users = self._auth.get_all_users()
-                if any(u.pin == pin for u in existing_users):
+                existing_users = self._auth.get_users_for_management()
+                pin_hash = AuthService.hash_pin(pin)
+                if any(u.pin_hash == pin_hash for u in existing_users):
                     QMessageBox.warning(self, "تحذير", "رمز الدخول (PIN) هذا مستخدم بالفعل من قبل موظف آخر.")
                     return
 
-                self._auth.create_user(name=name, role=role, pin=pin)
+                self._auth.create_user(
+                    username=name,
+                    display_name=name,
+                    role=UserRole(role),
+                    pin=pin,
+                    cashier_slot=cashier_slot
+                )
                 self.refresh_users()
             except Exception as e:
                 QMessageBox.critical(self, "خطأ", f"فشل إضافة المستخدم: {str(e)}")
@@ -219,14 +215,23 @@ class UsersView(QWidget):
         dialog = UserFormDialog(user, parent=self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             try:
-                name, role, pin = dialog.get_data()
-                # Verify PIN uniqueness
-                existing_users = self._auth.get_all_users()
-                if any(u.pin == pin and u.id != user.id for u in existing_users):
-                    QMessageBox.warning(self, "تحذير", "رمز الدخول (PIN) هذا مستخدم بالفعل من قبل موظف آخر.")
-                    return
+                name, role, pin, cashier_slot = dialog.get_data()
+                # Verify PIN uniqueness if a new one is set
+                if pin:
+                    existing_users = self._auth.get_users_for_management()
+                    pin_hash = AuthService.hash_pin(pin)
+                    if any(u.pin_hash == pin_hash and u.id != user.id for u in existing_users):
+                        QMessageBox.warning(self, "تحذير", "رمز الدخول (PIN) هذا مستخدم بالفعل من قبل موظف آخر.")
+                        return
 
-                self._auth.update_user(user_id=user.id, name=name, role=role, pin=pin)
+                self._auth.update_user(
+                    user_id=user.id,
+                    username=name,
+                    display_name=name,
+                    role=UserRole(role),
+                    pin=pin if pin else None,
+                    cashier_slot=cashier_slot
+                )
                 self.refresh_users()
             except Exception as e:
                 QMessageBox.critical(self, "خطأ", f"فشل تعديل المستخدم: {str(e)}")
@@ -262,7 +267,7 @@ class UserFormDialog(QDialog):
         self._name_edit = QLineEdit()
         self._name_edit.setPlaceholderText("اسم الموظف الثنائي أو الثلاثي")
         if user:
-            self._name_edit.setText(user.name)
+            self._name_edit.setText(user.display_name)
         form.addRow("اسم الموظف:", self._name_edit)
 
         # Role ComboBox
@@ -270,27 +275,49 @@ class UserFormDialog(QDialog):
         self._role_combo.addItem("كاشير", "cashier")
         self._role_combo.addItem("مدير", "manager")
         if user:
-            index = self._role_combo.findData(user.role)
+            index = self._role_combo.findData(user.role.value)
             if index != -1:
                 self._role_combo.setCurrentIndex(index)
         form.addRow("الدور / الصلاحية:", self._role_combo)
 
+        # Cashier Slot ComboBox
+        self._slot_combo = QComboBox()
+        self._slot_combo.addItem("سائق / دليفري (لا يوجد)", None)
+        self._slot_combo.addItem("نقطة بيع 1", 1)
+        self._slot_combo.addItem("نقطة بيع 2", 2)
+        if user:
+            index = self._slot_combo.findData(user.cashier_slot)
+            if index != -1:
+                self._slot_combo.setCurrentIndex(index)
+        form.addRow("مكان العمل / نقطة البيع:", self._slot_combo)
+
+        # Connect role change to enable/disable slot selection
+        def update_slot_combo_state():
+            is_cashier = self._role_combo.currentData() == "cashier"
+            self._slot_combo.setEnabled(is_cashier)
+            if not is_cashier:
+                self._slot_combo.setCurrentIndex(0)
+
+        self._role_combo.currentIndexChanged.connect(update_slot_combo_state)
+        update_slot_combo_state()
+
         # PIN Code Input (4 digits only)
         self._pin_edit = QLineEdit()
-        self._pin_edit.setPlaceholderText("٤ أرقام فقط")
         self._pin_edit.setMaxLength(4)
         # Regex validator for 4 digits
         rx = QRegularExpression(r"^\d{0,4}$")
         self._pin_edit.setValidator(QRegularExpressionValidator(rx))
         if user:
-            self._pin_edit.setText(user.pin)
+            self._pin_edit.setPlaceholderText("اتركه فارغاً لعدم التغيير")
+        else:
+            self._pin_edit.setPlaceholderText("٤ أرقام فقط")
         form.addRow("رمز الدخول (PIN):", self._pin_edit)
 
         layout.addLayout(form)
 
         # Dialog Buttons
         buttons = QDialogButtonBox(
-            QDialogButtonBox.ButtonRole.AcceptRole | QDialogButtonBox.ButtonRole.RejectRole
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
         )
         accept_btn = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if accept_btn:
@@ -305,11 +332,12 @@ class UserFormDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-    def get_data(self) -> tuple[str, str, str]:
+    def get_data(self) -> tuple[str, str, str, Optional[int]]:
         return (
             self._name_edit.text().strip(),
             self._role_combo.currentData(),
             self._pin_edit.text().strip(),
+            self._slot_combo.currentData(),
         )
 
     def accept(self) -> None:
@@ -319,7 +347,14 @@ class UserFormDialog(QDialog):
         if not name:
             QMessageBox.warning(self, "تحذير", "يرجى إدخال اسم الموظف.")
             return
-        if len(pin) != 4 or not pin.isdigit():
-            QMessageBox.warning(self, "تحذير", "رمز الدخول (PIN) يجب أن يكون ٤ أرقام تماماً.")
-            return
+
+        # If adding a new user, PIN is mandatory. If editing, it can be empty (meaning no change).
+        if not self._user:
+            if len(pin) != 4 or not pin.isdigit():
+                QMessageBox.warning(self, "تحذير", "رمز الدخول (PIN) يجب أن يكون ٤ أرقام تماماً.")
+                return
+        else:
+            if pin and (len(pin) != 4 or not pin.isdigit()):
+                QMessageBox.warning(self, "تحذير", "رمز الدخول (PIN) الجديد يجب أن يكون ٤ أرقام تماماً.")
+                return
         super().accept()

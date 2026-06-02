@@ -586,13 +586,10 @@ class OrderController:
     # ------------------------------------------------------------------
 
     def _recalc_totals(self) -> None:
-        """Recalculate current order totals."""
+        """Recalculate current order subtotal and total."""
         if self._current_order is None:
             return
-        order = self._current_order
-        subtotal = sum(i.unit_price * i.quantity for i in order.items)
-        order.subtotal = subtotal
-        # Service charge and total are computed by the Order model
+        self._current_order.recalculate()
 
     def _order_to_dict(self, order: Order) -> Dict[str, Any]:
         """Convert Order to dict for printing templates."""
@@ -600,7 +597,7 @@ class OrderController:
             "invoice_no": order.invoice_no,
             "order_type": order.order_type.value if order.order_type else "dine_in",
             "table_no": order.table_no or "",
-            "cashier_name": order.cashier_name or "",
+            "cashier_name": order.created_by_name or "",
             "cashier_slot": order.cashier_slot or self._cashier_slot,
             "customer_name": order.customer_name or "",
             "customer_phone": order.customer_phone or "",

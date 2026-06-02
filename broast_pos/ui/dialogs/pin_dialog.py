@@ -91,7 +91,7 @@ class PinDialog(QDialog):
     def _setup_ui(self) -> None:
         self.setWindowTitle("تأكيد الصلاحية")
         self.setModal(True)
-        self.setFixedSize(360, 480)
+        self.setMinimumSize(340, 440)
 
         self.setStyleSheet(f"""
             QDialog {{
@@ -127,7 +127,7 @@ class PinDialog(QDialog):
         for _ in range(_PIN_LENGTH):
             dot = QLabel("○")
             dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            dot.setFixedSize(40, 40)
+            dot.setMinimumSize(36, 36)
             dot.setStyleSheet(f"""
                 font-size: 28px;
                 color: {get_color('text_muted')};

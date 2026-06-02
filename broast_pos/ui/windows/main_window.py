@@ -114,9 +114,11 @@ class MainWindow(QWidget):
     logout_requested = pyqtSignal()
     shift_clicked = pyqtSignal()
 
-    # Sidebar dimensions
-    SIDEBAR_WIDTH = 200
-    HEADER_HEIGHT = 56
+    # Sidebar dimensions (min/max for flexible layout)
+    SIDEBAR_MIN_WIDTH = 180
+    SIDEBAR_MAX_WIDTH = 240
+    HEADER_MIN_HEIGHT = 48
+    HEADER_MAX_HEIGHT = 64
 
     def __init__(self, user: User, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -152,8 +154,10 @@ class MainWindow(QWidget):
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(0)
 
-        # Sidebar (fixed width) — added FIRST (appears on right in RTL)
-        body.addWidget(self._build_sidebar())
+        # Sidebar (toggleable) — added FIRST (appears on right in RTL)
+        self._sidebar = self._build_sidebar()
+        self._sidebar.setVisible(False)  # hidden by default
+        body.addWidget(self._sidebar)
 
         # Content area (fills remaining space) — added SECOND for RTL
         self._stack = QStackedWidget()
@@ -171,7 +175,8 @@ class MainWindow(QWidget):
 
     def _build_header(self) -> QFrame:
         header = QFrame()
-        header.setFixedHeight(self.HEADER_HEIGHT)
+        header.setMinimumHeight(self.HEADER_MIN_HEIGHT)
+        header.setMaximumHeight(self.HEADER_MAX_HEIGHT)
         header.setStyleSheet(f"""
             QFrame {{
                 background-color: {get_color('secondary_bg')};
@@ -191,6 +196,28 @@ class MainWindow(QWidget):
             background: transparent;
         """)
         layout.addWidget(app_label)
+
+        # Sidebar toggle button (hamburger)
+        self._sidebar_toggle = QPushButton("☰")
+        self._sidebar_toggle.setObjectName("sidebarToggle")
+        self._sidebar_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._sidebar_toggle.setStyleSheet(f"""
+            QPushButton#sidebarToggle {{
+                background: transparent;
+                color: {get_color('text_secondary')};
+                border: none;
+                border-radius: 6px;
+                font-size: 20px;
+                padding: 4px 10px;
+                min-height: 32px;
+            }}
+            QPushButton#sidebarToggle:hover {{
+                background-color: rgba(255, 255, 255, 0.08);
+                color: {get_color('text_primary')};
+            }}
+        """)
+        self._sidebar_toggle.clicked.connect(self._toggle_sidebar)
+        layout.addWidget(self._sidebar_toggle)
 
         layout.addStretch()
 
@@ -267,7 +294,11 @@ class MainWindow(QWidget):
 
     def _build_sidebar(self) -> QFrame:
         sidebar = QFrame()
-        sidebar.setFixedWidth(self.SIDEBAR_WIDTH)
+        sidebar.setMinimumWidth(self.SIDEBAR_MIN_WIDTH)
+        sidebar.setMaximumWidth(self.SIDEBAR_MAX_WIDTH)
+        sidebar.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
+        )
         sidebar.setStyleSheet(f"""
             QFrame {{
                 background-color: {get_color('secondary_bg')};
@@ -289,7 +320,8 @@ class MainWindow(QWidget):
 
         # Separator
         sep = QFrame()
-        sep.setFixedHeight(1)
+        sep.setMinimumHeight(1)
+        sep.setMaximumHeight(1)
         sep.setStyleSheet(f"background-color: {get_color('border_color')};")
         layout.addWidget(sep)
 
@@ -459,6 +491,12 @@ class MainWindow(QWidget):
     def _on_logout(self) -> None:
         logger.info("Logout requested by %s", self._user.display_name)
         self.logout_requested.emit()
+
+    def _toggle_sidebar(self) -> None:
+        """Show/hide the navigation sidebar."""
+        visible = self._sidebar.isVisible()
+        self._sidebar.setVisible(not visible)
+        self._sidebar_toggle.setText("✕" if not visible else "☰")
 
     # ------------------------------------------------------------------
     # Public helpers

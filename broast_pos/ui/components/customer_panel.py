@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
 
 from broast_pos.core.models.customer import Customer, CustomerAddress
 from broast_pos.core.services.customer_service import CustomerService
-from broast_pos.ui.styles.theme import get_color
+from broast_pos.ui.styles.theme import get_color, _lighten
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +215,7 @@ class CustomerPanel(QFrame):
 
         self._search_btn = QPushButton("🔍")
         self._search_btn.setProperty("class", "compact")
-        self._search_btn.setFixedSize(36, 36)
+        self._search_btn.setMinimumSize(32, 32)
         self._search_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._search_btn.setStyleSheet(f"""
             QPushButton {{
@@ -223,13 +223,15 @@ class CustomerPanel(QFrame):
                 border-radius: 6px;
                 font-size: 14px;
             }}
-            QPushButton:hover {{ background-color: {get_color('accent_blue')}dd; }}
+            QPushButton:hover {{
+                background-color: {_lighten(get_color('accent_blue'), 10)};
+            }}
         """)
         self._search_btn.clicked.connect(self._on_search)
         search_layout.addWidget(self._search_btn)
 
         self._status_lbl = QLabel("")
-        self._status_lbl.setFixedWidth(24)
+        self._status_lbl.setMinimumWidth(20)
         self._status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._status_lbl.setStyleSheet("font-size: 16px; font-weight: bold;")
         search_layout.addWidget(self._status_lbl)
@@ -405,3 +407,7 @@ class CustomerPanel(QFrame):
             elif dialog.created_address:
                 self._on_search()
                 self._select_address(dialog.created_address)
+        else:
+            self._status_lbl.setText("")
+            self._phone_input.selectAll()
+            self._phone_input.setFocus()

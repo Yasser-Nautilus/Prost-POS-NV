@@ -144,7 +144,11 @@ class PosView(QWidget):
 
         # Left panel container (Order & Customer info)
         left_container = QWidget()
-        left_container.setFixedWidth(340)
+        left_container.setMinimumWidth(300)
+        left_container.setMaximumWidth(450)
+        left_container.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
+        )
         left_layout = QVBoxLayout(left_container)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(0)
@@ -161,15 +165,15 @@ class PosView(QWidget):
         self._order_panel.note_changed.connect(self._on_note_changed)
         left_layout.addWidget(self._order_panel, 1)
 
-        body.addWidget(left_container)
+        body.addWidget(left_container, 3)  # stretch 3 — ~25-30% of width
 
         # Product grid (centre — stretch)
         self._product_grid = ProductGrid()
         self._product_grid.product_clicked.connect(self._on_product_clicked)
-        body.addWidget(self._product_grid, 1)
+        body.addWidget(self._product_grid, 7)  # stretch 7 — ~55-60% of width
 
         # Category sidebar (will appear on visual RIGHT in RTL = left side)
-        body.addWidget(self._build_category_sidebar())
+        body.addWidget(self._build_category_sidebar(), 2)  # stretch 2 — ~15% of width
 
         root.addLayout(body, 1)
 
@@ -182,7 +186,8 @@ class PosView(QWidget):
 
     def _build_parked_bar(self) -> QFrame:
         bar = QFrame()
-        bar.setFixedHeight(48)
+        bar.setMinimumHeight(44)
+        bar.setMaximumHeight(56)
         bar.setStyleSheet(f"""
             QFrame {{
                 background-color: {get_color('secondary_bg')};
@@ -197,7 +202,7 @@ class PosView(QWidget):
         # "+" new order button
         new_btn = QPushButton("+")
         new_btn.setObjectName("newOrderBtn")
-        new_btn.setFixedSize(40, 36)
+        new_btn.setMinimumSize(36, 32)
         new_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         new_btn.setStyleSheet(f"""
             QPushButton#newOrderBtn {{
@@ -207,10 +212,10 @@ class PosView(QWidget):
                 border-radius: 6px;
                 font-size: 20px;
                 font-weight: bold;
-                min-width: 40px;
-                max-width: 40px;
-                min-height: 36px;
-                max-height: 36px;
+                min-width: 36px;
+                max-width: 48px;
+                min-height: 32px;
+                max-height: 44px;
                 padding: 0px;
             }}
             QPushButton#newOrderBtn:hover {{
@@ -220,8 +225,20 @@ class PosView(QWidget):
         new_btn.clicked.connect(self._new_order)
         self._parked_layout.addWidget(new_btn)
 
-        # Spacer to push tabs left (visually right in RTL)
+        # Spacer between "+" and parked tabs
         self._parked_layout.addStretch()
+
+        # --- Order type selector buttons (right side of top bar) ---
+        self._type_buttons: Dict[OrderType, QPushButton] = {}
+        for otype in OrderType:
+            icon = _ORDER_TYPE_ICONS[otype]
+            label = _ORDER_TYPE_LABELS[otype]
+            btn = QPushButton(f"{icon}  {label}")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setMinimumHeight(34)
+            btn.clicked.connect(lambda _, t=otype: self._set_order_type(t))
+            self._type_buttons[otype] = btn
+            self._parked_layout.addWidget(btn)
 
         return bar
 
@@ -231,7 +248,11 @@ class PosView(QWidget):
 
     def _build_category_sidebar(self) -> QFrame:
         sidebar = QFrame()
-        sidebar.setFixedWidth(160)
+        sidebar.setMinimumWidth(140)
+        sidebar.setMaximumWidth(220)
+        sidebar.setSizePolicy(
+            QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding
+        )
         sidebar.setStyleSheet(f"""
             QFrame {{
                 background-color: {get_color('secondary_bg')};
@@ -257,6 +278,7 @@ class PosView(QWidget):
         # Scrollable category buttons
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
 
@@ -277,7 +299,8 @@ class PosView(QWidget):
 
     def _build_action_bar(self) -> QFrame:
         bar = QFrame()
-        bar.setFixedHeight(64)
+        bar.setMinimumHeight(56)
+        bar.setMaximumHeight(72)
         bar.setStyleSheet(f"""
             QFrame {{
                 background-color: {get_color('secondary_bg')};
@@ -288,18 +311,6 @@ class PosView(QWidget):
         layout = QHBoxLayout(bar)
         layout.setContentsMargins(12, 8, 12, 8)
         layout.setSpacing(8)
-
-        # Order type selector buttons
-        self._type_buttons: Dict[OrderType, QPushButton] = {}
-        for otype in OrderType:
-            icon = _ORDER_TYPE_ICONS[otype]
-            label = _ORDER_TYPE_LABELS[otype]
-            btn = QPushButton(f"{icon}  {label}")
-            btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setMinimumHeight(44)
-            btn.clicked.connect(lambda _, t=otype: self._set_order_type(t))
-            self._type_buttons[otype] = btn
-            layout.addWidget(btn)
 
         layout.addStretch()
 
@@ -606,7 +617,7 @@ class PosView(QWidget):
 
             tab = QPushButton(label)
             tab.setCursor(Qt.CursorShape.PointingHandCursor)
-            tab.setFixedHeight(36)
+            tab.setMinimumHeight(32)
             tab.setProperty("class", "compact")
 
             is_active = idx == self._active_order_idx
