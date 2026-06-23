@@ -52,6 +52,7 @@ from broast_pos.ui.components.customer_panel import CustomerPanel
 from broast_pos.ui.components.order_panel import OrderPanel
 from broast_pos.ui.components.product_grid import ProductGrid
 from broast_pos.ui.components.table_grid import TableGrid
+from broast_pos.ui.dialogs.discount_dialog import DiscountDialog
 from broast_pos.ui.dialogs.pin_dialog import PinDialog
 from broast_pos.ui.styles.theme import get_color
 
@@ -917,23 +918,56 @@ class PosView(QWidget):
             self._customer_panel.blockSignals(False)
 
     def _on_discount(self) -> None:
-        """Discount button pressed — show PIN dialog for manager override."""
+        """Discount button pressed — PIN gate → DiscountDialog.
+
+        In PosView, the active order is always in-memory (unsaved).
+        Confirmed orders are evicted from self._orders immediately, so
+        discount always operates on a local Order object.  The changes
+        are reflected live in the order panel; the discount is persisted
+        when the cashier later hits تأكيد (confirm).
+        """
         order = self._current_order()
         if order is None or not order.items:
             return
 
-        dialog = PinDialog(
+        pin_dialog = PinDialog(
             title="ادخل PIN المدير لتطبيق الخصم",
             parent=self,
         )
 
-        def on_pin_verified(raw_pin: str) -> None:
-            logger.info("Manager PIN verified for discount")
-            # TODO: show discount entry dialog
-            # For now, just log — discount dialog is Phase 6+
+        def on_pin_verified(_raw_pin: str) -> None:
+            logger.info("Manager PIN verified — opening DiscountDialog")
 
-        dialog.pin_verified.connect(on_pin_verified)
-        dialog.exec()
+            dlg = DiscountDialog(
+                subtotal=order.subtotal,
+                current_discount=order.discount_amount or 0.0,
+                parent=self,
+            )
+
+            def on_discount_applied(value: float, discount_type: str) -> None:
+                if discount_type == "percent":
+                    order.discount_amount = round(order.subtotal * value / 100, 2)
+                else:
+                    order.discount_amount = min(round(value, 2), order.subtotal)
+
+                order.recalculate()
+                self._refresh_order_panel()
+
+                label = (
+                    f"{value}%"
+                    if discount_type == "percent"
+                    else f"{value:,.2f} ج.م"
+                )
+                logger.info(
+                    "Discount applied: %s — new total: %.2f",
+                    label, order.total,
+                )
+
+            dlg.discount_applied.connect(on_discount_applied)
+            dlg.exec()
+
+        pin_dialog.pin_verified.connect(on_pin_verified)
+        pin_dialog.exec()
 
     # ==================================================================
     # Public API (for MainWindow / main.py)
