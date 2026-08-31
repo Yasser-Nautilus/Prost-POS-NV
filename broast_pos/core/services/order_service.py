@@ -200,8 +200,8 @@ class OrderService:
     def cancel_order(
         self,
         order_id: int,
-        manager_pin: str,
-        reason: str,
+        manager_pin: Optional[str] = None,
+        reason: str = "",
     ) -> Order:
         """Cancel an order — requires manager PIN + reason.
 
@@ -252,7 +252,7 @@ class OrderService:
         order: Order,
         value: float,
         discount_type: str,
-        manager_pin: str,
+        manager_pin: Optional[str] = None,
     ) -> Order:
         """Apply discount to order — requires manager PIN.
 
@@ -349,7 +349,7 @@ class OrderService:
             + order.delivery_fee
         )
 
-    def _verify_manager_pin(self, pin: str):
+    def _verify_manager_pin(self, pin: Optional[str]):
         """Hash PIN and verify against a manager/admin user.
 
         Returns the manager User object.
@@ -357,6 +357,11 @@ class OrderService:
         """
         if self._auth is None:
             raise PermissionError("Auth service not configured")
+        if not pin:
+            current_user = self._auth.get_current_user()
+            if current_user and current_user.is_manager_or_above():
+                return current_user
+            raise PermissionError("يجب إدخال رمز PIN للمدير")
         manager = self._auth.verify_pin(pin)
         if manager is None:
             raise PermissionError("PIN غير صحيح أو ليس لديك صلاحية")

@@ -1,0 +1,83 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-cairo: "Cairo", sans-serif;
+  --color-brand-dark: #0a0f1d;
+  --color-brand-surface: #121829;
+  --color-brand-card: #1b233a;
+  --color-brand-border: #2c3756;
+  --color-brand-gold: #cfa860;
+  --color-brand-teal: #10b981;
+}
+
+:root {
+  font-family: "Cairo", system-ui, -apple-system, sans-serif;
+  direction: rtl;
+  background-color: var(--color-brand-dark);
+  color: #f3f4f6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  overflow: hidden;
+  user-select: none; /* Prevents text selection on POS touchscreens */
+}
+
+/* Custom Scrollbar for POS views */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-brand-dark);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-brand-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-brand-gold);
+}
+
+/* Micro-animations and premium effects */
+.glassmorphism {
+  background: rgba(18, 24, 41, 0.8);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(44, 55, 86, 0.5);
+}
+
+.gold-gradient-text {
+  background: linear-gradient(135deg, #f3d082 0%, #cfa860 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gold-gradient-bg {
+  background: linear-gradient(135deg, #f3d082 0%, #cfa860 100%);
+}
+
+.btn-hover-active {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-hover-active:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(207, 168, 96, 0.2);
+}
+
+.btn-hover-active:active {
+  transform: translateY(1px);
+}
+
+/* RTL grid fix */
+.grid-flow-col-rtl {
+  grid-auto-flow: column;
+}

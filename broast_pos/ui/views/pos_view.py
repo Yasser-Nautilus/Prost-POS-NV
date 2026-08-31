@@ -45,9 +45,11 @@ from broast_pos.config.config import (
     get_category_colors,
 )
 from broast_pos.core.models.order import Order, OrderItem, OrderType
+from broast_pos.core.models.user import User, UserRole
 from broast_pos.core.models.product import Category, Product
 from broast_pos.core.services.product_service import ProductService
 from broast_pos.core.services.customer_service import CustomerService
+from broast_pos.core.services.auth_service import AuthService
 from broast_pos.ui.components.customer_panel import CustomerPanel
 from broast_pos.ui.components.order_panel import OrderPanel
 from broast_pos.ui.components.product_grid import ProductGrid
@@ -91,16 +93,18 @@ class PosView(QWidget):
         self,
         product_service: ProductService,
         customer_service: CustomerService,
-        user_id: int,
-        user_name: str,
+        auth_service: AuthService,
+        current_user: User,
         cashier_slot: int = 1,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
         self._product_svc = product_service
         self._customer_svc = customer_service
-        self._user_id = user_id
-        self._user_name = user_name
+        self._auth_svc = auth_service
+        self._current_user = current_user
+        self._user_id = current_user.id or 0
+        self._user_name = current_user.display_name or current_user.username
         self._cashier_slot = cashier_slot
 
         # Data caches
@@ -930,44 +934,53 @@ class PosView(QWidget):
         if order is None or not order.items:
             return
 
+        # Manager or admin role can bypass the PIN prompt
+        if self._current_user.role in (UserRole.MANAGER, UserRole.ADMIN):
+            self._apply_discount_dialog(order)
+            return
+
         pin_dialog = PinDialog(
             title="ادخل PIN المدير لتطبيق الخصم",
+            verify_fn=self._auth_svc.verify_pin,
             parent=self,
         )
 
         def on_pin_verified(_raw_pin: str) -> None:
             logger.info("Manager PIN verified — opening DiscountDialog")
-
-            dlg = DiscountDialog(
-                subtotal=order.subtotal,
-                current_discount=order.discount_amount or 0.0,
-                parent=self,
-            )
-
-            def on_discount_applied(value: float, discount_type: str) -> None:
-                if discount_type == "percent":
-                    order.discount_amount = round(order.subtotal * value / 100, 2)
-                else:
-                    order.discount_amount = min(round(value, 2), order.subtotal)
-
-                order.recalculate()
-                self._refresh_order_panel()
-
-                label = (
-                    f"{value}%"
-                    if discount_type == "percent"
-                    else f"{value:,.2f} ج.م"
-                )
-                logger.info(
-                    "Discount applied: %s — new total: %.2f",
-                    label, order.total,
-                )
-
-            dlg.discount_applied.connect(on_discount_applied)
-            dlg.exec()
+            self._apply_discount_dialog(order)
 
         pin_dialog.pin_verified.connect(on_pin_verified)
         pin_dialog.exec()
+
+    def _apply_discount_dialog(self, order: Order) -> None:
+        dlg = DiscountDialog(
+            subtotal=order.subtotal,
+            current_discount=order.discount_amount or 0.0,
+            parent=self,
+        )
+
+        def on_discount_applied(value: float, discount_type: str) -> None:
+            if discount_type == "percent":
+                order.discount_amount = round(order.subtotal * value / 100, 2)
+            else:
+                order.discount_amount = min(round(value, 2), order.subtotal)
+
+            order.discount_type = discount_type
+            order.recalculate()
+            self._refresh_order_panel()
+
+            label = (
+                f"{value}%"
+                if discount_type == "percent"
+                else f"{value:,.2f} ج.م"
+            )
+            logger.info(
+                "Discount applied: %s — new total: %.2f",
+                label, order.total,
+            )
+
+        dlg.discount_applied.connect(on_discount_applied)
+        dlg.exec()
 
     # ==================================================================
     # Public API (for MainWindow / main.py)

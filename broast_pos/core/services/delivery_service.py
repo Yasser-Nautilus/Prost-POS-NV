@@ -65,6 +65,10 @@ class DeliveryService:
         """Return only checked-in (available) drivers for the dispatch list."""
         return self._delivery.get_active_drivers()
 
+    def get_all_drivers(self) -> List[User]:
+        """Return all registered active drivers (cashier_slot is None)."""
+        return self._users.get_drivers()
+
     # ------------------------------------------------------------------
     # Trip management
     # ------------------------------------------------------------------
