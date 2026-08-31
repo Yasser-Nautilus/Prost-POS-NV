@@ -84,6 +84,20 @@ class AuthService:
         self._current_user = user
         return user
 
+    def login_by_pin(self, pin: str) -> User:
+        """Authenticate by PIN only — no user_id required.
+
+        Looks up the user by PIN hash directly. Any active role can log in.
+        Raises:
+            ValueError: if PIN not found or user is inactive.
+        """
+        pin_hash = self.hash_pin(pin)
+        user = self._users.get_by_pin(pin_hash)
+        if user is None or not user.is_active:
+            raise ValueError("رمز PIN غير صحيح أو المستخدم غير نشط")
+        self._current_user = user
+        return user
+
     def logout(self) -> None:
         """Clear the active session — return to login screen."""
         self._current_user = None

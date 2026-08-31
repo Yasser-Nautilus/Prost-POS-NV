@@ -74,20 +74,31 @@ class DeliveryController:
         except Exception as exc:
             return False, str(exc)
 
-    def get_active_drivers(self) -> List[Dict[str, Any]]:
-        """Return list of checked-in drivers for the dispatch list."""
+    def get_available_drivers(self) -> List[Dict[str, Any]]:
+        """Return all active drivers with their check-in status."""
         try:
-            drivers = self._delivery_svc.get_active_drivers()
+            all_drivers = self._delivery_svc.get_all_drivers()
+            checked_in_users = self._delivery_svc.get_active_drivers()
+            checked_in_ids = {d.id for d in checked_in_users}
             return [
                 {
                     "id": d.id,
-                    "name": d.display_name or d.username,
+                    "username": d.username,
+                    "display_name": d.display_name or d.username,
+                    "role": d.role.value,
+                    "cashier_slot": d.cashier_slot,
+                    "is_active": d.is_active,
+                    "is_checked_in": d.id in checked_in_ids,
                     "status": self._get_driver_status(d.id),
                 }
-                for d in drivers
+                for d in all_drivers
             ]
         except Exception:
             return []
+
+    def get_active_drivers(self) -> List[Dict[str, Any]]:
+        """Return list of checked-in drivers for the dispatch list."""
+        return self.get_available_drivers()
 
     def _get_driver_status(self, driver_id: int) -> str:
         """Determine driver display status: 'available' or 'out'."""
@@ -133,7 +144,7 @@ class DeliveryController:
         self,
         driver_id: int,
         order_ids: List[int],
-    ) -> Tuple[bool, str]:
+    ) -> Tuple[bool, Any]:
         """Create a delivery trip with selected orders.
 
         Cross-cashier trips allowed. Mixed payment trips allowed.
@@ -145,7 +156,7 @@ class DeliveryController:
             trip = self._delivery_svc.create_trip(driver_id, order_ids)
             self._notify_trips()
             self._notify_drivers()
-            return True, f"تم إنشاء رحلة #{trip.id}"
+            return True, trip
         except Exception as exc:
             return False, str(exc)
 
@@ -172,6 +183,10 @@ class DeliveryController:
             return True, "تم تسجيل عودة السائق"
         except Exception as exc:
             return False, str(exc)
+
+    def return_trip(self, trip_id: int) -> Tuple[bool, str]:
+        """Alias for mark_returned to align with bridge naming."""
+        return self.mark_returned(trip_id)
 
     # ------------------------------------------------------------------
     # 5. Settlement

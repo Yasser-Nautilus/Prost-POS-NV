@@ -136,7 +136,7 @@ class FinancialController:
         try:
             users = self._auth_svc.get_all_users()
             return [
-                {"id": u.id, "display_name": u.display_name, "role": u.role.name}
+                {"id": u.id, "display_name": u.display_name, "role": u.role.value}
                 for u in users
             ]
         except Exception as e:
@@ -147,7 +147,7 @@ class FinancialController:
         self,
         from_user_id: int,
         to_user_id: int,
-        manager_pin: str,
+        manager_pin: Optional[str] = None,
     ) -> bool:
         """Perform a mid-day cashier transfer."""
         try:
@@ -190,7 +190,7 @@ class FinancialController:
             logger.error("Error transferring shift: %s", e)
             raise ValueError(str(e))
 
-    def close_shift(self, shift_id: int, manager_pin: str) -> bool:
+    def close_shift(self, shift_id: int, manager_pin: Optional[str] = None) -> bool:
         """Close the active shift."""
         try:
             self._financial_svc.close_shift(shift_id, manager_pin)

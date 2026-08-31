@@ -17,6 +17,7 @@ import logging
 import sys
 from typing import Any, Optional
 
+from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from broast_pos.config.config import get_app_name
@@ -142,8 +143,8 @@ class AppController:
         self._pos_view = PosView(
             product_service=self._product_svc,
             customer_service=self._customer_svc,
-            user_id=user.id or 0,
-            user_name=user.display_name or user.username,
+            auth_service=self._auth,
+            current_user=user,
             cashier_slot=user.cashier_slot or 1,
         )
         self._main_window.set_view(NavPage.POS, self._pos_view)
@@ -515,22 +516,31 @@ def main() -> int:
     # ------------------------------------------------------------------
     # 6. Window lifecycle controller (owns the full confirm flow)
     # ------------------------------------------------------------------
-    controller = AppController(
+    # ------------------------------------------------------------------
+    # 6. Web UI Shell and Bridge Initialization
+    # ------------------------------------------------------------------
+    from broast_pos.infrastructure.web_bridge.bridge import POSBridge
+    from broast_pos.ui.web_shell import WebShell
+
+    bridge = POSBridge(
         auth_service=auth_service,
         product_service=product_service,
-        order_service=order_service,
-        financial_service=financial_service,
-        delivery_service=delivery_service,
         customer_service=customer_service,
+        delivery_service=delivery_service,
+        financial_service=financial_service,
+        order_service=order_service,
         report_service=report_service,
         print_triggers=print_triggers,
         printer_manager=printer_manager,
     )
-    controller.start()
 
-    logger.info("Application ready — showing login window")
+    shell = WebShell(bridge)
+    shell.show()
+
+    logger.info("Application ready — showing modernized QWebEngineView Web UI shell")
     return app.exec()
 
 
 if __name__ == "__main__":
     sys.exit(main())
+

@@ -32,6 +32,7 @@ from PyQt6.QtWidgets import (
 
 from broast_pos.features.financial.financial_controller import FinancialController
 from broast_pos.ui.styles.theme import get_color, get_font_family, _lighten
+from broast_pos.core.models.user import UserRole
 from broast_pos.ui.dialogs.pin_dialog import PinDialog
 from broast_pos.ui.views.reports_view import (
     MetricCard,
@@ -533,6 +534,11 @@ class FinancialView(QWidget):
         if not self._active_shift:
             return
 
+        current_user = self._ctrl._auth_svc.get_current_user()
+        if current_user and current_user.role in (UserRole.MANAGER, UserRole.ADMIN):
+            self._execute_transfer(None)
+            return
+
         # 1. Ask for Manager PIN
         dialog = PinDialog(
             title="تأكيد صلاحية المدير لتسليم الوردية",
@@ -541,78 +547,86 @@ class FinancialView(QWidget):
         )
 
         def proceed_transfer(raw_pin: str) -> None:
-            # 2. Show Transfer dialog to select target cashier
-            users = self._ctrl.get_users_for_transfer()
-            if not users:
-                QMessageBox.warning(self, "خطأ", "لم يتم العثور على موظفين متاحين للتحويل.")
-                return
-
-            dialog_users = QDialog(self)
-            dialog_users.setWindowTitle("اختر الموظف المستلم")
-            dialog_users.setFixedSize(320, 200)
-            dialog_users.setStyleSheet(f"""
-                QDialog {{
-                    background-color: {get_color('primary_bg')};
-                    border: 1px solid {get_color('border_color')};
-                }}
-            """)
-            du_layout = QVBoxLayout(dialog_users)
-            du_layout.setSpacing(12)
-
-            lbl = QLabel("اختر الكاشير المستلم للوردية:")
-            lbl.setStyleSheet("font-weight: bold; font-size: 14px;")
-            du_layout.addWidget(lbl)
-
-            combo = QComboBox()
-            combo.setStyleSheet(self._input_style())
-            for u in users:
-                if u["id"] != self._user_id:
-                    combo.addItem(f"{u['display_name']} ({u['role']})", u["id"])
-            du_layout.addWidget(combo)
-
-            confirm_btn = QPushButton("تأكيد التحويل")
-            confirm_btn.setFixedHeight(40)
-            confirm_btn.setStyleSheet(f"""
-                QPushButton {{
-                    background-color: {get_color('button_confirm')};
-                    color: #ffffff;
-                    font-weight: bold;
-                }}
-            """)
-
-            def execute() -> None:
-                to_user_id = combo.currentData()
-                if to_user_id is None:
-                    QMessageBox.warning(dialog_users, "خطأ", "يرجى اختيار الموظف المستلم.")
-                    return
-                try:
-                    self._ctrl.transfer_shift(
-                        from_user_id=self._user_id,
-                        to_user_id=to_user_id,
-                        manager_pin=raw_pin,
-                    )
-                    QMessageBox.information(
-                        dialog_users,
-                        "تم التحويل",
-                        "تمت عملية تسليم الوردية وطباعة التقرير بنجاح.",
-                    )
-                    dialog_users.accept()
-                    self.refresh_state()
-                    self.shift_status_changed.emit()
-                except Exception as ex:
-                    QMessageBox.critical(dialog_users, "خطأ", f"فشل تسليم الوردية: {ex}")
-
-            confirm_btn.clicked.connect(execute)
-            du_layout.addWidget(confirm_btn)
-
-            dialog_users.exec()
+            self._execute_transfer(raw_pin)
 
         dialog.pin_verified.connect(proceed_transfer)
         dialog.exec()
 
+    def _execute_transfer(self, raw_pin: Optional[str]) -> None:
+        # 2. Show Transfer dialog to select target cashier
+        users = self._ctrl.get_users_for_transfer()
+        if not users:
+            QMessageBox.warning(self, "خطأ", "لم يتم العثور على موظفين متاحين للتحويل.")
+            return
+
+        dialog_users = QDialog(self)
+        dialog_users.setWindowTitle("اختر الموظف المستلم")
+        dialog_users.setFixedSize(320, 200)
+        dialog_users.setStyleSheet(f"""
+            QDialog {{
+                background-color: {get_color('primary_bg')};
+                border: 1px solid {get_color('border_color')};
+            }}
+        """)
+        du_layout = QVBoxLayout(dialog_users)
+        du_layout.setSpacing(12)
+
+        lbl = QLabel("اختر الكاشير المستلم للوردية:")
+        lbl.setStyleSheet("font-weight: bold; font-size: 14px;")
+        du_layout.addWidget(lbl)
+
+        combo = QComboBox()
+        combo.setStyleSheet(self._input_style())
+        for u in users:
+            if u["id"] != self._user_id:
+                combo.addItem(f"{u['display_name']} ({u['role']})", u["id"])
+        du_layout.addWidget(combo)
+
+        confirm_btn = QPushButton("تأكيد التحويل")
+        confirm_btn.setFixedHeight(40)
+        confirm_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {get_color('button_confirm')};
+                color: #ffffff;
+                font-weight: bold;
+            }}
+        """)
+
+        def execute() -> None:
+            to_user_id = combo.currentData()
+            if to_user_id is None:
+                QMessageBox.warning(dialog_users, "خطأ", "يرجى اختيار الموظف المستلم.")
+                return
+            try:
+                self._ctrl.transfer_shift(
+                    from_user_id=self._user_id,
+                    to_user_id=to_user_id,
+                    manager_pin=raw_pin,
+                )
+                QMessageBox.information(
+                    dialog_users,
+                    "تم التحويل",
+                    "تمت عملية تسليم الوردية وطباعة التقرير بنجاح.",
+                )
+                dialog_users.accept()
+                self.refresh_state()
+                self.shift_status_changed.emit()
+            except Exception as ex:
+                QMessageBox.critical(dialog_users, "خطأ", f"فشل تسليم الوردية: {ex}")
+
+        confirm_btn.clicked.connect(execute)
+        du_layout.addWidget(confirm_btn)
+
+        dialog_users.exec()
+
     def _on_close_shift_clicked(self) -> None:
         """End-of-day shift closure."""
         if not self._active_shift:
+            return
+
+        current_user = self._ctrl._auth_svc.get_current_user()
+        if current_user and current_user.role in (UserRole.MANAGER, UserRole.ADMIN):
+            self._execute_close(None)
             return
 
         # 1. Ask for Manager PIN
@@ -623,28 +637,31 @@ class FinancialView(QWidget):
         )
 
         def proceed_close(raw_pin: str) -> None:
-            # 2. Trigger Close Shift in service via controller
-            try:
-                self._ctrl.close_shift(
-                    shift_id=self._active_shift["id"],
-                    manager_pin=raw_pin,
-                )
-                QMessageBox.information(
-                    self,
-                    "تم الإغلاق",
-                    "تم إغلاق الوردية واليومية بنجاح وطباعة تقرير الإغلاق النهائي.",
-                )
-                self.refresh_state()
-                self.shift_status_changed.emit()
-            except Exception as ex:
-                QMessageBox.critical(
-                    self,
-                    "خطأ",
-                    f"فشل إغلاق الوردية:\n{ex}",
-                )
+            self._execute_close(raw_pin)
 
         dialog.pin_verified.connect(proceed_close)
         dialog.exec()
+
+    def _execute_close(self, raw_pin: Optional[str]) -> None:
+        # 2. Trigger Close Shift in service via controller
+        try:
+            self._ctrl.close_shift(
+                shift_id=self._active_shift["id"],
+                manager_pin=raw_pin,
+            )
+            QMessageBox.information(
+                self,
+                "تم الإغلاق",
+                "تم إغلاق الوردية واليومية بنجاح وطباعة تقرير الإغلاق النهائي.",
+            )
+            self.refresh_state()
+            self.shift_status_changed.emit()
+        except Exception as ex:
+            QMessageBox.critical(
+                self,
+                "خطأ",
+                f"فشل إغلاق الوردية:\n{ex}",
+            )
 
     # ------------------------------------------------------------------
     # Styles

@@ -91,7 +91,7 @@ class FinancialService:
         self,
         from_user_id: int,
         to_user_id: int,
-        manager_pin: str,
+        manager_pin: Optional[str] = None,
     ) -> ShiftTransfer:
         """Transfer the active shift from one user to another.
 
@@ -149,7 +149,7 @@ class FinancialService:
     # Close shift
     # ------------------------------------------------------------------
 
-    def close_shift(self, shift_id: int, manager_pin: str) -> Shift:
+    def close_shift(self, shift_id: int, manager_pin: Optional[str] = None) -> Shift:
         """Close the shift — manager only, with prerequisites.
 
         Prerequisites:
@@ -290,7 +290,7 @@ class FinancialService:
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _verify_manager_pin(self, pin: str):
+    def _verify_manager_pin(self, pin: Optional[str]):
         """Verify manager/admin PIN. Returns the User.
 
         Raises:
@@ -298,6 +298,11 @@ class FinancialService:
         """
         if self._auth is None:
             raise PermissionError("Auth service not configured")
+        if not pin:
+            current_user = self._auth.get_current_user()
+            if current_user and current_user.is_manager_or_above():
+                return current_user
+            raise PermissionError("يجب إدخال رمز PIN للمدير")
         manager = self._auth.verify_pin(pin)
         if manager is None:
             raise PermissionError("PIN غير صحيح أو ليس لديك صلاحية")
