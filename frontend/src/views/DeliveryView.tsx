@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Truck, Users, UserCheck, UserMinus, Plus, MapPin, CheckCircle, Clock, Loader2 } from "lucide-react";
+import { Truck, Users, UserCheck, UserMinus, Plus, MapPin, CheckCircle, Clock, Loader2, RotateCcw } from "lucide-react";
 import { bridge } from "../bridge";
 
 interface DeliveryViewProps {
@@ -79,6 +79,16 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({ currentUser: _curren
       alert("تم إرسال الطيار بالرحلة بنجاح!");
     } catch (err: any) {
       alert("فشل إنشاء الرحلة: " + err.message);
+    }
+  };
+
+  const handleReturnTrip = async (tripId: number) => {
+    try {
+      await bridge.call("return_trip", { trip_id: tripId });
+      fetchDeliveryData();
+      alert("تم تسجيل عودة الطيار بنجاح!");
+    } catch (err: any) {
+      alert("فشل تسجيل عودة الطيار: " + err.message);
     }
   };
 
@@ -226,28 +236,49 @@ export const DeliveryView: React.FC<DeliveryViewProps> = ({ currentUser: _curren
           
           {trips.length > 0 ? (
             <div className="space-y-3">
-              {trips.map((t) => (
-                <div key={t.id} className="p-4 bg-brand-card border border-brand-border/50 rounded-xl space-y-3 animate-in fade-in duration-150">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="text-white font-bold block text-sm">{t.driver_name}</span>
-                      <span className="text-xs text-brand-gold mt-1 inline-block">
-                        حملت {t.order_ids?.length || 0} طلبات
+              {trips.map((t) => {
+                // Trip status: dispatched (no returned_at) vs returned (has returned_at, not settled)
+                const isReturned = !!t.returned_at;
+                return (
+                  <div key={t.id} className="p-4 bg-brand-card border border-brand-border/50 rounded-xl space-y-3 animate-in fade-in duration-150">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-white font-bold block text-sm">{t.driver_name}</span>
+                        <span className="text-xs text-brand-gold mt-1 inline-block">
+                          حملت {t.order_ids?.length || 0} طلبات
+                        </span>
+                      </div>
+                      <span className={`py-1 px-2.5 rounded-md font-bold text-[10px] ${
+                        isReturned
+                          ? "bg-brand-teal/10 text-brand-teal"
+                          : "bg-yellow-600/10 text-yellow-500"
+                      }`}>
+                        {isReturned ? "عاد للمحل" : "في الطريق"}
                       </span>
                     </div>
-                    <span className="py-1 px-2.5 bg-yellow-600/10 text-yellow-500 rounded-md font-bold text-[10px]">
-                      بالطريق
-                    </span>
+
+                    {!isReturned ? (
+                      // Step 1: Mark driver as returned
+                      <button
+                        onClick={() => handleReturnTrip(t.id)}
+                        className="w-full py-2 bg-brand-gold/10 text-brand-gold border border-brand-gold/30 hover:bg-brand-gold/20 font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 btn-hover-active transition-all"
+                      >
+                        <RotateCcw size={14} />
+                        تأكيد عودة الطيار
+                      </button>
+                    ) : (
+                      // Step 2: Settle (only after return_trip)
+                      <button
+                        onClick={() => handleSettleTrip(t.id)}
+                        className="w-full py-2 bg-brand-teal text-white hover:bg-opacity-90 font-bold rounded-lg text-xs flex items-center justify-center gap-1 btn-hover-active"
+                      >
+                        <CheckCircle size={14} />
+                        تسوية وإغلاق الرحلة
+                      </button>
+                    )}
                   </div>
-                  <button
-                    onClick={() => handleSettleTrip(t.id)}
-                    className="w-full py-2 bg-brand-teal text-white hover:bg-opacity-90 font-bold rounded-lg text-xs flex items-center justify-center gap-1 btn-hover-active"
-                  >
-                    <CheckCircle size={14} />
-                    تسوية وإغلاق الرحلة
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="py-10 bg-brand-card/10 rounded-2xl border border-brand-border/20 text-center text-xs text-gray-500 italic">

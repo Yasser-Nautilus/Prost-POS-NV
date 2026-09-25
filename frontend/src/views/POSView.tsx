@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { 
   ShoppingBag, Search, Tag, CreditCard, RotateCcw, 
-  Plus, Minus, Trash2, AlertCircle 
+  Plus, Minus, Trash2, AlertCircle, Archive, X 
 } from "lucide-react";
 import { bridge } from "../bridge";
 import { DiscountDialog } from "../components/DiscountDialog";
 import { PaymentDialog } from "../components/PaymentDialog";
 import { CustomerLookup } from "../components/CustomerLookup";
 import { PinDialog } from "../components/PinDialog";
+import { TableGrid } from "../components/TableGrid";
 
 interface POSViewProps {
   currentUser: any;
@@ -22,11 +23,16 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
   
   const [currentOrder, setCurrentOrder] = useState<any>(null);
   const [parkedCount, setParkedCount] = useState(0);
+  const [parkedOrders, setParkedOrders] = useState<any[]>([]);
+  const [selectedTable, setSelectedTable] = useState<number | null>(null);
+  const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
 
   // Dialog Toggles
   const [isDiscountOpen, setIsDiscountOpen] = useState(false);
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [isCustomerLookupOpen, setIsCustomerLookupOpen] = useState(false);
+  const [isTableGridOpen, setIsTableGridOpen] = useState(false);
+  const [isParkedPanelOpen, setIsParkedPanelOpen] = useState(false);
   const [showPinGate, setShowPinGate] = useState(false);
   const [pendingDeleteIdx, setPendingDeleteIdx] = useState<number | null>(null);
 
@@ -161,23 +167,36 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
   };
 
   const handleSetOrderType = async (type: string) => {
-    // If there's no order yet, or the current order has no items, create a fresh one.
-    // If items already exist, just update the type without clearing the cart.
     try {
-      if (!currentOrder || currentOrder.items.length === 0) {
-        await bridge.call("new_order", { order_type: type });
-      } else {
-        // Items exist – switch type only; backend new_order replaces the in-memory draft
-        await bridge.call("new_order", { order_type: type });
-        // Re-add items is not needed because new_order in Python replaces the in-memory
-        // pending draft. For the frontend, refetch the current order to stay in sync.
-        await fetchCurrentOrder();
+      // Guard: if items already exist, confirm before switching (clears cart)
+      if (currentOrder && currentOrder.items.length > 0) {
+        const choice = window.confirm(
+          "تحويل نوع الطلب سيمسح العناصر الحالية. هل تريد المتابعة؟\n\n" +
+          "اضغط OK للمتابعة، أو Cancel لإلغاء."
+        );
+        if (!choice) return;
       }
+
+      await bridge.call("new_order", { order_type: type });
+      setSelectedTable(null); // Reset table on type change
+
       if (type === "delivery") {
         setIsCustomerLookupOpen(true);
+      } else if (type === "dine_in") {
+        setIsTableGridOpen(true);
       }
     } catch (e: any) {
       alert(e.message);
+    }
+  };
+
+  const handleTableSelect = async (tableNo: number) => {
+    try {
+      await bridge.call("set_table", { table_number: tableNo });
+      setSelectedTable(tableNo);
+      setIsTableGridOpen(false);
+    } catch (e: any) {
+      alert("فشل تعيين الطاولة: " + e.message);
     }
   };
 
@@ -221,41 +240,92 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
     }
   };
 
-  const handleCheckoutClick = () => {
+  const handleCheckoutClick = async () => {
     if (!currentOrder || currentOrder.items.length === 0) return;
-    
+
+    // Validation: delivery needs a customer
     if (currentOrder.order_type === "delivery" && !currentOrder.customer_name) {
       alert("يرجى اختيار عميل وعنوان توصيل لطلبات الدليفري");
       setIsCustomerLookupOpen(true);
       return;
     }
-    
-    // Open payment dialog directly
-    setIsPaymentOpen(true);
+
+    // Validation: dine-in needs a table
+    if (currentOrder.order_type === "dine_in" && !selectedTable) {
+      alert("يرجى اختيار رقم الطاولة أولاً");
+      setIsTableGridOpen(true);
+      return;
+    }
+
+    try {
+      // Step 1: confirm_order — validates, saves to DB, prints kitchen ticket
+      const confirmRes = await bridge.call<{
+        invoice_no: string;
+        needs_immediate_payment: boolean;
+        order_id: number;
+      }>("confirm_order");
+
+      if (confirmRes.needs_immediate_payment) {
+        // Step 2A: Takeaway/dine-in — show PaymentDialog to collect payment
+        setPendingOrderId(confirmRes.order_id);
+        setIsPaymentOpen(true);
+      } else {
+        // Step 2B: Delivery — no immediate payment (driver collects)
+        // Clear workspace and start fresh
+        setSelectedTable(null);
+        await fetchCurrentOrder();
+        fetchParkedCount();
+        alert(`تم تأكيد الطلب بنجاح! رقم الفاتورة: ${confirmRes.invoice_no}`);
+      }
+    } catch (e: any) {
+      alert("فشل تأكيد الطلب: " + e.message);
+    }
   };
 
   const handlePaymentConfirm = async (paymentMethod: string, amountPaid: number, _change: number) => {
-    if (!currentOrder) return;
+    if (!pendingOrderId) return;
     try {
-      // Step 1: confirm_order — validates, saves to DB, prints kitchen ticket
-      const confirmRes = await bridge.call("confirm_order");
-
-      // Step 2: complete_payment — marks order paid, prints customer receipt
+      // complete_payment — marks order paid, prints customer receipt
       await bridge.call("complete_payment", {
-        order_id: confirmRes.order_id,
+        order_id: pendingOrderId,
         payment_method: paymentMethod,
         amount_paid: amountPaid,
       });
 
       setIsPaymentOpen(false);
+      setPendingOrderId(null);
+      setSelectedTable(null);
 
       // Clear workspace and start fresh
       await fetchCurrentOrder();
       fetchParkedCount();
 
-      alert(`تم تأكيد الطلب بنجاح! رقم الفاتورة: ${confirmRes.invoice_no}`);
+      alert("تم تأكيد الطلب وتسجيل الدفع بنجاح!");
     } catch (e: any) {
-      alert("فشل تأكيد الطلب: " + e.message);
+      alert("فشل تسجيل الدفع: " + e.message);
+    }
+  };
+
+  // Parked orders panel
+  const handleOpenParkedPanel = async () => {
+    try {
+      const res = await bridge.call("get_parked_orders");
+      setParkedOrders(res || []);
+      setIsParkedPanelOpen(true);
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
+  const handleResumeParked = async (index: number) => {
+    try {
+      await bridge.call("resume_parked_order", { index });
+      setIsParkedPanelOpen(false);
+      setSelectedTable(null);
+      await fetchCurrentOrder();
+      fetchParkedCount();
+    } catch (e: any) {
+      alert("فشل استرجاع الطلب: " + e.message);
     }
   };
 
@@ -315,6 +385,26 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
                 className="py-1 px-3 bg-brand-gold text-brand-dark hover:bg-opacity-90 font-bold rounded-lg"
               >
                 {currentOrder.customer_name ? "تغيير" : "اختيار عميل"}
+              </button>
+            </div>
+          )}
+
+          {/* Dine-in table info block */}
+          {currentOrder?.order_type === "dine_in" && (
+            <div className="p-3 bg-brand-surface/60 border border-brand-border/50 rounded-xl flex justify-between items-center text-xs">
+              {selectedTable ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400">طاولة رقم:</span>
+                  <span className="text-2xl font-black text-brand-gold font-mono">{selectedTable}</span>
+                </div>
+              ) : (
+                <span className="text-red-400 italic">لم يتم اختيار طاولة بعد!</span>
+              )}
+              <button
+                onClick={() => setIsTableGridOpen(true)}
+                className="py-1 px-3 bg-brand-gold text-brand-dark hover:bg-opacity-90 font-bold rounded-lg"
+              >
+                {selectedTable ? "تغيير الطاولة" : "اختيار طاولة"}
               </button>
             </div>
           )}
@@ -420,7 +510,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
               className="py-3 bg-brand-card hover:bg-brand-border/20 text-brand-gold border border-brand-gold/20 rounded-xl text-xs font-bold active:translate-y-0.5 btn-hover-active flex items-center justify-center gap-1 disabled:opacity-50"
             >
               <Tag size={14} />
-              تعليق ({parkedCount})
+              تعليق
             </button>
             <button
               onClick={() => setIsDiscountOpen(true)}
@@ -431,6 +521,17 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
               خصم
             </button>
           </div>
+
+          {/* Parked orders retrieval button */}
+          {parkedCount > 0 && (
+            <button
+              onClick={handleOpenParkedPanel}
+              className="w-full py-2.5 bg-brand-card hover:bg-brand-border/20 text-brand-gold border border-brand-gold/30 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all"
+            >
+              <Archive size={14} />
+              استرجاع طلب معلّق ({parkedCount})
+            </button>
+          )}
 
           <button
             onClick={handleCheckoutClick}
@@ -531,8 +632,12 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
 
       <PaymentDialog
         isOpen={isPaymentOpen}
-        onClose={() => setIsPaymentOpen(false)}
+        onClose={() => {
+          setIsPaymentOpen(false);
+          setPendingOrderId(null);
+        }}
         total={currentOrder?.total || 0}
+        orderType={currentOrder?.order_type}
         onConfirm={handlePaymentConfirm}
       />
 
@@ -540,6 +645,13 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
         isOpen={isCustomerLookupOpen}
         onClose={() => setIsCustomerLookupOpen(false)}
         onSelect={handleCustomerSelect}
+      />
+
+      <TableGrid
+        isOpen={isTableGridOpen}
+        selectedTable={selectedTable}
+        onSelect={handleTableSelect}
+        onClose={() => setIsTableGridOpen(false)}
       />
 
       <PinDialog
@@ -558,6 +670,51 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
         }}
         title="موافقة المدير مطلوبة لحذف عنصر من السلة"
       />
+
+      {/* Parked Orders Slide-Out Panel */}
+      {isParkedPanelOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md">
+          <div className="w-full max-w-md mx-4 bg-brand-surface border border-brand-border rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+            <div className="p-5 border-b border-brand-border/40 flex items-center justify-between">
+              <h3 className="font-bold text-xl text-brand-gold">الطلبات المعلّقة</h3>
+              <button
+                onClick={() => setIsParkedPanelOpen(false)}
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-brand-border/30"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4 space-y-3 max-h-96 overflow-y-auto">
+              {parkedOrders.length > 0 ? (
+                parkedOrders.map((order: any, idx: number) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleResumeParked(idx)}
+                    className="w-full p-4 bg-brand-card/60 border border-brand-border/40 rounded-xl text-right hover:bg-brand-card hover:border-brand-gold/30 transition-all group"
+                  >
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="text-xs text-gray-500 font-bold uppercase">
+                        {order.order_type === "dine_in" ? "صالة" : order.order_type === "takeaway" ? "تيك أواي" : order.order_type === "delivery" ? "دليفري" : "استلام"}
+                      </span>
+                      <span className="text-brand-gold font-black text-lg font-mono">
+                        {(order.total || 0).toFixed(2)} ج.م
+                      </span>
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      {order.items?.length || 0} عناصر
+                    </div>
+                  </button>
+                ))
+              ) : (
+                <div className="text-center text-gray-500 py-8">
+                  <Archive size={32} className="mx-auto mb-2 text-brand-border/50" />
+                  <p className="text-sm">لا توجد طلبات معلّقة</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

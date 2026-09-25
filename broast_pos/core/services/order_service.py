@@ -8,6 +8,7 @@ All business rules enforced here. Never in repositories or UI.
 from __future__ import annotations
 
 import hashlib
+import datetime
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 from broast_pos.core.models.order import (
@@ -229,6 +230,7 @@ class OrderService:
         order.cancelled_by_id = manager.id
         order.cancelled_by_name = manager.display_name
         order.cancel_reason = reason
+        order.cancelled_at = datetime.datetime.now().isoformat()
 
         saved = self._orders.save(order)
 

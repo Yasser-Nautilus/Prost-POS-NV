@@ -65,6 +65,11 @@ class FinancialController:
         """Get live financial summary of a shift."""
         try:
             summary = self._financial_svc.get_shift_summary(shift_id)
+            # Compute total order count from breakdown by type
+            order_count = sum(
+                v.get("count", 0)
+                for v in (summary.order_breakdown or {}).values()
+            )
             return {
                 "total_sales": summary.total_sales,
                 "total_expenses": summary.total_expenses,
@@ -72,6 +77,8 @@ class FinancialController:
                 "pending_dinein": summary.pending_dinein,
                 "pending_kitchen": summary.pending_kitchen,
                 "expected_cash": summary.expected_cash,
+                "order_count": order_count,
+                "order_breakdown": summary.order_breakdown,
             }
         except Exception as e:
             logger.error("Error getting shift summary: %s", e)
@@ -82,6 +89,8 @@ class FinancialController:
                 "pending_dinein": 0.0,
                 "pending_kitchen": 0.0,
                 "expected_cash": 0.0,
+                "order_count": 0,
+                "order_breakdown": {},
             }
 
     def get_expenses(self, shift_id: int) -> List[Dict[str, Any]]:
@@ -200,20 +209,25 @@ class FinancialController:
             raise ValueError(str(e))
 
     def get_shift_history(self) -> List[Dict[str, Any]]:
-        """Get past shifts."""
+        """Get past shifts with display names resolved."""
         try:
             shifts = self._financial_svc.get_shift_history()
-            return [
-                {
+            result = []
+            for s in shifts:
+                # Resolve integer FK to display name
+                opened_user = self._auth_svc._users.get_by_id(s.opened_by) if s.opened_by else None
+                closed_user = self._auth_svc._users.get_by_id(s.closed_by) if s.closed_by else None
+                result.append({
                     "id": s.id,
                     "opened_by": s.opened_by,
+                    "opened_by_name": opened_user.display_name if opened_user else f"#{s.opened_by}",
                     "closed_by": s.closed_by,
+                    "closed_by_name": closed_user.display_name if closed_user else (f"#{s.closed_by}" if s.closed_by else None),
                     "opened_at": s.opened_at,
                     "closed_at": s.closed_at,
                     "is_active": s.is_active,
-                }
-                for s in shifts
-            ]
+                })
+            return result
         except Exception as e:
             logger.error("Error fetching shift history: %s", e)
             return []

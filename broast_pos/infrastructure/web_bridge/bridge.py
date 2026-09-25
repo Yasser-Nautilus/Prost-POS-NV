@@ -15,6 +15,13 @@ from broast_pos.features.reports.reports_controller import ReportsController
 
 logger = logging.getLogger(__name__)
 
+# Actions that are allowed before login
+_PUBLIC_ACTIONS = frozenset({
+    "login",
+    "get_all_users",      # used by LoginView user tiles
+    "get_current_user",   # used by App.tsx checkAuth on load
+})
+
 
 class POSBridge(QObject):
     orderChanged = pyqtSignal(str)
@@ -196,6 +203,10 @@ class POSBridge(QObject):
             payload = json.loads(payload_json) if payload_json else {}
             logger.info("Bridge received action: %s", action)
 
+            # ── Auth guard: reject unauthenticated calls ───────────────────────
+            if action not in _PUBLIC_ACTIONS and not self._current_user:
+                return json.dumps({"success": False, "error": "غير مصرح — يجب تسجيل الدخول أولاً"})
+
             # ── Auth ──────────────────────────────────────────────────────────
             if action == "login":
                 try:
@@ -229,10 +240,73 @@ class POSBridge(QObject):
                     return json.dumps({"success": True, "data": self._user_to_dict(m)})
                 return json.dumps({"success": False, "error": "ليست لديك صلاحيات مدير"})
 
+            elif action == "get_users_management":
+                users = self._auth.get_users_for_management()
+                return json.dumps({"success": True, "data": [self._user_to_dict(u) for u in users]})
+
+            elif action == "create_user":
+                # Admin only
+                if not self._current_user or self._current_user.role.value != "admin":
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير عام"})
+                try:
+                    role_str = payload.get("role", "cashier")
+                    role = UserRole(role_str)
+                    user = self._auth.create_user(
+                        username=payload.get("username", ""),
+                        display_name=payload.get("display_name", ""),
+                        role=role,
+                        pin=payload.get("pin", ""),
+                        cashier_slot=payload.get("cashier_slot"),
+                    )
+                    return json.dumps({"success": True, "data": self._user_to_dict(user)})
+                except ValueError as e:
+                    return json.dumps({"success": False, "error": str(e)})
+
+            elif action == "update_user":
+                # Admin only
+                if not self._current_user or self._current_user.role.value != "admin":
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير عام"})
+                try:
+                    role_val = payload.get("role")
+                    role = UserRole(role_val) if role_val else None
+                    user = self._auth.update_user(
+                        user_id=payload.get("user_id"),
+                        username=payload.get("username"),
+                        display_name=payload.get("display_name"),
+                        role=role,
+                        pin=payload.get("pin"),
+                        cashier_slot=payload.get("cashier_slot", -1),
+                        is_active=payload.get("is_active"),
+                    )
+                    return json.dumps({"success": True, "data": self._user_to_dict(user)})
+                except ValueError as e:
+                    return json.dumps({"success": False, "error": str(e)})
+
+            elif action == "deactivate_user":
+                # Admin only
+                if not self._current_user or self._current_user.role.value != "admin":
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير عام"})
+                try:
+                    user = self._auth.update_user(
+                        user_id=payload.get("user_id"),
+                        is_active=False,
+                    )
+                    return json.dumps({"success": True, "data": self._user_to_dict(user)})
+                except ValueError as e:
+                    return json.dumps({"success": False, "error": str(e)})
+
             # ── Products ──────────────────────────────────────────────────────
             elif action == "get_active_categories":
-                cats = self._product.get_active_categories()
+                cats = self._product.get_categories()  # get_categories() returns active only
                 return json.dumps({"success": True, "data": [self._category_to_dict(c) for c in cats]})
+
+            elif action == "get_all_categories":
+                cats = self._product.get_all_categories()
+                return json.dumps({"success": True, "data": [self._category_to_dict(c) for c in cats]})
+
+            elif action == "get_all_products":
+                prods = self._product.get_all_products()
+                return json.dumps({"success": True, "data": [self._product_to_dict(p) for p in prods]})
 
             elif action == "get_products_by_category":
                 prods = self._product.get_products_by_category(payload.get("category_id"))
@@ -241,6 +315,79 @@ class POSBridge(QObject):
             elif action == "search_products":
                 prods = self._product.search_products(payload.get("query", ""))
                 return json.dumps({"success": True, "data": [self._product_to_dict(p) for p in prods]})
+
+            elif action == "create_product":
+                # Manager/Admin only
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
+                try:
+                    prod = self._product.create_product(
+                        name=payload.get("name", ""),
+                        price=float(payload.get("price", 0)),
+                        category_id=int(payload.get("category_id")),
+                        sort_order=int(payload.get("sort_order", 0)),
+                    )
+                    return json.dumps({"success": True, "data": self._product_to_dict(prod)})
+                except (ValueError, TypeError) as e:
+                    return json.dumps({"success": False, "error": str(e)})
+
+            elif action == "update_product":
+                # Manager/Admin only
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
+                try:
+                    prod = self._product.update_product(
+                        product_id=payload.get("product_id"),
+                        name=payload.get("name"),
+                        price=float(payload["price"]) if "price" in payload else None,
+                        category_id=payload.get("category_id"),
+                        sort_order=payload.get("sort_order"),
+                        is_active=payload.get("is_active"),
+                    )
+                    return json.dumps({"success": True, "data": self._product_to_dict(prod)})
+                except (ValueError, TypeError) as e:
+                    return json.dumps({"success": False, "error": str(e)})
+
+            elif action == "deactivate_product":
+                # Manager/Admin only
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
+                try:
+                    prod = self._product.update_product(
+                        product_id=payload.get("product_id"),
+                        is_active=False,
+                    )
+                    return json.dumps({"success": True, "data": self._product_to_dict(prod)})
+                except (ValueError, TypeError) as e:
+                    return json.dumps({"success": False, "error": str(e)})
+
+            elif action == "create_category":
+                # Manager/Admin only
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
+                try:
+                    cat = self._product.create_category(
+                        name=payload.get("name", ""),
+                        sort_order=int(payload.get("sort_order", 0)),
+                    )
+                    return json.dumps({"success": True, "data": self._category_to_dict(cat)})
+                except ValueError as e:
+                    return json.dumps({"success": False, "error": str(e)})
+
+            elif action == "update_category":
+                # Manager/Admin only
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
+                try:
+                    cat = self._product.update_category(
+                        category_id=payload.get("category_id"),
+                        name=payload.get("name"),
+                        sort_order=payload.get("sort_order"),
+                        is_active=payload.get("is_active"),
+                    )
+                    return json.dumps({"success": True, "data": self._category_to_dict(cat)})
+                except ValueError as e:
+                    return json.dumps({"success": False, "error": str(e)})
 
             # ── Customers ─────────────────────────────────────────────────────
             elif action == "find_customer_by_phone":

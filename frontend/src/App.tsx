@@ -1,18 +1,23 @@
 import { useState, useEffect } from "react";
 import { 
   ShoppingBag, Truck, BarChart3, LogOut, User, Calendar, 
-  Loader2 
+  Loader2, Eye, Package, Users
 } from "lucide-react";
 import { LoginView } from "./views/LoginView";
 import { POSView } from "./views/POSView";
 import { DeliveryView } from "./views/DeliveryView";
 import { ReportsView } from "./views/ReportsView";
+import { TrackingView } from "./views/TrackingView";
+import { ProductsView } from "./views/ProductsView";
+import { UsersView } from "./views/UsersView";
 import { ShiftDialog } from "./components/ShiftDialog";
 import { bridge } from "./bridge";
 
+type Tab = "pos" | "delivery" | "tracking" | "reports" | "products" | "users";
+
 function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<"pos" | "delivery" | "reports">("pos");
+  const [activeTab, setActiveTab] = useState<Tab>("pos");
   const [isShiftOpen, setIsShiftOpen] = useState(false);
   const [activeShift, setActiveShift] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -72,6 +77,20 @@ function App() {
     return <LoginView onLoginSuccess={handleLoginSuccess} />;
   }
 
+  const isManagerOrAbove =
+    currentUser.role === "manager" || currentUser.role === "admin";
+  const isAdmin = currentUser.role === "admin";
+
+  // Navigation items — visible tabs depend on role
+  const navItems: { id: Tab; label: string; icon: any; visible: boolean }[] = [
+    { id: "pos",      label: "شاشة البيع (POS)",    icon: ShoppingBag, visible: true },
+    { id: "delivery", label: "توصيل الطلبات",       icon: Truck,       visible: true },
+    { id: "tracking", label: "متابعة الطلبات",      icon: Eye,         visible: true },
+    { id: "reports",  label: "التقارير المالية",    icon: BarChart3,   visible: isManagerOrAbove },
+    { id: "products", label: "إدارة المنتجات",      icon: Package,     visible: isManagerOrAbove },
+    { id: "users",    label: "إدارة المستخدمين",    icon: Users,       visible: isAdmin },
+  ];
+
   return (
     <div className="min-h-screen bg-brand-dark flex flex-col overflow-hidden text-white font-cairo">
       
@@ -92,41 +111,25 @@ function App() {
 
           {/* Navigation links */}
           <nav className="hidden md:flex items-center gap-1.5">
-            <button
-              onClick={() => setActiveTab("pos")}
-              className={`flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-bold transition-all ${
-                activeTab === "pos"
-                  ? "bg-brand-gold/10 text-brand-gold border border-brand-gold/30"
-                  : "text-gray-400 hover:text-white hover:bg-brand-card/40 border border-transparent"
-              }`}
-            >
-              <ShoppingBag size={16} />
-              شاشة البيع (POS)
-            </button>
-            <button
-              onClick={() => setActiveTab("delivery")}
-              className={`flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-bold transition-all ${
-                activeTab === "delivery"
-                  ? "bg-brand-gold/10 text-brand-gold border border-brand-gold/30"
-                  : "text-gray-400 hover:text-white hover:bg-brand-card/40 border border-transparent"
-              }`}
-            >
-              <Truck size={16} />
-              توصيل الطلبات (Delivery)
-            </button>
-            {(currentUser.role === "manager" || currentUser.role === "admin") && (
-              <button
-                onClick={() => setActiveTab("reports")}
-                className={`flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-bold transition-all ${
-                  activeTab === "reports"
-                    ? "bg-brand-gold/10 text-brand-gold border border-brand-gold/30"
-                    : "text-gray-400 hover:text-white hover:bg-brand-card/40 border border-transparent"
-                }`}
-              >
-                <BarChart3 size={16} />
-                التقارير المالية
-              </button>
-            )}
+            {navItems
+              .filter((n) => n.visible)
+              .map((n) => {
+                const Icon = n.icon;
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => setActiveTab(n.id)}
+                    className={`flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-bold transition-all ${
+                      activeTab === n.id
+                        ? "bg-brand-gold/10 text-brand-gold border border-brand-gold/30"
+                        : "text-gray-400 hover:text-white hover:bg-brand-card/40 border border-transparent"
+                    }`}
+                  >
+                    <Icon size={16} />
+                    {n.label}
+                  </button>
+                );
+              })}
           </nav>
         </div>
 
@@ -153,7 +156,7 @@ function App() {
             <div className="text-right">
               <span className="text-xs font-bold text-white block leading-none">{currentUser.display_name}</span>
               <span className="text-[9px] text-gray-400 block mt-0.5 leading-none">
-                {currentUser.role === "admin" ? "مدير النظام" : currentUser.role === "manager" ? "مدير الوردية" : "كاشير الصندوق"}
+                {currentUser.role === "admin" ? "مدير عام" : currentUser.role === "manager" ? "مدير الوردية" : "كاشير الصندوق"}
               </span>
             </div>
           </div>
@@ -172,9 +175,12 @@ function App() {
 
       {/* Main View Display */}
       <main className="flex-1 overflow-hidden">
-        {activeTab === "pos" && <POSView currentUser={currentUser} />}
+        {activeTab === "pos"      && <POSView currentUser={currentUser} />}
         {activeTab === "delivery" && <DeliveryView currentUser={currentUser} />}
-        {activeTab === "reports" && <ReportsView currentUser={currentUser} />}
+        {activeTab === "tracking" && <TrackingView currentUser={currentUser} />}
+        {activeTab === "reports"  && isManagerOrAbove && <ReportsView currentUser={currentUser} />}
+        {activeTab === "products" && isManagerOrAbove && <ProductsView currentUser={currentUser} />}
+        {activeTab === "users"    && isAdmin           && <UsersView currentUser={currentUser} />}
       </main>
 
       {/* Global Dialogs */}

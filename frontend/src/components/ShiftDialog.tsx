@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Calendar, Plus, Power, Loader2 } from "lucide-react";
+import { X, Calendar, Plus, Power, Loader2, Printer, CheckCircle2 } from "lucide-react";
 import { bridge } from "../bridge";
 import { PinDialog } from "./PinDialog";
 
@@ -20,6 +20,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
   const [summary, setSummary] = useState<any>(null);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [summaryPrinted, setSummaryPrinted] = useState(false);
 
   // New Expense form — categories must match backend: supplies | delivery_fees | other
   const [expAmount, setExpAmount] = useState("");
@@ -58,6 +59,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
   useEffect(() => {
     if (isOpen) {
       fetchShiftData();
+      setSummaryPrinted(false); // Reset print status when dialog opens
     }
   }, [isOpen]);
 
@@ -105,6 +107,20 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
       setShowPinGate(true);
     } else {
       setShowPinGate(true);
+    }
+  };
+
+  const handlePrintSummary = async () => {
+    if (!activeShift) return;
+    try {
+      setLoading(true);
+      await bridge.call("print_shift_summary", { shift_id: activeShift.id });
+      setSummaryPrinted(true);
+      alert("تمت طباعة ملخص الوردية بنجاح!");
+    } catch (err: any) {
+      alert("فشل طباعة الملخص: " + err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -202,17 +218,33 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                             {(summary.expected_cash || 0).toFixed(2)} ج.م
                           </span>
                         </div>
-                        {/* Only manager/admin can close shift */}
-                        {isManagerOrAbove && (
+                        <div className="flex flex-col items-end gap-2">
+                          {/* Print Summary — must be done before close shift */}
                           <button
-                            onClick={handleCloseShiftClick}
-                            disabled={loading}
-                            className="py-3 px-5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl flex items-center gap-1.5 active:translate-y-0.5 btn-hover-active disabled:opacity-50"
+                            onClick={handlePrintSummary}
+                            disabled={loading || summaryPrinted}
+                            className={`py-2 px-4 font-bold rounded-xl flex items-center gap-1.5 text-sm transition-all ${
+                              summaryPrinted
+                                ? "bg-brand-teal/10 text-brand-teal border border-brand-teal/30 cursor-not-allowed"
+                                : "bg-brand-card border border-brand-gold/30 text-brand-gold hover:border-brand-gold active:translate-y-0.5 btn-hover-active"
+                            } disabled:opacity-60`}
                           >
-                            {loading ? <Loader2 size={18} className="animate-spin" /> : <Power size={18} />}
-                            إغلاق الوردية
+                            {summaryPrinted ? <CheckCircle2 size={16} /> : <Printer size={16} />}
+                            {summaryPrinted ? "تمت الطباعة" : "طباعة ملخص الوردية"}
                           </button>
-                        )}
+                          {/* Only manager/admin can close shift */}
+                          {isManagerOrAbove && (
+                            <button
+                              onClick={handleCloseShiftClick}
+                              disabled={loading || !summaryPrinted}
+                              title={!summaryPrinted ? "يجب طباعة الملخص أولاً" : ""}
+                              className="py-3 px-5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl flex items-center gap-1.5 active:translate-y-0.5 btn-hover-active disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {loading ? <Loader2 size={18} className="animate-spin" /> : <Power size={18} />}
+                              إغلاق الوردية
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}

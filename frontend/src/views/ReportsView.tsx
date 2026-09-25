@@ -95,7 +95,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
           <div>
             <span className="text-gray-400 text-xs block">عدد فواتير الوردية</span>
             <span className="text-2xl font-black text-white mt-1 block">
-              12 فاتورة
+              {salesSummary?.order_count != null
+                ? `${salesSummary.order_count} فاتورة`
+                : "—"}
             </span>
           </div>
           <div className="h-12 w-12 rounded-xl bg-brand-border/20 text-gray-300 flex items-center justify-center">
@@ -139,7 +141,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
                   <td className="py-3 text-gray-300">
                     {shift.opened_at ? new Date(shift.opened_at).toLocaleDateString("ar-EG") : "—"}
                   </td>
-                  <td className="py-3 text-gray-300">{shift.opened_by || "—"}</td>
+                  <td className="py-3 text-gray-300">{shift.opened_by_name || shift.opened_by || "—"}</td>
                   <td className="py-3 text-left font-bold text-white font-mono">
                     {shift.is_active ? <span className="text-brand-teal text-xs font-bold">نشطة</span> : "مغلقة"}
                   </td>

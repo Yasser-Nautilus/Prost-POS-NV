@@ -6,6 +6,7 @@ interface PaymentDialogProps {
   isOpen: boolean;
   onClose: () => void;
   total: number;
+  orderType?: string;
   onConfirm: (method: string, amountPaid: number, change: number) => void;
 }
 
@@ -13,6 +14,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   isOpen,
   onClose,
   total,
+  orderType,
   onConfirm
 }) => {
   const [method, setMethod] = useState("cash");
@@ -80,14 +82,17 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
               </button>
               <button
                 type="button"
+                disabled={orderType === "delivery"}
                 onClick={() => {
-                  setMethod("card");
+                  setMethod("visa");
                   setCashReceived(total.toString());
                 }}
                 className={`py-4 rounded-2xl border font-bold flex flex-col items-center justify-center gap-2 transition-all ${
-                  method === "card"
-                    ? "bg-brand-gold/10 border-brand-gold text-brand-gold"
-                    : "bg-brand-card border-brand-border/50 text-gray-400 hover:text-white"
+                  orderType === "delivery"
+                    ? "opacity-40 cursor-not-allowed bg-brand-card border-brand-border/50 text-gray-500"
+                    : method === "visa"
+                      ? "bg-brand-gold/10 border-brand-gold text-brand-gold"
+                      : "bg-brand-card border-brand-border/50 text-gray-400 hover:text-white"
                 }`}
               >
                 <CreditCard size={24} />
