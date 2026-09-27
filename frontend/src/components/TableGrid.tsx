@@ -6,6 +6,8 @@ interface TableGridProps {
   onSelect: (tableNo: number) => void;
   onClose: () => void;
   tableCount?: number;
+  /** Map of table_no (number) → invoice label (e.g. "#42") for occupied tables */
+  occupiedTables?: Record<number, string>;
 }
 
 export const TableGrid: React.FC<TableGridProps> = ({
@@ -14,6 +16,7 @@ export const TableGrid: React.FC<TableGridProps> = ({
   onSelect,
   onClose,
   tableCount = 12,
+  occupiedTables = {},
 }) => {
   if (!isOpen) return null;
 
@@ -33,11 +36,30 @@ export const TableGrid: React.FC<TableGridProps> = ({
           </button>
         </div>
 
+        {/* Legend */}
+        <div className="px-6 pt-4 flex items-center gap-4 text-xs text-gray-400">
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-brand-card border border-brand-border/40 inline-block" />
+            فارغة
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-red-500 inline-block animate-pulse" />
+            مشغولة
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-3 h-3 rounded-full bg-brand-gold inline-block" />
+            مختارة
+          </span>
+        </div>
+
         {/* Table Grid */}
         <div className="p-6">
           <div className="grid grid-cols-4 gap-3">
             {tables.map((tableNo) => {
               const isSelected = selectedTable === tableNo;
+              const isOccupied = tableNo in occupiedTables;
+              const invoiceLabel = occupiedTables[tableNo];
+
               return (
                 <button
                   key={tableNo}
@@ -45,21 +67,37 @@ export const TableGrid: React.FC<TableGridProps> = ({
                   onClick={() => onSelect(tableNo)}
                   className={`
                     relative h-20 rounded-2xl border-2 font-bold text-lg
-                    flex flex-col items-center justify-center gap-1
+                    flex flex-col items-center justify-center gap-0.5
                     transition-all duration-200 active:scale-95
                     ${
                       isSelected
-                        ? "bg-brand-gold/15 border-brand-gold text-brand-gold shadow-lg shadow-brand-gold/10"
+                        ? "bg-brand-gold/15 border-brand-gold text-brand-gold shadow-lg shadow-brand-gold/20"
+                        : isOccupied
+                        ? "bg-red-950/40 border-red-700/70 text-red-400 shadow-md shadow-red-900/20"
                         : "bg-brand-card border-brand-border/40 text-gray-300 hover:text-white hover:border-brand-border hover:bg-brand-card/80"
                     }
                   `}
                 >
-                  <span className="text-[10px] text-gray-500 uppercase tracking-wider">طاولة</span>
-                  <span className={`text-2xl font-black font-mono ${isSelected ? "text-brand-gold" : ""}`}>
+                  <span className="text-[9px] text-gray-500 uppercase tracking-wider">طاولة</span>
+                  <span className={`text-2xl font-black font-mono ${isSelected ? "text-brand-gold" : isOccupied ? "text-red-400" : ""}`}>
                     {tableNo}
                   </span>
+
+                  {/* Occupied badge */}
+                  {isOccupied && !isSelected && (
+                    <span className="text-[8px] text-red-500 font-bold leading-none">
+                      {invoiceLabel || "مشغولة"}
+                    </span>
+                  )}
+
+                  {/* Selected indicator */}
                   {isSelected && (
                     <div className="absolute top-1.5 left-1.5 h-3 w-3 rounded-full bg-brand-gold animate-pulse" />
+                  )}
+
+                  {/* Occupied indicator */}
+                  {isOccupied && !isSelected && (
+                    <div className="absolute top-1.5 left-1.5 h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
                   )}
                 </button>
               );

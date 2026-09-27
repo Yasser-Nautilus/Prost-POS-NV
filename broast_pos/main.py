@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import sys
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from broast_pos.config.config import get_app_name
@@ -40,7 +41,8 @@ from broast_pos.infrastructure.printing.print_triggers import PrintTriggers
 from broast_pos.infrastructure.printing.printer_manager import PrinterManager
 from broast_pos.ui.styles.theme import apply_theme
 from broast_pos.infrastructure.web_bridge.bridge import POSBridge
-from broast_pos.ui.web_shell import WebShell
+# NOTE: WebShell is imported lazily inside main() — QWebEngineWidgets
+# must be imported AFTER QApplication is created per Qt6 requirements.
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +122,9 @@ def main() -> int:
     # ------------------------------------------------------------------
     # 5. Qt Application
     # ------------------------------------------------------------------
+    # Qt6 requirement: AA_ShareOpenGLContexts MUST be set before QApplication
+    # when QtWebEngineWidgets is used — otherwise ImportError on web_shell import.
+    QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = QApplication(sys.argv)
     app.setApplicationName(get_app_name())
 
@@ -129,6 +134,9 @@ def main() -> int:
     # ------------------------------------------------------------------
     # 6. Web UI Shell and Bridge Initialization
     # ------------------------------------------------------------------
+    # Lazy import — QWebEngineWidgets must be imported AFTER QApplication is created
+    from broast_pos.ui.web_shell import WebShell  # noqa: PLC0415
+
     bridge = POSBridge(
         auth_service=auth_service,
         product_service=product_service,

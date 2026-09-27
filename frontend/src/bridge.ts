@@ -489,6 +489,15 @@ class POSBridgeClient {
         return { success: true } as any;
       }
 
+      case "return_trip": {
+        const trip = this.mockState.trips.find((t: any) => t.id === payload.trip_id);
+        if (!trip) throw new Error("رحلة غير موجودة");
+        if (!trip.dispatched_at) throw new Error("الرحلة لم تُرسل بعد");
+        trip.returned_at = new Date().toISOString();
+        trip.status = "returned";
+        return { success: true, message: "تم تسجيل عودة الطيار" } as any;
+      }
+
       case "settle_trip": {
         const trip = this.mockState.trips.find((t: any) => t.id === payload.trip_id);
         if (trip) {

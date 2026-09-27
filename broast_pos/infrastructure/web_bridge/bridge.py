@@ -514,19 +514,28 @@ class POSBridge(QObject):
 
             # ── Reports ───────────────────────────────────────────────────────
             elif action == "get_report_daily_sales":
-                data = self._report.get_daily_sales_summary(payload.get("date_str", ""))
+                if not self._reports_ctrl:
+                    return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
+                # Correct method: generate_daily_summary on ReportsController
+                data = self._reports_ctrl.generate_daily_summary(
+                    target_date=None, shift_id=payload.get("shift_id")
+                )
                 return json.dumps({"success": True, "data": data})
 
             elif action == "get_report_product_sales":
-                data = self._report.get_product_sales_summary(
-                    start_date=payload.get("start_date", ""),
-                    end_date=payload.get("end_date", "")
+                if not self._reports_ctrl:
+                    return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
+                # Correct method: get_bestsellers on ReportsController
+                data = self._reports_ctrl.get_bestsellers(
+                    shift_id=payload.get("shift_id"),
+                    limit=payload.get("limit", 20)
                 )
                 return json.dumps({"success": True, "data": data})
 
             elif action == "print_shift_summary":
                 if self._reports_ctrl and self._current_user:
-                    self._reports_ctrl.print_shift_report(
+                    # Correct method name: print_daily_summary (not print_shift_report)
+                    self._reports_ctrl.print_daily_summary(
                         shift_id=payload.get("shift_id"),
                         cashier_slot=self._current_user.cashier_slot or 1
                     )
@@ -538,7 +547,8 @@ class POSBridge(QObject):
                             "park_order", "resume_parked_order", "get_parked_orders",
                             "confirm_order", "complete_payment", "get_table_state",
                             "get_active_orders", "get_active_by_type", "cancel_order",
-                            "apply_discount", "reprint_receipt"):
+                            "apply_discount", "reprint_receipt",
+                            "load_order", "load_order_by_table", "save_amendment"):
                 if not self._order_ctrl:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
                 return self._dispatch_order(action, payload)
@@ -546,7 +556,8 @@ class POSBridge(QObject):
             # ── Delivery ──────────────────────────────────────────────────────
             elif action in ("get_available_drivers", "get_active_trips", "check_in_driver",
                             "check_out_driver", "create_trip", "dispatch_trip",
-                            "return_trip", "settle_trip"):
+                            "return_trip", "settle_trip", "get_trip_details",
+                            "get_driver_attendance_today", "get_daily_driver_summary"):
                 if not self._delivery_ctrl:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
                 return self._dispatch_delivery(action, payload)
@@ -628,6 +639,21 @@ class POSBridge(QObject):
             return json.dumps({"success": False, "message": msg, "error": msg})
         elif action == "get_table_state":
             return json.dumps({"success": True, "data": ctrl.get_table_state()})
+        elif action == "load_order":
+            order = ctrl.load_order(payload.get("order_id"))
+            if order:
+                return json.dumps({"success": True, "data": self._order_to_dict(order)})
+            return json.dumps({"success": False, "error": "الطلب غير موجود"})
+        elif action == "load_order_by_table":
+            order = ctrl.load_order_by_table(payload.get("table_number"))
+            if order:
+                return json.dumps({"success": True, "data": self._order_to_dict(order)})
+            return json.dumps({"success": False, "error": "لا يوجد طلب لهذه الطاولة"})
+        elif action == "save_amendment":
+            ok, msg = ctrl.save_amendment(payload.get("manager_pin"))
+            if ok:
+                return json.dumps({"success": True, "message": msg})
+            return json.dumps({"success": False, "error": msg})
         elif action == "get_active_orders":
             return json.dumps({"success": True, "data": [self._order_to_dict(o) for o in ctrl.get_active_orders()]})
         elif action == "get_active_by_type":
@@ -661,24 +687,24 @@ class POSBridge(QObject):
         if action == "get_available_drivers":
             return json.dumps({"success": True, "data": ctrl.get_available_drivers()})
         elif action == "get_active_trips":
+            # Controller already returns List[Dict] — pass through directly
             trips = ctrl.get_active_trips()
-            return json.dumps({"success": True, "data": [{
-                "id": t.id, "driver_id": t.driver_id, "driver_name": t.driver_name,
-                "created_at": t.created_at, "dispatched_at": t.dispatched_at,
-                "returned_at": t.returned_at, "settled_at": t.settled_at,
-                "order_ids": t.order_ids, "cash_collected": t.cash_collected,
-                "total_delivery_fees": t.total_delivery_fees, "is_settled": t.is_settled,
-            } for t in trips]})
+            return json.dumps({"success": True, "data": trips})
         elif action == "check_in_driver":
-            ctrl.check_in_driver(payload.get("driver_id"))
+            ok, msg = ctrl.check_in_driver(payload.get("driver_id"))
+            if not ok:
+                return json.dumps({"success": False, "error": msg})
             return json.dumps({"success": True})
         elif action == "check_out_driver":
-            ctrl.check_out_driver(payload.get("driver_id"))
+            ok, msg = ctrl.check_out_driver(payload.get("driver_id"))
+            if not ok:
+                return json.dumps({"success": False, "error": msg})
             return json.dumps({"success": True})
         elif action == "create_trip":
             ok, res = ctrl.create_trip(driver_id=payload.get("driver_id"), order_ids=payload.get("order_ids", []))
             if ok:
-                return json.dumps({"success": True, "trip_id": res.id})
+                # Put trip_id inside 'data' so bridge.call() resolves it correctly
+                return json.dumps({"success": True, "data": {"trip_id": res.id}})
             return json.dumps({"success": False, "error": res})
         elif action == "dispatch_trip":
             ok, msg = ctrl.dispatch_trip(payload.get("trip_id"))
@@ -691,4 +717,25 @@ class POSBridge(QObject):
             if ok:
                 return json.dumps({"success": True, "message": msg})
             return json.dumps({"success": False, "message": msg, "error": msg})
+        elif action == "get_trip_details":
+            details = self._delivery_ctrl._delivery_svc.get_trip_details(payload.get("trip_id"))
+            if details:
+                return json.dumps({"success": True, "data": details})
+            return json.dumps({"success": False, "error": "الرحلة غير موجودة"})
+        elif action == "get_driver_attendance_today":
+            records = self._delivery_ctrl._delivery_svc.get_driver_attendance_today()
+            drivers = self._delivery_ctrl.get_available_drivers()
+            drivers_by_id = {d["id"]: d for d in drivers}
+            # Merge attendance with driver info
+            result = []
+            for rec in records:
+                drv = drivers_by_id.get(rec["driver_id"], {})
+                result.append({
+                    **rec,
+                    "display_name": drv.get("display_name", rec["driver_id"]),
+                })
+            return json.dumps({"success": True, "data": result})
+        elif action == "get_daily_driver_summary":
+            summary = self._delivery_ctrl._delivery_svc.get_all_drivers_daily_summary()
+            return json.dumps({"success": True, "data": summary})
         return json.dumps({"success": False, "error": f"إجراء توصيل غير معروف: {action}"})

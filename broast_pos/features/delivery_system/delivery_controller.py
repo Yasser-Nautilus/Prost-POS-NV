@@ -101,13 +101,16 @@ class DeliveryController:
         return self.get_available_drivers()
 
     def _get_driver_status(self, driver_id: int) -> str:
-        """Determine driver display status: 'available' or 'out'."""
+        """Determine driver display status using the repo's authoritative logic."""
         try:
-            unsettled = self._delivery_svc.get_unsettled_trips(driver_id)
-            for trip in unsettled:
-                if trip.dispatched_at and not trip.returned_at:
-                    return "out"
-            return "available"
+            status = self._delivery_svc._delivery.get_driver_status(driver_id)
+            from broast_pos.core.models.delivery import DriverStatus
+            if status == DriverStatus.OUT:
+                return "out"
+            elif status == DriverStatus.AVAILABLE:
+                return "available"
+            else:  # CHECKED_OUT
+                return "off_duty"
         except Exception:
             return "available"
 
@@ -328,25 +331,48 @@ class DeliveryController:
     # ------------------------------------------------------------------
 
     def get_active_trips(self) -> List[Dict[str, Any]]:
-        """Return all active (non-settled) trips for display."""
+        """Return all live trips: in-transit + returned-but-unsettled.
+
+        Uses the repo directly because DeliveryService.get_unsettled_trips()
+        only returns already-returned trips, not in-transit ones.
+        """
         try:
-            drivers = self._delivery_svc.get_active_drivers()
-            all_trips = []
-            for d in drivers:
-                trips = self._delivery_svc.get_unsettled_trips(d.id)
-                for t in trips:
-                    status = "dispatched" if t.dispatched_at and not t.returned_at else "returned"
-                    if not t.dispatched_at:
-                        status = "pending"
-                    all_trips.append({
-                        "id": t.id,
-                        "driver_name": t.driver_name,
-                        "order_count": len(t.order_ids) if t.order_ids else 0,
-                        "status": status,
-                        "dispatched_at": str(t.dispatched_at) if t.dispatched_at else "",
-                    })
+            repo = self._delivery_svc._delivery
+            # In-transit: dispatched but driver hasn't returned yet
+            in_transit = repo.get_active_trips()
+            # Returned but not yet settled (cash handover pending)
+            unsettled = repo.get_unsettled_trips()
+
+            all_trips: List[Dict[str, Any]] = []
+
+            def _serialize(t: Any, status: str) -> Dict[str, Any]:
+                return {
+                    "id": t.id,
+                    "driver_id": t.driver_id,
+                    "driver_name": getattr(t, "driver_name", ""),
+                    "order_ids": t.order_ids or [],
+                    "order_count": len(t.order_ids) if t.order_ids else 0,
+                    "status": status,
+                    "dispatched_at": str(t.dispatched_at) if t.dispatched_at else None,
+                    "returned_at": str(t.returned_at) if t.returned_at else None,
+                    "settled_at": str(t.settled_at) if getattr(t, "settled_at", None) else None,
+                    "is_settled": bool(getattr(t, "is_settled", False)),
+                    "cash_collected": float(getattr(t, "cash_collected", 0) or 0),
+                    "total_delivery_fees": float(getattr(t, "total_delivery_fees", 0) or 0),
+                }
+
+            seen_ids: set = set()
+            for t in in_transit:
+                all_trips.append(_serialize(t, "dispatched"))
+                seen_ids.add(t.id)
+            for t in unsettled:
+                if t.id not in seen_ids:
+                    all_trips.append(_serialize(t, "returned"))
+                    seen_ids.add(t.id)
+
             return all_trips
-        except Exception:
+        except Exception as exc:
+            logger.error("get_active_trips error: %s", exc)
             return []
 
     # ------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Delete, Check } from "lucide-react";
 
 interface NumpadProps {
@@ -7,6 +7,7 @@ interface NumpadProps {
   onConfirm?: () => void;
   confirmLabel?: string;
   confirmColor?: string;
+  maxLength?: number;
 }
 
 export const Numpad: React.FC<NumpadProps> = ({
@@ -14,27 +15,46 @@ export const Numpad: React.FC<NumpadProps> = ({
   onChange,
   onConfirm,
   confirmLabel = "موافق",
-  confirmColor = "bg-brand-gold text-brand-dark hover:bg-opacity-90"
+  confirmColor = "bg-brand-gold text-brand-dark hover:bg-opacity-90",
+  maxLength = 12,
 }) => {
+  // ── Physical keyboard support ────────────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't hijack typing in real input fields
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+
+      if (e.key >= "0" && e.key <= "9") {
+        e.preventDefault();
+        onChange((value + e.key).slice(0, maxLength));
+      } else if (e.key === "Backspace") {
+        e.preventDefault();
+        onChange(value.slice(0, -1));
+      } else if ((e.key === "Enter" || e.key === "NumpadEnter") && onConfirm) {
+        e.preventDefault();
+        onConfirm();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [value, onChange, onConfirm, maxLength]);
+
   const handlePress = (num: string) => {
-    onChange(value + num);
+    if (value.length < maxLength) onChange(value + num);
   };
 
   const handleBackspace = () => {
-    if (value.length > 0) {
-      onChange(value.slice(0, -1));
-    }
+    if (value.length > 0) onChange(value.slice(0, -1));
   };
 
-  const handleClear = () => {
-    onChange("");
-  };
+  const handleClear = () => onChange("");
 
   const buttons = [
     "1", "2", "3",
     "4", "5", "6",
     "7", "8", "9",
-    "C", "0", "back"
+    "C", "0", "back",
   ];
 
   return (

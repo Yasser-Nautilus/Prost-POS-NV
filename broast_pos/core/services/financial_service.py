@@ -44,6 +44,13 @@ class FinancialService:
     # Shift guard (called by OrderService before every order)
     # ------------------------------------------------------------------
 
+    def get_active_shift(self) -> Optional[Shift]:
+        """Return the currently active shift, or None if no shift is open.
+
+        Used by the bridge to resolve shift_id for expenses, summaries, etc.
+        """
+        return self._financial.get_active_shift()
+
     def ensure_shift_active(self) -> Shift:
         """Verify that a shift is currently open.
 

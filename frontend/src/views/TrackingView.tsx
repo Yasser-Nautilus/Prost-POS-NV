@@ -1,41 +1,272 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
-  Eye, RefreshCw, AlertCircle, Loader2, X, ShoppingBag,
-  UtensilsCrossed, Truck, Package, CheckCircle2
+  Eye, RefreshCw, Loader2, X,
+  UtensilsCrossed, Truck, Package, ShoppingBag, PlusCircle
 } from "lucide-react";
 import { bridge } from "../bridge";
 
 interface TrackingViewProps {
   currentUser: any;
+  onResumeOrder?: (order: any) => void;
 }
 
 const ORDER_TYPE_LABELS: Record<string, { label: string; icon: any; color: string }> = {
-  dine_in:  { label: "صالة",           icon: UtensilsCrossed, color: "text-brand-gold bg-brand-gold/10 border-brand-gold/30" },
-  takeaway: { label: "تيك أواي",        icon: ShoppingBag,    color: "text-brand-teal bg-brand-teal/10 border-brand-teal/30" },
-  delivery: { label: "دليفري",          icon: Truck,           color: "text-blue-400 bg-blue-900/20 border-blue-800/30" },
-  pickup:   { label: "استلام",          icon: Package,         color: "text-purple-400 bg-purple-900/20 border-purple-800/30" },
+  dine_in:  { label: "صالة",        icon: UtensilsCrossed, color: "text-brand-gold bg-brand-gold/10 border-brand-gold/30" },
+  takeaway: { label: "تيك أواي",     icon: ShoppingBag,    color: "text-brand-teal bg-brand-teal/10 border-brand-teal/30" },
+  delivery: { label: "دليفري",       icon: Truck,           color: "text-blue-400 bg-blue-900/20 border-blue-800/30" },
+  pickup:   { label: "استلام محل",   icon: Package,         color: "text-purple-400 bg-purple-900/20 border-purple-800/30" },
 };
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  new:              { label: "جديد — في الانتظار",    color: "text-yellow-400" },
-  confirmed:        { label: "مؤكد",                  color: "text-brand-gold" },
-  out_for_delivery: { label: "خرج للتوصيل",           color: "text-blue-400" },
-  completed:        { label: "مكتمل",                  color: "text-brand-teal" },
-  cancelled:        { label: "ملغي",                   color: "text-red-400" },
+  new:              { label: "جديد — في الانتظار",  color: "text-yellow-400" },
+  confirmed:        { label: "مؤكد",                 color: "text-brand-gold" },
+  out_for_delivery: { label: "خرج للتوصيل",          color: "text-blue-400" },
+  completed:        { label: "مكتمل",                 color: "text-green-400" },
+  cancelled:        { label: "ملغي",                  color: "text-red-400" },
 };
 
-export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser }) => {
+/** Format elapsed time from a datetime string → "HH:MM:SS" */
+function formatElapsed(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  const secs = Math.max(0, Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000));
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  return [h, m, s].map((v) => v.toString().padStart(2, "0")).join(":");
+}
+
+/** Self-updating timer cell */
+const LiveTimer: React.FC<{ since: string | null; urgentSecs?: number }> = ({ since, urgentSecs = 1800 }) => {
+  const [display, setDisplay] = useState(() => formatElapsed(since));
+  const [isUrgent, setIsUrgent] = useState(false);
+  useEffect(() => {
+    const update = () => {
+      setDisplay(formatElapsed(since));
+      if (since) {
+        const elapsed = Math.floor((Date.now() - new Date(since).getTime()) / 1000);
+        setIsUrgent(elapsed >= urgentSecs);
+      }
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [since, urgentSecs]);
+  return (
+    <span className={`font-mono font-bold tabular-nums text-xs ${isUrgent ? "text-red-400 animate-pulse" : "text-brand-gold"}`}>
+      {display}
+    </span>
+  );
+};
+
+// ─── Per-type table columns ───────────────────────────────────────────────────
+
+const DineInTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; onResume: (o: any) => void; canCancel: boolean }> =
+  ({ orders, onCancel, onResume, canCancel }) => (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="bg-brand-card/80 text-gray-400 text-xs">
+          <th className="py-2.5 px-3 text-right">#فاتورة</th>
+          <th className="py-2.5 px-3 text-right">الطاولة</th>
+          <th className="py-2.5 px-3 text-right">العناصر</th>
+          <th className="py-2.5 px-3 text-center">الحالة</th>
+          <th className="py-2.5 px-3 text-center">المنقضي</th>
+          <th className="py-2.5 px-3 text-center font-mono">الإجمالي</th>
+          <th className="py-2.5 px-3 text-center">إجراء</th>
+        </tr>
+      </thead>
+      <tbody>
+        {orders.map((order, i) => {
+          const status = STATUS_LABELS[order.status] || { label: order.status, color: "text-gray-400" };
+          return (
+            <tr key={order.id} className={`border-t border-brand-border/20 ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}>
+              <td className="py-2.5 px-3 text-gray-400 font-mono text-xs">#{order.invoice_no || order.id}</td>
+              <td className="py-2.5 px-3">
+                <span className="text-brand-gold font-black text-lg font-mono">{order.table_no || "—"}</span>
+              </td>
+              <td className="py-2.5 px-3 text-gray-400 text-xs">
+                {(order.items || []).slice(0, 2).map((it: any, j: number) => (
+                  <div key={j}>{it.product_name} ×{it.quantity}</div>
+                ))}
+                {(order.items || []).length > 2 && <div className="text-gray-600">+{order.items.length - 2} أخرى</div>}
+              </td>
+              <td className="py-2.5 px-3 text-center">
+                <span className={`text-[10px] font-bold ${status.color}`}>{status.label}</span>
+              </td>
+              <td className="py-2.5 px-3 text-center">
+                <LiveTimer since={order.created_at} urgentSecs={1800} />
+              </td>
+              <td className="py-2.5 px-3 text-center text-brand-gold font-black font-mono text-sm">
+                {(order.total || 0).toFixed(2)} ج.م
+              </td>
+              <td className="py-2.5 px-3">
+                <div className="flex items-center gap-1.5 justify-center">
+                  <button
+                    onClick={() => onResume(order)}
+                    className="py-1 px-2 bg-brand-gold/10 text-brand-gold border border-brand-gold/30 hover:bg-brand-gold/20 rounded-lg text-[10px] font-bold flex items-center gap-0.5 transition-all"
+                    title="إضافة أصناف للطلب"
+                  >
+                    <PlusCircle size={11} /> إضافة
+                  </button>
+                  {canCancel && order.status !== "completed" && order.status !== "cancelled" && (
+                    <button
+                      onClick={() => onCancel(order.id)}
+                      className="py-1 px-2 bg-red-950/20 text-red-400 border border-red-900/30 hover:bg-red-950/40 rounded-lg text-[10px] font-bold transition-all"
+                    >
+                      <X size={11} />
+                    </button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+
+const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; onResume: (o: any) => void; canCancel: boolean }> =
+  ({ orders, onCancel, onResume, canCancel }) => (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="bg-brand-card/80 text-gray-400 text-xs">
+          <th className="py-2.5 px-3 text-right">#فاتورة</th>
+          <th className="py-2.5 px-3 text-right">العميل</th>
+          <th className="py-2.5 px-3 text-right">المنطقة/العنوان</th>
+          <th className="py-2.5 px-3 text-center">الحالة</th>
+          <th className="py-2.5 px-3 text-center">المنقضي</th>
+          <th className="py-2.5 px-3 text-center font-mono">الإجمالي</th>
+          <th className="py-2.5 px-3 text-center">إجراء</th>
+        </tr>
+      </thead>
+      <tbody>
+        {orders.map((order, i) => {
+          const status = STATUS_LABELS[order.status] || { label: order.status, color: "text-gray-400" };
+          const canAddItems = order.status === "new"; // only unassigned delivery orders
+          return (
+            <tr key={order.id} className={`border-t border-brand-border/20 ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}>
+              <td className="py-2.5 px-3 text-gray-400 font-mono text-xs">#{order.invoice_no || order.id}</td>
+              <td className="py-2.5 px-3">
+                <span className="text-white font-bold text-sm">{order.customer_name || "—"}</span>
+                {order.customer_phone && (
+                  <span className="text-gray-500 font-mono block text-[10px]">{order.customer_phone}</span>
+                )}
+              </td>
+              <td className="py-2.5 px-3 text-gray-400 text-xs">
+                {order.customer_zone && <div className="text-brand-gold">{order.customer_zone}</div>}
+                {order.customer_address && <div className="truncate max-w-[120px]">{order.customer_address}</div>}
+              </td>
+              <td className="py-2.5 px-3 text-center">
+                <span className={`text-[10px] font-bold ${status.color}`}>{status.label}</span>
+              </td>
+              <td className="py-2.5 px-3 text-center">
+                <LiveTimer since={order.created_at} urgentSecs={1200} />
+              </td>
+              <td className="py-2.5 px-3 text-center text-brand-gold font-black font-mono text-sm">
+                {(order.total || 0).toFixed(2)} ج.م
+              </td>
+              <td className="py-2.5 px-3">
+                <div className="flex items-center gap-1.5 justify-center">
+                  {canAddItems && (
+                    <button
+                      onClick={() => onResume(order)}
+                      className="py-1 px-2 bg-brand-gold/10 text-brand-gold border border-brand-gold/30 hover:bg-brand-gold/20 rounded-lg text-[10px] font-bold flex items-center gap-0.5 transition-all"
+                      title="إضافة أصناف للطلب"
+                    >
+                      <PlusCircle size={11} /> إضافة
+                    </button>
+                  )}
+                  {canCancel && order.status !== "completed" && order.status !== "cancelled" && order.status !== "out_for_delivery" && (
+                    <button
+                      onClick={() => onCancel(order.id)}
+                      className="py-1 px-2 bg-red-950/20 text-red-400 border border-red-900/30 hover:bg-red-950/40 rounded-lg text-[10px] font-bold transition-all"
+                    >
+                      <X size={11} />
+                    </button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+
+const TakeawayTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; onResume: (o: any) => void; canCancel: boolean }> =
+  ({ orders, onCancel, onResume, canCancel }) => (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="bg-brand-card/80 text-gray-400 text-xs">
+          <th className="py-2.5 px-3 text-right">#فاتورة</th>
+          <th className="py-2.5 px-3 text-right">العناصر</th>
+          <th className="py-2.5 px-3 text-center">الحالة</th>
+          <th className="py-2.5 px-3 text-center">المنقضي</th>
+          <th className="py-2.5 px-3 text-center font-mono">الإجمالي</th>
+          <th className="py-2.5 px-3 text-center">إجراء</th>
+        </tr>
+      </thead>
+      <tbody>
+        {orders.map((order, i) => {
+          const status = STATUS_LABELS[order.status] || { label: order.status, color: "text-gray-400" };
+          return (
+            <tr key={order.id} className={`border-t border-brand-border/20 ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}>
+              <td className="py-2.5 px-3 text-gray-400 font-mono text-xs">#{order.invoice_no || order.id}</td>
+              <td className="py-2.5 px-3 text-gray-400 text-xs">
+                {(order.items || []).slice(0, 3).map((it: any, j: number) => (
+                  <div key={j}>{it.product_name} ×{it.quantity}</div>
+                ))}
+                {(order.items || []).length > 3 && <div className="text-gray-600">+{order.items.length - 3} أخرى</div>}
+              </td>
+              <td className="py-2.5 px-3 text-center">
+                <span className={`text-[10px] font-bold ${status.color}`}>{status.label}</span>
+              </td>
+              <td className="py-2.5 px-3 text-center">
+                <LiveTimer since={order.created_at} urgentSecs={900} />
+              </td>
+              <td className="py-2.5 px-3 text-center text-brand-gold font-black font-mono text-sm">
+                {(order.total || 0).toFixed(2)} ج.م
+              </td>
+              <td className="py-2.5 px-3 text-center">
+                <div className="flex items-center gap-1.5 justify-center">
+                  <button
+                    onClick={() => onResume(order)}
+                    className="py-1 px-2 bg-brand-gold/10 text-brand-gold border border-brand-gold/30 hover:bg-brand-gold/20 rounded-lg text-[10px] font-bold flex items-center gap-0.5 transition-all"
+                  >
+                    <PlusCircle size={11} /> إضافة
+                  </button>
+                  {canCancel && order.status !== "completed" && order.status !== "cancelled" && (
+                    <button
+                      onClick={() => onCancel(order.id)}
+                      className="py-1 px-2 bg-red-950/20 text-red-400 border border-red-900/30 hover:bg-red-950/40 rounded-lg text-[10px] font-bold transition-all"
+                    >
+                      <X size={11} />
+                    </button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+
+// ─── Main View ────────────────────────────────────────────────────────────────
+
+export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResumeOrder }) => {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterType, setFilterType] = useState<string>("all");
-  const [showCancelPinGate, setShowCancelPinGate] = useState(false);
+
+  // Cancel dialog state
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [pendingCancelOrderId, setPendingCancelOrderId] = useState<number | null>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [cancelPin, setCancelPin] = useState("");
 
-  const isManagerOrAbove =
-    currentUser?.role === "manager" || currentUser?.role === "admin";
+  const isManagerOrAbove = currentUser?.role === "manager" || currentUser?.role === "admin";
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
       const res = await bridge.call("get_active_orders");
@@ -45,66 +276,73 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchOrders();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchOrders, 30_000);
-    return () => clearInterval(interval);
-  }, []);
+    const id = setInterval(fetchOrders, 30_000);
+    return () => clearInterval(id);
+  }, [fetchOrders]);
 
   const filteredOrders =
-    filterType === "all"
-      ? orders
-      : orders.filter((o) => o.order_type === filterType);
+    filterType === "all" ? orders : orders.filter((o) => o.order_type === filterType);
 
-  const [cancelPin, setCancelPin] = useState("");
+  // Group by type for display
+  const byType: Record<string, any[]> = {};
+  for (const o of filteredOrders) {
+    if (!byType[o.order_type]) byType[o.order_type] = [];
+    byType[o.order_type].push(o);
+  }
 
   const handleCancelClick = (orderId: number) => {
     setPendingCancelOrderId(orderId);
     setCancelReason("");
     setCancelPin("");
-    setShowCancelPinGate(true);
+    setShowCancelDialog(true);
   };
 
   const performCancel = async () => {
     if (!pendingCancelOrderId) return;
-    if (!cancelReason.trim()) {
-      alert("يجب إدخال سبب الإلغاء");
-      return;
-    }
-    if (!cancelPin.trim()) {
-      alert("يجب إدخال رمز PIN المدير");
-      return;
-    }
+    if (!cancelReason.trim()) { alert("يجب إدخال سبب الإلغاء"); return; }
+    if (!cancelPin.trim()) { alert("يجب إدخال رمز PIN المدير"); return; }
     try {
-      await bridge.call("cancel_order", {
+      const ok = await bridge.call("cancel_order", {
         order_id: pendingCancelOrderId,
         manager_pin: cancelPin,
         reason: cancelReason,
       });
-      setShowCancelPinGate(false);
-      setPendingCancelOrderId(null);
-      setCancelReason("");
-      setCancelPin("");
-      fetchOrders();
+      if (ok) {
+        setShowCancelDialog(false);
+        fetchOrders();
+      }
     } catch (e: any) {
-      alert("فشل إلغاء الطلب: " + e.message);
+      alert("فشل الإلغاء: " + e.message);
     }
   };
 
+  const handleResume = async (order: any) => {
+    try {
+      await bridge.call("load_order", { order_id: order.id });
+      onResumeOrder?.(order);
+    } catch (e: any) {
+      alert("فشل تحميل الطلب: " + e.message);
+    }
+  };
+
+  const TYPE_ORDER = ["dine_in", "delivery", "pickup", "takeaway"];
+  const displayTypes = filterType === "all" ? TYPE_ORDER : [filterType];
+
   if (loading && orders.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center text-white space-y-2 h-[calc(100vh-64px)] bg-brand-dark">
+      <div className="flex-1 flex flex-col items-center justify-center text-white space-y-2 h-[calc(100vh-64px)]">
         <Loader2 className="animate-spin text-brand-gold" size={32} />
-        <p className="text-gray-400 text-xs">جاري تحميل الطلبات النشطة...</p>
+        <p className="text-gray-400 text-xs">جاري تحميل الطلبات...</p>
       </div>
     );
   }
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-6 h-[calc(100vh-64px)] bg-brand-dark">
+    <div className="flex-1 overflow-y-auto p-4 space-y-5 h-[calc(100vh-64px)] bg-brand-dark">
       {/* Header */}
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
@@ -113,19 +351,16 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser }) => {
           </div>
           <div>
             <h2 className="text-xl font-black text-white">متابعة الطلبات النشطة</h2>
-            <p className="text-xs text-gray-400">
-              {filteredOrders.length} طلب نشط
-            </p>
+            <p className="text-xs text-gray-400">{filteredOrders.length} طلب نشط</p>
           </div>
         </div>
-
         <div className="flex items-center gap-2">
-          {/* Filter tabs */}
           {[
             { id: "all", label: "الكل" },
             { id: "dine_in", label: "صالة" },
             { id: "takeaway", label: "تيك أواي" },
             { id: "delivery", label: "دليفري" },
+            { id: "pickup", label: "استلام محل" },
           ].map((f) => (
             <button
               key={f.id}
@@ -139,189 +374,102 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser }) => {
               {f.label}
             </button>
           ))}
-
           <button
             onClick={fetchOrders}
-            className={`p-2 bg-brand-card border border-brand-border/40 hover:border-brand-gold text-gray-400 hover:text-brand-gold rounded-xl transition-all ${
-              loading ? "animate-spin text-brand-gold" : ""
-            }`}
+            className={`p-2 bg-brand-card border border-brand-border/40 hover:border-brand-gold text-gray-400 hover:text-brand-gold rounded-xl transition-all ${loading ? "animate-spin" : ""}`}
           >
             <RefreshCw size={16} />
           </button>
         </div>
       </div>
 
-      {/* Orders grid */}
-      {filteredOrders.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredOrders.map((order) => {
-            const typeInfo =
-              ORDER_TYPE_LABELS[order.order_type] || ORDER_TYPE_LABELS.takeaway;
-            const TypeIcon = typeInfo.icon;
-            const statusInfo =
-              STATUS_LABELS[order.status] || { label: order.status, color: "text-gray-400" };
-            const canCancel =
-              isManagerOrAbove &&
-              order.status !== "completed" &&
-              order.status !== "cancelled" &&
-              order.status !== "out_for_delivery";
-
-            return (
-              <div
-                key={order.id}
-                className="p-4 bg-brand-card border border-brand-border/30 rounded-2xl space-y-3 hover:border-brand-border/70 transition-all animate-in fade-in duration-150"
-              >
-                {/* Header */}
-                <div className="flex justify-between items-start">
-                  <span
-                    className={`py-1 px-2.5 rounded-lg border text-[10px] font-bold flex items-center gap-1 ${typeInfo.color}`}
-                  >
-                    <TypeIcon size={12} />
-                    {typeInfo.label}
-                  </span>
-                  <span className="text-xs text-gray-500 font-mono">
-                    #{order.invoice_no || order.id}
-                  </span>
-                </div>
-
-                {/* Table / Customer */}
-                {order.order_type === "dine_in" && order.table_no && (
-                  <div className="text-brand-gold font-black text-2xl font-mono">
-                    طاولة {order.table_no}
-                  </div>
-                )}
-                {(order.order_type === "delivery" || order.order_type === "pickup") &&
-                  order.customer_name && (
-                    <div>
-                      <span className="text-white font-bold text-sm block">
-                        {order.customer_name}
-                      </span>
-                      {order.customer_address && (
-                        <span className="text-xs text-gray-400 block truncate">
-                          {order.customer_address}
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                {/* Items summary */}
-                <div className="text-xs text-gray-400 space-y-0.5">
-                  {(order.items || []).slice(0, 3).map((item: any, i: number) => (
-                    <div key={i} className="flex justify-between">
-                      <span className="truncate">{item.product_name}</span>
-                      <span className="text-gray-500 ml-1 flex-shrink-0">×{item.quantity}</span>
-                    </div>
-                  ))}
-                  {(order.items || []).length > 3 && (
-                    <div className="text-gray-600 text-[10px]">
-                      + {order.items.length - 3} عناصر أخرى
-                    </div>
-                  )}
-                </div>
-
-                {/* Status + total */}
-                <div className="flex justify-between items-center pt-1 border-t border-brand-border/20">
-                  <span className={`text-xs font-bold ${statusInfo.color}`}>
-                    {statusInfo.label}
-                  </span>
-                  <span className="text-brand-gold font-black text-sm font-mono">
-                    {(order.total || 0).toFixed(2)} ج.م
-                  </span>
-                </div>
-
-                {/* Cancel button */}
-                {canCancel && (
-                  <button
-                    onClick={() => handleCancelClick(order.id)}
-                    className="w-full py-1.5 text-xs font-bold text-red-400 border border-red-900/30 bg-red-950/20 hover:bg-red-950/40 rounded-lg flex items-center justify-center gap-1.5 transition-all"
-                  >
-                    <X size={12} />
-                    إلغاء الطلب
-                  </button>
-                )}
-
-                {order.status === "completed" && (
-                  <div className="w-full py-1.5 text-xs text-brand-teal font-bold flex items-center justify-center gap-1.5">
-                    <CheckCircle2 size={12} />
-                    مكتمل ومدفوع
-                  </div>
-                )}
-              </div>
-            );
-          })}
+      {/* Order tables by type */}
+      {filteredOrders.length === 0 ? (
+        <div className="py-20 text-center text-gray-500">
+          <Eye size={48} className="mx-auto mb-3 text-brand-border/30" />
+          <p>لا توجد طلبات نشطة حالياً</p>
         </div>
       ) : (
-        <div className="flex-1 flex flex-col items-center justify-center py-24 text-gray-500 text-center">
-          <AlertCircle size={48} className="text-brand-border/50 mb-3" />
-          <p className="text-base font-bold text-gray-400 mb-1">لا توجد طلبات نشطة حالياً</p>
-          <p className="text-sm">ستظهر الطلبات هنا بمجرد تأكيدها من شاشة البيع.</p>
-        </div>
+        displayTypes.map((type) => {
+          const typeOrders = byType[type];
+          if (!typeOrders || typeOrders.length === 0) return null;
+          const typeInfo = ORDER_TYPE_LABELS[type] || ORDER_TYPE_LABELS.takeaway;
+          const TypeIcon = typeInfo.icon;
+          return (
+            <div key={type} className="rounded-2xl border border-brand-border/40 overflow-hidden">
+              <div className={`px-4 py-2.5 flex items-center gap-2 border-b border-brand-border/30 ${typeInfo.color}`}>
+                <TypeIcon size={15} />
+                <span className="font-bold text-sm">{typeInfo.label}</span>
+                <span className="ml-auto bg-black/20 text-xs font-bold px-2 py-0.5 rounded-full">{typeOrders.length}</span>
+              </div>
+              {(type === "dine_in") && (
+                <DineInTable
+                  orders={typeOrders}
+                  onCancel={handleCancelClick}
+                  onResume={handleResume}
+                  canCancel={isManagerOrAbove}
+                />
+              )}
+              {(type === "delivery" || type === "pickup") && (
+                <DeliveryPickupTable
+                  orders={typeOrders}
+                  onCancel={handleCancelClick}
+                  onResume={handleResume}
+                  canCancel={isManagerOrAbove}
+                />
+              )}
+              {type === "takeaway" && (
+                <TakeawayTable
+                  orders={typeOrders}
+                  onCancel={handleCancelClick}
+                  onResume={handleResume}
+                  canCancel={isManagerOrAbove}
+                />
+              )}
+            </div>
+          );
+        })
       )}
 
-      {/* Cancel Modal — reason + manager PIN in one dialog */}
-      {showCancelPinGate && (
+      {/* Cancel Dialog */}
+      {showCancelDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md">
-          <div className="w-full max-w-sm mx-4 bg-brand-surface border border-brand-border rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
-            <div className="p-5 border-b border-brand-border/40 flex items-center justify-between">
-              <h3 className="font-bold text-lg text-red-400 flex items-center gap-2">
-                <X size={18} />
-                إلغاء الطلب — موافقة المدير
-              </h3>
-              <button
-                onClick={() => {
-                  setShowCancelPinGate(false);
-                  setPendingCancelOrderId(null);
-                  setCancelReason("");
-                  setCancelPin("");
-                }}
-                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-brand-border/30"
-              >
-                <X size={18} />
-              </button>
+          <div className="w-full max-w-sm mx-4 bg-brand-surface border border-brand-border rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200 p-6 space-y-4">
+            <h3 className="font-bold text-xl text-red-400">إلغاء الطلب</h3>
+            <div>
+              <label className="text-gray-400 text-xs block mb-1.5">سبب الإلغاء (مطلوب)</label>
+              <textarea
+                value={cancelReason}
+                onChange={(e) => setCancelReason(e.target.value)}
+                rows={2}
+                className="w-full bg-brand-dark border border-brand-border/50 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-red-500 resize-none"
+                placeholder="اكتب سبب الإلغاء..."
+              />
             </div>
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="text-gray-400 text-xs block mb-1">سبب الإلغاء (مطلوب)</label>
-                <input
-                  type="text"
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  placeholder="مثال: طلب العميل إلغاء الطلب..."
-                  className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-gold text-right"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="text-gray-400 text-xs block mb-1">رمز PIN المدير</label>
-                <input
-                  type="password"
-                  value={cancelPin}
-                  onChange={(e) => setCancelPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                  placeholder="● ● ● ●"
-                  maxLength={4}
-                  className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-3 text-white placeholder-gray-500 focus:outline-none focus:border-red-500 font-mono text-center text-2xl tracking-widest"
-                />
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowCancelPinGate(false);
-                    setPendingCancelOrderId(null);
-                    setCancelReason("");
-                    setCancelPin("");
-                  }}
-                  className="flex-1 py-2.5 bg-brand-card border border-brand-border/40 text-gray-300 rounded-xl font-bold text-sm"
-                >
-                  إلغاء
-                </button>
-                <button
-                  onClick={performCancel}
-                  disabled={!cancelReason.trim() || cancelPin.length < 4}
-                  className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold text-sm transition-all"
-                >
-                  تأكيد الإلغاء
-                </button>
-              </div>
+            <div>
+              <label className="text-gray-400 text-xs block mb-1.5">PIN المدير</label>
+              <input
+                type="password"
+                value={cancelPin}
+                onChange={(e) => setCancelPin(e.target.value)}
+                className="w-full bg-brand-dark border border-brand-border/50 rounded-xl p-3 text-white font-mono text-center text-lg tracking-widest focus:outline-none focus:border-red-500"
+                placeholder="••••"
+                maxLength={6}
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCancelDialog(false)}
+                className="flex-1 py-3 bg-brand-card border border-brand-border/40 text-gray-300 font-bold rounded-xl hover:bg-brand-border/20 transition-all"
+              >
+                تراجع
+              </button>
+              <button
+                onClick={performCancel}
+                className="flex-1 py-3 bg-red-900/40 text-red-300 border border-red-900/50 font-bold rounded-xl hover:bg-red-900/60 transition-all"
+              >
+                تأكيد الإلغاء
+              </button>
             </div>
           </div>
         </div>

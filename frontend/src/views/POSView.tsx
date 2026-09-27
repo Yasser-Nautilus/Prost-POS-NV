@@ -26,6 +26,8 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
   const [parkedOrders, setParkedOrders] = useState<any[]>([]);
   const [selectedTable, setSelectedTable] = useState<number | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
+  const [pendingTotal, setPendingTotal] = useState(0); // captured before confirm clears cart
+  const [isAmending, setIsAmending] = useState(false); // true when editing existing order
 
   // Dialog Toggles
   const [isDiscountOpen, setIsDiscountOpen] = useState(false);
@@ -36,26 +38,47 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
   const [showPinGate, setShowPinGate] = useState(false);
   const [pendingDeleteIdx, setPendingDeleteIdx] = useState<number | null>(null);
 
+  // Table occupancy state (table_no -> invoice label)
+  const [occupiedTables, setOccupiedTables] = useState<Record<number, string>>({});
+
   // Load Categories on init
   useEffect(() => {
     fetchCategories();
     fetchCurrentOrder();
     fetchParkedCount();
+    fetchTableState();
 
-    // Subscribe to backend order changes
+    // Subscribe to backend changes
     const handleOrderChange = (order: any) => {
       setCurrentOrder(order);
+      // If the order has an invoice_no it was loaded from DB (amending mode)
+      if (order?.invoice_no) {
+        setIsAmending(true);
+        if (order.table_no) setSelectedTable(order.table_no);
+      } else {
+        // Fresh/new order — clear amending flag
+        setIsAmending(false);
+      }
     };
     const handleParkedChange = (parkedList: any[]) => {
       setParkedCount(parkedList?.length || 0);
     };
+    const handleTableStateChange = (state: Record<string, string>) => {
+      const parsed: Record<number, string> = {};
+      Object.entries(state || {}).forEach(([k, v]) => {
+        parsed[parseInt(k)] = v;
+      });
+      setOccupiedTables(parsed);
+    };
 
     bridge.subscribe("orderChanged", handleOrderChange);
     bridge.subscribe("parkedChanged", handleParkedChange);
+    bridge.subscribe("tableStateChanged", handleTableStateChange);
 
     return () => {
       bridge.unsubscribe("orderChanged", handleOrderChange);
       bridge.unsubscribe("parkedChanged", handleParkedChange);
+      bridge.unsubscribe("tableStateChanged", handleTableStateChange);
     };
   }, []);
 
@@ -104,6 +127,21 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
     try {
       const res = await bridge.call("get_parked_orders");
       setParkedCount(res?.length || 0);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const fetchTableState = async () => {
+    try {
+      const state = await bridge.call("get_table_state");
+      if (state && typeof state === "object") {
+        const parsed: Record<number, string> = {};
+        Object.entries(state).forEach(([k, v]) => {
+          parsed[parseInt(k)] = v as string;
+        });
+        setOccupiedTables(parsed);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -178,17 +216,19 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
       }
 
       await bridge.call("new_order", { order_type: type });
-      setSelectedTable(null); // Reset table on type change
+      setSelectedTable(null);
+      setIsAmending(false);
 
-      if (type === "delivery") {
-        setIsCustomerLookupOpen(true);
-      } else if (type === "dine_in") {
+      // For dine-in: open table picker immediately
+      if (type === "dine_in") {
         setIsTableGridOpen(true);
       }
+      // Delivery/pickup: add items first, customer info prompted at checkout
     } catch (e: any) {
       alert(e.message);
     }
   };
+
 
   const handleTableSelect = async (tableNo: number) => {
     try {
@@ -243,9 +283,9 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
   const handleCheckoutClick = async () => {
     if (!currentOrder || currentOrder.items.length === 0) return;
 
-    // Validation: delivery needs a customer
-    if (currentOrder.order_type === "delivery" && !currentOrder.customer_name) {
-      alert("يرجى اختيار عميل وعنوان توصيل لطلبات الدليفري");
+    // Validation: delivery and pickup both need a customer phone
+    if ((currentOrder.order_type === "delivery" || currentOrder.order_type === "pickup") && !currentOrder.customer_phone) {
+      alert("يرجى اختيار عميل لهذا الطلب");
       setIsCustomerLookupOpen(true);
       return;
     }
@@ -257,7 +297,33 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
       return;
     }
 
+    // ── Amending mode: save changes to existing order ──────────────────
+    if (isAmending) {
+      try {
+        const capturedTotal = currentOrder?.total || 0;
+        await bridge.call("save_amendment");
+        setIsAmending(false);
+        // For non-delivery orders, open payment so cashier can collect
+        if (currentOrder.order_type !== "delivery") {
+          setPendingOrderId(currentOrder.id);
+          setPendingTotal(capturedTotal);
+          setIsPaymentOpen(true);
+        } else {
+          setSelectedTable(null);
+          await fetchCurrentOrder();
+          alert("تم حفظ تعديلات الطلب بنجاح!");
+        }
+      } catch (e: any) {
+        alert("فشل حفظ التعديلات: " + e.message);
+      }
+      return;
+    }
+
+    // ── Normal mode: confirm new order ────────────────────────────────
     try {
+      // Capture total NOW before confirm_order resets the order state
+      const capturedTotal = currentOrder?.total || 0;
+
       // Step 1: confirm_order — validates, saves to DB, prints kitchen ticket
       const confirmRes = await bridge.call<{
         invoice_no: string;
@@ -268,6 +334,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
       if (confirmRes.needs_immediate_payment) {
         // Step 2A: Takeaway/dine-in — show PaymentDialog to collect payment
         setPendingOrderId(confirmRes.order_id);
+        setPendingTotal(capturedTotal); // use captured total, not current (cleared) order
         setIsPaymentOpen(true);
       } else {
         // Step 2B: Delivery — no immediate payment (driver collects)
@@ -342,10 +409,22 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
     <div className="flex-1 flex flex-col md:flex-row h-[calc(100vh-64px)] overflow-hidden">
       
       {/* Right Column: Order Cart Workspace (40% width) */}
-      <div className="w-full md:w-[420px] bg-brand-surface border-l border-brand-border/60 flex flex-col justify-between">
+      <div className="w-full md:w-[420px] bg-brand-surface border-l border-brand-border/60 flex flex-col min-h-0">
         
         {/* Order Type Header */}
-        <div className="p-4 bg-brand-card/80 border-b border-brand-border/40 space-y-3">
+        <div className="p-4 bg-brand-card/80 border-b border-brand-border/40 space-y-3 shrink-0">
+          {/* Amending indicator */}
+          {isAmending && (
+            <div className="py-1.5 px-3 bg-yellow-900/20 border border-yellow-700/40 rounded-lg text-xs text-yellow-400 font-bold flex items-center justify-between">
+              <span>⚠️ تعديل طلب موجود</span>
+              <button
+                onClick={() => { setIsAmending(false); bridge.call("new_order", { order_type: "dine_in" }); }}
+                className="text-[10px] text-gray-400 hover:text-white"
+              >
+                إلغاء التعديل
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-4 gap-2">
             {[
               { id: "dine_in", name: "صالة" },
@@ -368,7 +447,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
             ))}
           </div>
 
-          {/* Delivery customer info block if delivery selected */}
+          {/* Delivery customer info block */}
           {currentOrder?.order_type === "delivery" && (
             <div className="p-3 bg-brand-surface/60 border border-brand-border/50 rounded-xl flex justify-between items-center text-xs">
               {currentOrder.customer_name ? (
@@ -378,7 +457,27 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
                   <span className="text-brand-gold mt-1 block">العنوان: {currentOrder.customer_address}</span>
                 </div>
               ) : (
-                <span className="text-red-400 italic">لم يتم اختيار عميل بعد!</span>
+                <span className="text-gray-400 italic">لم يتم اختيار عميل (مطلوب قبل التأكيد)</span>
+              )}
+              <button
+                onClick={() => setIsCustomerLookupOpen(true)}
+                className="py-1 px-3 bg-brand-gold text-brand-dark hover:bg-opacity-90 font-bold rounded-lg"
+              >
+                {currentOrder.customer_name ? "تغيير" : "اختيار عميل"}
+              </button>
+            </div>
+          )}
+
+          {/* Pickup customer info block */}
+          {currentOrder?.order_type === "pickup" && (
+            <div className="p-3 bg-brand-surface/60 border border-brand-border/50 rounded-xl flex justify-between items-center text-xs">
+              {currentOrder.customer_name ? (
+                <div>
+                  <span className="text-white font-bold block">{currentOrder.customer_name}</span>
+                  <span className="text-gray-400 block mt-1 font-mono">{currentOrder.customer_phone}</span>
+                </div>
+              ) : (
+                <span className="text-gray-400 italic">لم يتم اختيار عميل (مطلوب قبل التأكيد)</span>
               )}
               <button
                 onClick={() => setIsCustomerLookupOpen(true)}
@@ -468,7 +567,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
         </div>
 
         {/* Totals Summary */}
-        <div className="p-4 bg-brand-card border-t border-brand-border/60 space-y-4">
+        <div className="p-4 bg-brand-card border-t border-brand-border/60 space-y-4 shrink-0">
           <div className="space-y-2 text-xs">
             <div className="flex justify-between items-center text-gray-400">
               <span>المجموع الفرعي:</span>
@@ -536,10 +635,10 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
           <button
             onClick={handleCheckoutClick}
             disabled={!currentOrder || currentOrder.items.length === 0}
-            className="w-full py-4 bg-brand-gold text-brand-dark hover:bg-opacity-95 disabled:opacity-50 font-black text-lg rounded-2xl flex items-center justify-center gap-2 shadow-lg active:translate-y-0.5 btn-hover-active"
+            className={`w-full py-4 ${isAmending ? "bg-orange-500 hover:bg-orange-400" : "bg-brand-gold hover:bg-opacity-95"} text-brand-dark disabled:opacity-50 font-black text-lg rounded-2xl flex items-center justify-center gap-2 shadow-lg active:translate-y-0.5 btn-hover-active transition-colors`}
           >
             <CreditCard size={20} />
-            تأكيد ودفع الفاتورة
+            {isAmending ? "حفظ التعديلات" : "تأكيد ودفع الفاتورة"}
           </button>
         </div>
 
@@ -635,8 +734,9 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
         onClose={() => {
           setIsPaymentOpen(false);
           setPendingOrderId(null);
+          setPendingTotal(0);
         }}
-        total={currentOrder?.total || 0}
+        total={pendingTotal}
         orderType={currentOrder?.order_type}
         onConfirm={handlePaymentConfirm}
       />
@@ -652,6 +752,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
         selectedTable={selectedTable}
         onSelect={handleTableSelect}
         onClose={() => setIsTableGridOpen(false)}
+        occupiedTables={occupiedTables}
       />
 
       <PinDialog

@@ -7,24 +7,37 @@ interface UsersViewProps {
 }
 
 const ROLE_OPTIONS = [
-  { value: "cashier",  label: "كاشير صندوق",  color: "text-brand-teal" },
-  { value: "manager",  label: "مدير وردية",    color: "text-brand-gold" },
-  { value: "admin",    label: "مدير عام",       color: "text-red-400" },
+  { value: "cashier",  label: "كاشير صندوق",          color: "text-brand-teal" },
+  { value: "driver",   label: "طيار (مندوب توصيل)",   color: "text-purple-400" },
+  { value: "manager",  label: "مدير وردية",          color: "text-brand-gold" },
+  { value: "admin",    label: "مدير عام",           color: "text-red-400" },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
   cashier: "كاشير",
   manager: "مدير وردية",
   admin:   "مدير عام",
+  driver:  "طيار",
 };
 
 const ROLE_COLORS: Record<string, string> = {
   cashier: "text-brand-teal bg-brand-teal/10 border-brand-teal/30",
   manager: "text-brand-gold bg-brand-gold/10 border-brand-gold/30",
   admin:   "text-red-400 bg-red-900/20 border-red-800/30",
+  driver:  "text-purple-400 bg-purple-900/20 border-purple-800/30",
 };
 
 export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
+
+  // Helper: detect driver (cashier role + no cashier_slot)
+  const getRoleLabel = (user: any): string => {
+    if (user.role === "cashier" && user.cashier_slot == null) return ROLE_LABELS.driver;
+    return ROLE_LABELS[user.role] || user.role;
+  };
+  const getRoleColor = (user: any): string => {
+    if (user.role === "cashier" && user.cashier_slot == null) return ROLE_COLORS.driver;
+    return ROLE_COLORS[user.role] || ROLE_COLORS.cashier;
+  };
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -69,7 +82,9 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
     setEditingUser(user);
     setFormUsername(user.username || "");
     setFormDisplayName(user.display_name || "");
-    setFormRole(user.role || "cashier");
+    // Detect driver: backend stores as role=cashier + cashier_slot=null
+    const isDriver = user.role === "cashier" && user.cashier_slot == null;
+    setFormRole(isDriver ? "driver" : (user.role || "cashier"));
     setFormPin(""); // don't pre-fill PIN
     setFormSlot(user.cashier_slot != null ? user.cashier_slot.toString() : "");
     setShowForm(true);
@@ -78,14 +93,18 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
   const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      // 'driver' is a UI-only concept: backend stores as role=cashier + cashier_slot=null
+      const isDriver = formRole === "driver";
+      const backendRole = isDriver ? "cashier" : formRole;
+
       if (editingUser) {
         await bridge.call("update_user", {
           user_id: editingUser.id,
           username: formUsername || undefined,
           display_name: formDisplayName || undefined,
-          role: formRole,
+          role: backendRole,
           pin: formPin || undefined,
-          cashier_slot: formSlot !== "" ? parseInt(formSlot) : -1,
+          cashier_slot: isDriver ? null : (formSlot !== "" ? parseInt(formSlot) : -1),
         });
       } else {
         if (!formPin) {
@@ -95,9 +114,9 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
         await bridge.call("create_user", {
           username: formUsername,
           display_name: formDisplayName,
-          role: formRole,
+          role: backendRole,
           pin: formPin,
-          cashier_slot: formSlot !== "" ? parseInt(formSlot) : null,
+          cashier_slot: isDriver ? null : (formSlot !== "" ? parseInt(formSlot) : null),
         });
       }
       setShowForm(false);
@@ -180,11 +199,11 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
               </div>
               <span
                 className={`py-1 px-2.5 rounded-lg border text-[10px] font-bold flex items-center gap-1 ${
-                  ROLE_COLORS[user.role] || ROLE_COLORS.cashier
+                  getRoleColor(user)
                 }`}
               >
                 <Shield size={10} />
-                {ROLE_LABELS[user.role] || user.role}
+                {getRoleLabel(user)}
               </span>
             </div>
 
@@ -308,17 +327,24 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
                 </div>
               </div>
 
-              <div>
-                <label className="text-gray-400 text-xs block mb-1">رقم الصندوق (cashier slot)</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={formSlot}
-                  onChange={(e) => setFormSlot(e.target.value)}
-                  placeholder="1"
-                  className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white focus:outline-none focus:border-brand-gold text-center font-mono"
-                />
-              </div>
+              {formRole !== "driver" && (
+                <div>
+                  <label className="text-gray-400 text-xs block mb-1">رقم الصندوق (cashier slot)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formSlot}
+                    onChange={(e) => setFormSlot(e.target.value)}
+                    placeholder="1"
+                    className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white focus:outline-none focus:border-brand-gold text-center font-mono"
+                  />
+                </div>
+              )}
+              {formRole === "driver" && (
+                <div className="py-2 px-3 bg-purple-900/20 border border-purple-800/30 rounded-xl text-purple-400 text-xs text-center">
+                  الطيارون لا يملكون رقم صندوق — يُضافون تلقائياً لقائمة الطيارين
+                </div>
+              )}
 
               <div className="flex gap-3 pt-2">
                 <button

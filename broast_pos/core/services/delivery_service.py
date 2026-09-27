@@ -264,6 +264,78 @@ class DeliveryService:
         """Trips that are returned but not yet settled for a driver."""
         return self._delivery.get_unsettled_trips(driver_id)
 
+    def get_active_trips(self) -> List[DeliveryTrip]:
+        """All trips currently in transit (dispatched but not returned)."""
+        return self._delivery.get_active_trips()
+
+    def is_driver_out(self, driver_id: int) -> bool:
+        """Return True if driver has an in-transit trip."""
+        active = self._delivery.get_active_trips()
+        return any(t.driver_id == driver_id for t in active)
+
+    def get_trip_details(self, trip_id: int) -> Optional[Dict]:
+        """Full trip details for settlement dialog.
+
+        Returns dict with:
+            trip_id, driver_name, dispatched_at, returned_at,
+            orders: list of {invoice_no, customer_name, customer_address,
+                             customer_zone, total, delivery_fee},
+            total_order_value, total_delivery_fees
+        """
+        trip = self._delivery.get_trip_by_id(trip_id)
+        if not trip:
+            return None
+
+        orders_data = []
+        total_order = 0.0
+        total_fees = 0.0
+
+        for oid in trip.order_ids:
+            order = self._orders.get_by_id(oid)
+            if not order:
+                continue
+            fee = order.delivery_fee or 0.0
+            total = order.total or 0.0
+            total_order += total
+            total_fees += fee
+            orders_data.append({
+                "order_id": oid,
+                "invoice_no": order.invoice_no,
+                "customer_name": order.customer_name or "—",
+                "customer_phone": order.customer_phone or "",
+                "customer_address": order.customer_address or "—",
+                "customer_zone": order.customer_zone or "",
+                "total": total,
+                "delivery_fee": fee,
+            })
+
+        return {
+            "trip_id": trip.id,
+            "driver_id": trip.driver_id,
+            "driver_name": trip.driver_name or "—",
+            "dispatched_at": str(trip.dispatched_at) if trip.dispatched_at else None,
+            "returned_at": str(trip.returned_at) if trip.returned_at else None,
+            "is_settled": trip.is_settled,
+            "orders": orders_data,
+            "total_order_value": total_order,
+            "total_delivery_fees": total_fees,
+        }
+
+    def get_driver_attendance_today(self) -> List[Dict]:
+        """All attendance records for today — for the attendance panel."""
+        try:
+            records = self._delivery.get_attendance_for_date(date.today().isoformat())
+        except Exception:
+            records = []
+        result = []
+        for rec in records:
+            result.append({
+                "driver_id": rec.driver_id,
+                "check_in_at": str(rec.check_in_at) if rec.check_in_at else None,
+                "check_out_at": str(rec.check_out_at) if rec.check_out_at else None,
+            })
+        return result
+
     # ------------------------------------------------------------------
     # End-of-day summaries
     # ------------------------------------------------------------------

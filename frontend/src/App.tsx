@@ -173,11 +173,18 @@ function App() {
 
       </header>
 
-      {/* Main View Display */}
+      {/* Main View Display — POSView always mounted to preserve state */}
       <main className="flex-1 overflow-hidden">
-        {activeTab === "pos"      && <POSView currentUser={currentUser} />}
+        <div className={activeTab === "pos" ? "flex flex-col h-full" : "hidden"}>
+          <POSView currentUser={currentUser} />
+        </div>
         {activeTab === "delivery" && <DeliveryView currentUser={currentUser} />}
-        {activeTab === "tracking" && <TrackingView currentUser={currentUser} />}
+        {activeTab === "tracking" && (
+          <TrackingView
+            currentUser={currentUser}
+            onResumeOrder={(_order) => setActiveTab("pos")}
+          />
+        )}
         {activeTab === "reports"  && isManagerOrAbove && <ReportsView currentUser={currentUser} />}
         {activeTab === "products" && isManagerOrAbove && <ProductsView currentUser={currentUser} />}
         {activeTab === "users"    && isAdmin           && <UsersView currentUser={currentUser} />}

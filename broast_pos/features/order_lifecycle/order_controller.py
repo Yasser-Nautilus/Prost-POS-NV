@@ -336,7 +336,9 @@ class OrderController:
 
         return True, ConfirmResult(
             invoice_no=saved.invoice_no,
-            needs_immediate_payment=(saved.order_type == OrderType.TAKEAWAY),
+            needs_immediate_payment=(
+                saved.order_type in (OrderType.TAKEAWAY, OrderType.DINE_IN, OrderType.PICKUP)
+            ),
             order_id=saved.id,
         )
 
@@ -427,20 +429,43 @@ class OrderController:
         if not changes:
             return True, "لا توجد تغييرات"
 
-        # Split into added and removed OrderItems
+        # Build lookup maps from the current order's actual items
+        current_items_by_name: dict = {
+            item.product_name: item for item in self._current_order.items
+        }
+        # Build lookup map from snapshot (for removed items — they no longer exist
+        # in current_order but were in the original)
+        snapshot_items_by_name: dict = {}
+        if self._amendment_tracker._original_names:
+            for (pid, _notes), name in self._amendment_tracker._original_names.items():
+                snapshot_items_by_name[name] = pid
+
         added_items: List[OrderItem] = []
         removed_items: List[OrderItem] = []
         for change in changes:
-            item = OrderItem(
-                product_id=0,  # ID resolved by service from name lookup
-                product_name=change["product_name"],
-                unit_price=0,
-                quantity=change["quantity"],
-            )
+            name = change["product_name"]
+            qty = int(change["quantity"])
+
             if change["action"] == "added":
-                added_items.append(item)
+                # Get the real item from current order
+                real_item = current_items_by_name.get(name)
+                product_id = real_item.product_id if real_item else 0
+                unit_price = real_item.unit_price if real_item else 0.0
+                added_items.append(OrderItem(
+                    product_id=product_id,
+                    product_name=name,
+                    unit_price=unit_price,
+                    quantity=qty,
+                ))
             elif change["action"] == "removed":
-                removed_items.append(item)
+                # Get product_id from snapshot
+                product_id = snapshot_items_by_name.get(name, 0)
+                removed_items.append(OrderItem(
+                    product_id=product_id,
+                    product_name=name,
+                    unit_price=0,
+                    quantity=qty,
+                ))
 
         try:
             self._order_svc.amend_order(

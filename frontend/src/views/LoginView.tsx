@@ -64,8 +64,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             <Users size={14} />
           </h3>
           <div className="grid grid-cols-2 gap-3">
-            {users.length > 0 ? (
-              users.map((u) => (
+            {users.filter((u) => !(u.role === "cashier" && u.cashier_slot == null)).length > 0 ? (
+              users
+                .filter((u) => !(u.role === "cashier" && u.cashier_slot == null))
+                .map((u) => (
                 <div
                   key={u.id}
                   onClick={handleUserTileClick}

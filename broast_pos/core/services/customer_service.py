@@ -34,7 +34,7 @@ class CustomerService:
         """Exact 11-digit phone match → customer with all addresses, or None."""
         phone = phone.strip()
         self._validate_phone(phone)
-        return self._customers.get_by_phone(phone)
+        return self._customers.find_by_phone(phone)
 
     # ------------------------------------------------------------------
     # New customer flow
@@ -54,7 +54,7 @@ class CustomerService:
         self._validate_phone(phone)
 
         # Check for duplicates
-        existing = self._customers.get_by_phone(phone)
+        existing = self._customers.find_by_phone(phone)
         if existing is not None:
             raise ValueError("رقم الهاتف مسجل بالفعل")
 
@@ -110,7 +110,7 @@ class CustomerService:
         Raises:
             ValueError: if address not found.
         """
-        self._customers.delete_address(address_id)
+        self._customers.delete(address_id)
 
     # ------------------------------------------------------------------
     # Zone management (manager only)
@@ -185,7 +185,7 @@ class CustomerService:
         zone = self._customers.get_zone_by_id(zone_id)
         if zone is None:
             raise ValueError("المنطقة غير موجودة")
-        self._customers.delete_zone(zone_id)
+        self._customers.deactivate_zone(zone_id)
 
     # ------------------------------------------------------------------
     # Private helpers

@@ -103,6 +103,20 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
         """Alias for check_out — used by DeliveryService."""
         self.check_out(driver_id)
 
+    def get_attendance_for_date(self, date_str: str) -> list:
+        """All attendance records for a specific date (YYYY-MM-DD).
+
+        Timestamps are stored in UTC — we convert to localtime for comparison
+        so results match the user's calendar day.
+        """
+        rows = self._db.fetch_all(
+            """SELECT * FROM driver_attendance
+               WHERE date(check_in_at, 'localtime') = ?
+               ORDER BY check_in_at""",
+            (date_str,),
+        )
+        return [self._row_to_attendance(r) for r in rows]
+
     def get_active_drivers(self) -> list:
         """Return User objects for all currently checked-in drivers.
 
@@ -267,7 +281,7 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
                    COALESCE(SUM(dt.total_delivery_fees), 0) AS fees_earned
                FROM delivery_trips dt
                LEFT JOIN delivery_trip_orders dto ON dto.trip_id = dt.id
-               WHERE DATE(dt.created_at) = ?
+               WHERE DATE(dt.created_at, 'localtime') = ?
                GROUP BY dt.driver_id, dt.driver_name
                ORDER BY dt.driver_name""",
             (date_str,),
@@ -288,7 +302,7 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
         """All trips for one driver on a date."""
         rows = self._db.fetch_all(
             """SELECT * FROM delivery_trips
-               WHERE driver_id = ? AND DATE(created_at) = ?
+               WHERE driver_id = ? AND DATE(created_at, 'localtime') = ?
                ORDER BY created_at""",
             (driver_id, date_str),
         )
