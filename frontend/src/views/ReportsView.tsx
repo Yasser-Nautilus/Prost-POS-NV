@@ -6,9 +6,23 @@ interface ReportsViewProps {
   currentUser: any;
 }
 
+const ORDER_TYPE_LABELS: Record<string, string> = {
+  dine_in: "صالة",
+  takeaway: "تيك أواي",
+  delivery: "دليفري",
+  pickup: "استلام محل",
+};
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "كاش",
+  visa: "فيزا",
+  online: "أونلاين",
+};
+
 export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentUser }) => {
   const [salesSummary, setSalesSummary] = useState<any>(null);
   const [recentShifts, setRecentShifts] = useState<any[]>([]);
+  const [dailySales, setDailySales] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
   const fetchReportData = async () => {
@@ -21,6 +35,10 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
       // Fetch real shift history from database
       const history = await bridge.call("get_shift_history");
       setRecentShifts(history || []);
+
+      // Today's sales, including bestsellers
+      const daily = await bridge.call("get_report_daily_sales");
+      setDailySales(daily);
     } catch (e) {
       console.error(e);
     } finally {
@@ -102,6 +120,77 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
           </div>
           <div className="h-12 w-12 rounded-xl bg-brand-border/20 text-gray-300 flex items-center justify-center">
             <BarChart3 size={24} />
+          </div>
+        </div>
+      </div>
+
+      {/* Today's Sales Panel */}
+      <div className="bg-brand-card p-6 rounded-3xl border border-brand-border/50 space-y-6">
+        <div className="flex flex-wrap justify-between items-center gap-3 border-b border-brand-border/60 pb-4">
+          <h3 className="text-xl font-bold text-brand-gold flex items-center gap-2">
+            <TrendingUp size={22} />
+            مبيعات اليوم
+          </h3>
+          <div className="flex flex-wrap gap-5 text-xs text-gray-400">
+            <span>
+              إجمالي المبيعات{" "}
+              <b className="text-white font-mono">{(dailySales?.gross_revenue || 0).toFixed(2)} ج.م</b>
+            </span>
+            <span>
+              إيراد المطعم{" "}
+              <b className="text-brand-teal font-mono">{(dailySales?.restaurant_revenue || 0).toFixed(2)} ج.م</b>
+            </span>
+            <span>
+              رسوم التوصيل{" "}
+              <b className="text-white font-mono">{(dailySales?.total_delivery_fees || 0).toFixed(2)} ج.م</b>
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="space-y-2">
+            <h4 className="text-sm font-bold text-white">حسب نوع الطلب</h4>
+            {(dailySales?.sales_by_type?.breakdown || []).map((row: any) => (
+              <div key={row.type} className="flex justify-between gap-3 text-sm py-1.5 border-b border-brand-border/20">
+                <span className="text-gray-300">
+                  {ORDER_TYPE_LABELS[row.type] || row.type} ({row.count})
+                </span>
+                <span className="font-bold text-white font-mono">{row.revenue.toFixed(2)} ج.م</span>
+              </div>
+            ))}
+            {!dailySales?.sales_by_type?.breakdown?.length && (
+              <p className="text-xs text-gray-500">لا توجد مبيعات مكتملة اليوم</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <h4 className="text-sm font-bold text-white">حسب طريقة الدفع</h4>
+            {(dailySales?.payment_breakdown?.payments || []).map((row: any) => (
+              <div key={row.method} className="flex justify-between gap-3 text-sm py-1.5 border-b border-brand-border/20">
+                <span className="text-gray-300">
+                  {PAYMENT_METHOD_LABELS[row.method] || row.method} ({row.count})
+                </span>
+                <span className="font-bold text-white font-mono">{row.revenue.toFixed(2)} ج.م</span>
+              </div>
+            ))}
+            {!dailySales?.payment_breakdown?.payments?.length && (
+              <p className="text-xs text-gray-500">لا توجد مدفوعات اليوم</p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <h4 className="text-sm font-bold text-white">الأصناف الأكثر مبيعًا</h4>
+            {(dailySales?.bestsellers || []).slice(0, 10).map((row: any) => (
+              <div key={row.product_name} className="flex justify-between gap-3 text-sm py-1.5 border-b border-brand-border/20">
+                <span className="text-gray-300">
+                  {row.product_name} ({row.quantity})
+                </span>
+                <span className="font-bold text-white font-mono">{row.revenue.toFixed(2)} ج.م</span>
+              </div>
+            ))}
+            {!dailySales?.bestsellers?.length && (
+              <p className="text-xs text-gray-500">لم يتم بيع أي صنف اليوم</p>
+            )}
           </div>
         </div>
       </div>

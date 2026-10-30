@@ -571,6 +571,35 @@ class POSBridgeClient {
         return shift as any;
       }
 
+      case "get_report_daily_sales":
+        return {
+          date: new Date().toISOString().slice(0, 10),
+          sales_by_type: {
+            breakdown: [
+              { type: "dine_in", count: 6, revenue: 520.0 },
+              { type: "takeaway", count: 5, revenue: 410.0 },
+              { type: "delivery", count: 3, revenue: 320.0 }
+            ],
+            grand_total: { count: 14, revenue: 1250.0 }
+          },
+          payment_breakdown: {
+            payments: [
+              { method: "cash", count: 10, revenue: 880.0 },
+              { method: "visa", count: 3, revenue: 290.0 },
+              { method: "online", count: 1, revenue: 80.0 }
+            ],
+            total: 1250.0
+          },
+          gross_revenue: 1250.0,
+          restaurant_revenue: 1205.0,
+          total_delivery_fees: 45.0,
+          bestsellers: [
+            { product_name: "عرض سوبر بروست 4 قطع", quantity: 5, revenue: 800.0 },
+            { product_name: "بطاطس وسط", quantity: 9, revenue: 270.0 },
+            { product_name: "بيبسي كانز", quantity: 9, revenue: 180.0 }
+          ]
+        } as any;
+
       case "get_shift_summary":
         return {
           total_sales: 1250.0,
