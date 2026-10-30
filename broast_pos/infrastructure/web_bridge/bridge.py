@@ -526,10 +526,7 @@ class POSBridge(QObject):
                 if not self._reports_ctrl:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
                 # Correct method: get_bestsellers on ReportsController
-                data = self._reports_ctrl.get_bestsellers(
-                    shift_id=payload.get("shift_id"),
-                    limit=payload.get("limit", 20)
-                )
+                data = self._reports_ctrl.get_bestsellers()[:payload.get("limit", 20)]
                 return json.dumps({"success": True, "data": data})
 
             elif action == "print_shift_summary":
