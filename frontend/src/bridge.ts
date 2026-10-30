@@ -161,7 +161,8 @@ class POSBridgeClient {
 
   private notifyListeners(signal: string, data: any) {
     if (this.signalListeners[signal]) {
-      this.signalListeners[signal].forEach((cb) => cb(data));
+      // The mock mutates its state in place; a fresh copy lets React see the change
+      this.signalListeners[signal].forEach((cb) => cb(structuredClone(data)));
     }
   }
 
