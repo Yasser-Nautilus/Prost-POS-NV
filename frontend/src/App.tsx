@@ -92,7 +92,7 @@ function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-brand-dark flex flex-col overflow-hidden text-white font-cairo">
+    <div className="h-screen bg-brand-dark flex flex-col overflow-hidden text-white font-cairo">
       
       {/* Top Premium Navbar Header */}
       <header className="h-16 bg-brand-surface border-b border-brand-border/60 flex items-center justify-between px-6 z-20">
