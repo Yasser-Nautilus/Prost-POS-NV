@@ -77,7 +77,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                     {u.display_name}
                   </span>
                   <span className="text-xs text-gray-400 mt-1 inline-block">
-                    {u.role === "admin" ? "مدير عام" : u.role === "manager" ? "مدير النظام" : "كاشير صندوق"}
+                    {u.role === "admin" ? "مدير النظام" : u.role === "manager" ? "مدير المطعم" : "كاشير صندوق"}
                   </span>
                 </div>
               ))

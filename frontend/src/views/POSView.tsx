@@ -82,6 +82,11 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
     };
   }, []);
 
+  // Occupancy may have changed since the last look (other orders, payments)
+  useEffect(() => {
+    if (isTableGridOpen) fetchTableState();
+  }, [isTableGridOpen]);
+
   // Fetch products when category changes
   useEffect(() => {
     if (selectedCatId !== null) {
@@ -231,10 +236,21 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
 
 
   const handleTableSelect = async (tableNo: number) => {
+    if (tableNo === selectedTable) return;
     try {
+      // Occupied table: open its order so the cashier can add to it
+      if (tableNo in occupiedTables) {
+        if (currentOrder?.items?.length > 0 && !window.confirm(
+          "فتح طلب هذه الطاولة سيمسح العناصر الحالية. هل تريد المتابعة؟"
+        )) return;
+        await bridge.call("load_order_by_table", { table_number: tableNo });
+        setSelectedTable(tableNo);
+        setIsTableGridOpen(false);
+        return;
+      }
+      // Free table: stays open so the selection is visible until confirmed
       await bridge.call("set_table", { table_number: tableNo });
       setSelectedTable(tableNo);
-      setIsTableGridOpen(false);
     } catch (e: any) {
       alert("فشل تعيين الطاولة: " + e.message);
     }
@@ -567,8 +583,8 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
         </div>
 
         {/* Totals Summary */}
-        <div className="p-4 bg-brand-card border-t border-brand-border/60 space-y-4 shrink-0">
-          <div className="space-y-2 text-xs">
+        <div className="p-3 bg-brand-card border-t border-brand-border/60 space-y-2.5 shrink-0">
+          <div className="space-y-1 text-xs">
             <div className="flex justify-between items-center text-gray-400">
               <span>المجموع الفرعي:</span>
               <span className="font-bold font-mono text-white">{(currentOrder?.subtotal || 0).toFixed(2)} ج.م</span>
@@ -582,13 +598,13 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
             {currentOrder?.delivery_fee > 0 && (
               <div className="flex justify-between items-center text-brand-gold">
                 <span>خدمة التوصيل (الطيار):</span>
-                <span className="font-bold font-mono">+{currentOrder.delivery_fee.toFixed(2)} ج.m</span>
+                <span className="font-bold font-mono">+{currentOrder.delivery_fee.toFixed(2)} ج.م</span>
               </div>
             )}
             <div className="h-px bg-brand-border/30" />
             <div className="flex justify-between items-center">
-              <span className="text-base font-bold text-white">الإجمالي الكلي:</span>
-              <span className="text-2xl font-black text-brand-gold font-mono">
+              <span className="text-sm font-bold text-white">الإجمالي الكلي:</span>
+              <span className="text-xl font-black text-brand-gold font-mono">
                 {(currentOrder?.total || 0).toFixed(2)} ج.م
               </span>
             </div>
@@ -598,7 +614,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
           <div className="grid grid-cols-3 gap-2">
             <button
               onClick={handleClearOrder}
-              className="py-3 bg-brand-border/20 border border-brand-border/40 hover:bg-brand-border/40 text-gray-300 font-bold rounded-xl text-xs active:translate-y-0.5 btn-hover-active flex items-center justify-center gap-1"
+              className="py-2 bg-brand-border/20 border border-brand-border/40 hover:bg-brand-border/40 text-gray-300 font-bold rounded-xl text-xs active:translate-y-0.5 btn-hover-active flex items-center justify-center gap-1"
             >
               <RotateCcw size={14} />
               مسح
@@ -606,7 +622,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
             <button
               onClick={handleParkOrder}
               disabled={!currentOrder || currentOrder.items.length === 0}
-              className="py-3 bg-brand-card hover:bg-brand-border/20 text-brand-gold border border-brand-gold/20 rounded-xl text-xs font-bold active:translate-y-0.5 btn-hover-active flex items-center justify-center gap-1 disabled:opacity-50"
+              className="py-2 bg-brand-card hover:bg-brand-border/20 text-brand-gold border border-brand-gold/20 rounded-xl text-xs font-bold active:translate-y-0.5 btn-hover-active flex items-center justify-center gap-1 disabled:opacity-50"
             >
               <Tag size={14} />
               تعليق
@@ -614,7 +630,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
             <button
               onClick={() => setIsDiscountOpen(true)}
               disabled={!currentOrder || currentOrder.items.length === 0}
-              className="py-3 bg-brand-card hover:bg-brand-border/20 text-brand-gold border border-brand-gold/20 rounded-xl text-xs font-bold active:translate-y-0.5 btn-hover-active flex items-center justify-center gap-1 disabled:opacity-50"
+              className="py-2 bg-brand-card hover:bg-brand-border/20 text-brand-gold border border-brand-gold/20 rounded-xl text-xs font-bold active:translate-y-0.5 btn-hover-active flex items-center justify-center gap-1 disabled:opacity-50"
             >
               <Tag size={14} />
               خصم
@@ -635,7 +651,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
           <button
             onClick={handleCheckoutClick}
             disabled={!currentOrder || currentOrder.items.length === 0}
-            className={`w-full py-4 ${isAmending ? "bg-orange-500 hover:bg-orange-400" : "bg-brand-gold hover:bg-opacity-95"} text-brand-dark disabled:opacity-50 font-black text-lg rounded-2xl flex items-center justify-center gap-2 shadow-lg active:translate-y-0.5 btn-hover-active transition-colors`}
+            className={`w-full py-3 ${isAmending ? "bg-orange-500 hover:bg-orange-400" : "bg-brand-gold hover:bg-opacity-95"} text-brand-dark disabled:opacity-50 font-black text-base rounded-xl flex items-center justify-center gap-2 shadow-lg active:translate-y-0.5 btn-hover-active transition-colors`}
           >
             <CreditCard size={20} />
             {isAmending ? "حفظ التعديلات" : "تأكيد ودفع الفاتورة"}

@@ -27,12 +27,18 @@ class POSBridgeClient {
     parkedOrders: [] as any[],
     activeOrders: [] as any[],
     activeShift: null as any,
+    closedShifts: [] as any[],
     expenses: [] as any[],
+    users: [
+      { id: 1, username: "admin", display_name: "ياسر (مدير النظام)", role: "admin", cashier_slot: 1, is_active: true, pin: "1234" },
+      { id: 2, username: "manager", display_name: "مدير المطعم", role: "manager", cashier_slot: 1, is_active: true, pin: "5555" },
+      { id: 3, username: "cashier1", display_name: "كاشير الوردية", role: "cashier", cashier_slot: 1, is_active: true, pin: "1111" }
+    ] as any[],
     drivers: [
       { id: 10, username: "driver1", display_name: "أحمد (طيار)", role: "cashier", cashier_slot: null, is_active: true, is_checked_in: true },
       { id: 11, username: "driver2", display_name: "محمد (طيار)", role: "cashier", cashier_slot: null, is_active: true, is_checked_in: true },
       { id: 12, username: "driver3", display_name: "علي (طيار)", role: "cashier", cashier_slot: null, is_active: true, is_checked_in: true }
-    ],
+    ] as any[],
     trips: [] as any[],
     zones: [
       { id: 1, name: "مدينة فاقوس", delivery_fee: 15.0, is_active: true },
@@ -161,7 +167,8 @@ class POSBridgeClient {
 
   private notifyListeners(signal: string, data: any) {
     if (this.signalListeners[signal]) {
-      this.signalListeners[signal].forEach((cb) => cb(data));
+      // The mock mutates its state in place; a fresh copy lets React see the change
+      this.signalListeners[signal].forEach((cb) => cb(structuredClone(data)));
     }
   }
 
@@ -172,57 +179,115 @@ class POSBridgeClient {
 
     switch (action) {
       case "login": {
-        const pin = payload.pin;
-        if (pin === "1111" || pin === "1234" || pin === "5555") {
-          const user = {
-            id: 1,
-            username: "cashier1",
-            display_name: pin === "1234" ? "ياسر (مدير)" : "كاشير الوردية",
-            avatar_path: null,
-            role: pin === "1234" ? "manager" : "cashier",
-            cashier_slot: 1,
-            is_active: true
-          };
-          this.mockState.currentUser = user;
-          // Auto create active shift if none
-          if (!this.mockState.activeShift) {
-            this.mockState.activeShift = { id: 101, opened_by: 1, opened_at: new Date().toISOString(), is_active: true };
-          }
-          return user as any;
+        const found = this.mockState.users.find((u: any) => u.pin === payload.pin && u.is_active);
+        if (!found) throw new Error("رمز PIN غير صحيح. جرب 1234 (مدير النظام) أو 5555 (مدير المطعم) أو 1111 (كاشير)");
+        const { pin: _pin, ...user } = found;
+        this.mockState.currentUser = user;
+        // Auto create active shift if none
+        if (!this.mockState.activeShift) {
+          this.mockState.activeShift = { id: 101 + this.mockState.closedShifts.length, opened_by: user.display_name, opened_at: new Date().toISOString(), next_invoice_no: 1, is_active: true, summary_printed_at: null };
         }
-        throw new Error("رمز PIN غير صحيح. جرب 1111 (كاشير) أو 1234 (مدير)");
+        return user as any;
       }
-      
+
       case "logout":
         this.mockState.currentUser = null;
         this.mockState.currentOrder = null;
-        this.mockState.activeOrders = [];
         return true as any;
 
       case "get_current_user":
         return this.mockState.currentUser;
 
       case "get_all_users":
-        return [
-          { id: 1, username: "cashier1", display_name: "كاشير الوردية", role: "cashier", is_active: true },
-          { id: 2, username: "manager1", display_name: "ياسر (مدير)", role: "manager", is_active: true }
-        ] as any;
+        return this.mockState.users.filter((u: any) => u.is_active).map(({ pin: _pin, ...u }: any) => u) as any;
 
-      case "verify_manager_pin":
-        if (payload.pin === "1234") {
-          return { id: 2, display_name: "ياسر (مدير)", role: "manager" } as any;
+      case "get_users_management":
+        return [...this.mockState.users, ...this.mockState.drivers].map(({ pin: _pin, ...u }: any) => u) as any;
+
+      case "create_user": {
+        this.requireMockAdmin();
+        const all = [...this.mockState.users, ...this.mockState.drivers];
+        if (all.some((u: any) => u.username === payload.username)) throw new Error("اسم المستخدم موجود بالفعل");
+        if (all.some((u: any) => u.pin === payload.pin)) throw new Error("رمز PIN مستخدم بالفعل");
+        const newUser = { id: Date.now(), username: payload.username, display_name: payload.display_name, role: payload.role, cashier_slot: payload.cashier_slot, is_active: true, pin: payload.pin };
+        if (payload.role === "cashier" && payload.cashier_slot == null) {
+          this.mockState.drivers.push({ ...newUser, is_checked_in: false });
+        } else {
+          this.mockState.users.push(newUser);
         }
-        throw new Error("رمز PIN للمدير غير صحيح");
+        return newUser as any;
+      }
+
+      case "update_user": {
+        this.requireMockAdmin();
+        const target = [...this.mockState.users, ...this.mockState.drivers].find((u: any) => u.id === payload.user_id);
+        if (!target) throw new Error("المستخدم غير موجود");
+        if (payload.username) target.username = payload.username;
+        if (payload.display_name) target.display_name = payload.display_name;
+        if (payload.role) target.role = payload.role;
+        if (payload.pin) target.pin = payload.pin;
+        if (payload.cashier_slot !== undefined && payload.cashier_slot !== -1) target.cashier_slot = payload.cashier_slot;
+        return target as any;
+      }
+
+      case "deactivate_user": {
+        this.requireMockAdmin();
+        const target = [...this.mockState.users, ...this.mockState.drivers].find((u: any) => u.id === payload.user_id);
+        if (target) target.is_active = false;
+        return true as any;
+      }
+
+      case "verify_manager_pin": {
+        const manager = this.mockState.users.find((u: any) => u.pin === payload.pin && u.is_active && (u.role === "admin" || u.role === "manager"));
+        if (!manager) throw new Error("ليست لديك صلاحيات مدير");
+        return { id: manager.id, display_name: manager.display_name, role: manager.role } as any;
+      }
 
       case "get_active_categories":
+        return this.mockState.categories.filter((c: any) => c.is_active) as any;
+
+      case "get_all_categories":
         return this.mockState.categories as any;
 
+      case "create_category": {
+        const cat = { id: Date.now(), name: payload.name, sort_order: payload.sort_order || 0, is_active: true };
+        this.mockState.categories.push(cat);
+        return cat as any;
+      }
+
+      case "update_category": {
+        const cat = this.mockState.categories.find((c: any) => c.id === payload.category_id);
+        if (!cat) throw new Error("الفئة غير موجودة");
+        if (payload.name) cat.name = payload.name;
+        if (payload.sort_order !== undefined) cat.sort_order = payload.sort_order;
+        return cat as any;
+      }
+
+      case "create_product": {
+        const prod = { id: Date.now(), name: payload.name, price: payload.price, category_id: payload.category_id, is_active: true, sort_order: payload.sort_order || 0 };
+        this.mockState.products.push(prod);
+        return prod as any;
+      }
+
+      case "update_product": {
+        const prod = this.mockState.products.find((x: any) => x.id === payload.product_id);
+        if (!prod) throw new Error("المنتج غير موجود");
+        Object.assign(prod, { name: payload.name, price: payload.price, category_id: payload.category_id, sort_order: payload.sort_order });
+        return prod as any;
+      }
+
+      case "deactivate_product": {
+        const prod = this.mockState.products.find((x: any) => x.id === payload.product_id);
+        if (prod) prod.is_active = false;
+        return true as any;
+      }
+
       case "get_products_by_category":
-        return this.mockState.products.filter(p => p.category_id === payload.category_id) as any;
+        return this.mockState.products.filter(p => p.category_id === payload.category_id && p.is_active) as any;
 
       case "search_products": {
         const q = payload.query.toLowerCase();
-        return this.mockState.products.filter(p => p.name.includes(q)) as any;
+        return this.mockState.products.filter(p => p.is_active && p.name.includes(q)) as any;
       }
 
       case "find_customer_by_phone":
@@ -405,11 +470,16 @@ class POSBridgeClient {
         const order = this.mockState.currentOrder;
         if (!order || order.items.length === 0) throw new Error("الطلب فارغ");
         
-        const invoice_no = Math.floor(Math.random() * 1000) + 1;
-        order.id = Math.floor(Math.random() * 10000) + 1;
+        const shift = this.mockState.activeShift;
+        if (!shift) throw new Error("لا توجد وردية مفتوحة");
+
+        // Invoice numbers restart at 1 with every shift
+        const invoice_no = shift.next_invoice_no++;
+        order.id = Date.now();
         order.invoice_no = invoice_no;
         order.status = "new";
-        order.shift_id = this.mockState.activeShift?.id || 101;
+        order.shift_id = shift.id;
+        order.created_at = new Date().toISOString();
 
         // Track as active order
         this.mockState.activeOrders.push({ ...order });
@@ -435,7 +505,34 @@ class POSBridgeClient {
           activeOrder.payment_method = payload.payment_method;
           activeOrder.amount_paid = payload.amount_paid;
         }
+        this.notifyListeners("tableStateChanged", this.getMockTableState());
         return true as any;
+      }
+
+      case "load_order":
+      case "load_order_by_table": {
+        const found = this.mockState.activeOrders.find((o: any) =>
+          o.status !== "completed" && o.status !== "cancelled" &&
+          (action === "load_order" ? o.id === payload.order_id : o.order_type === "dine_in" && o.table_no === payload.table_number)
+        );
+        if (!found) {
+          throw new Error(action === "load_order" ? "الطلب غير موجود" : "هذه الطاولة عليها طلب معلق، استرجعه من الطلبات المعلقة");
+        }
+        const order = structuredClone(found);
+        this.mockState.currentOrder = order;
+        this.notifyListeners("orderChanged", order);
+        return order as any;
+      }
+
+      case "save_amendment": {
+        const order = this.mockState.currentOrder;
+        if (!order?.id) throw new Error("لا يوجد طلب محفوظ للتعديل");
+        const idx = this.mockState.activeOrders.findIndex((o: any) => o.id === order.id);
+        if (idx >= 0) this.mockState.activeOrders[idx] = structuredClone(order);
+        this.mockState.currentOrder = null;
+        this.notifyListeners("orderChanged", null);
+        this.notifyListeners("tableStateChanged", this.getMockTableState());
+        return { success: true, message: "تم حفظ التعديلات" } as any;
       }
 
       case "get_table_state":
@@ -457,19 +554,54 @@ class POSBridgeClient {
 
       case "check_in_driver": {
         const d = this.mockState.drivers.find((x: any) => x.id === payload.driver_id);
-        if (d) d.is_checked_in = true;
+        if (d) { d.is_checked_in = true; d.check_in_at = new Date().toISOString(); d.check_out_at = null; }
         return true as any;
       }
 
       case "check_out_driver": {
         const d = this.mockState.drivers.find((x: any) => x.id === payload.driver_id);
-        if (d) d.is_checked_in = false;
+        if (d) { d.is_checked_in = false; d.check_out_at = new Date().toISOString(); }
         return true as any;
+      }
+
+      case "get_driver_attendance_today":
+        return this.mockState.drivers
+          .filter((d: any) => d.is_checked_in || d.check_in_at)
+          .map((d: any) => {
+            if (!d.check_in_at) d.check_in_at = new Date().toISOString();
+            return { driver_id: d.id, display_name: d.display_name, check_in_at: d.check_in_at, check_out_at: d.is_checked_in ? null : d.check_out_at };
+          }) as any;
+
+      case "get_daily_driver_summary":
+        return this.mockState.drivers.map((d: any) => {
+          const trips = this.mockState.trips.filter((t: any) => t.driver_id === d.id);
+          const orders = this.mockState.activeOrders.filter((o: any) => trips.some((t: any) => t.order_ids?.includes(o.id)));
+          return {
+            driver_id: d.id,
+            driver_name: d.display_name,
+            trip_count: trips.length,
+            order_count: orders.length,
+            fees_earned: orders.reduce((sum: number, o: any) => sum + (o.delivery_fee || 0), 0)
+          };
+        }).filter((row: any) => row.trip_count > 0) as any;
+
+      case "get_trip_details": {
+        const trip = this.mockState.trips.find((t: any) => t.id === payload.trip_id);
+        if (!trip) throw new Error("الرحلة غير موجودة");
+        const orders = this.mockState.activeOrders.filter((o: any) => trip.order_ids?.includes(o.id));
+        return {
+          trip_id: trip.id,
+          driver_name: trip.driver_name,
+          orders: orders.map((o: any) => ({ ...o, order_id: o.id })),
+          total_order_value: orders.reduce((sum: number, o: any) => sum + (o.total || 0), 0),
+          total_delivery_fees: orders.reduce((sum: number, o: any) => sum + (o.delivery_fee || 0), 0)
+        } as any;
       }
 
       case "create_trip": {
         const newTrip = {
           id: Math.floor(Math.random() * 1000) + 1,
+          driver_id: payload.driver_id,
           driver_name: this.mockState.drivers.find((d: any) => d.id === payload.driver_id)?.display_name || "طيار",
           order_count: payload.order_ids.length,
           status: "pending",
@@ -571,22 +703,20 @@ class POSBridgeClient {
         return shift as any;
       }
 
+      case "get_report_daily_sales":
+        return this.buildMockDailySales() as any;
+
       case "get_shift_summary":
-        return {
-          total_sales: 1250.0,
-          total_expenses: 150.0,
-          pending_delivery: 120.0,
-          pending_dinein: 0.0,
-          pending_kitchen: 85.0,
-          expected_cash: 980.0
-        } as any;
+        return this.buildMockShiftSummary(payload?.shift_id ?? this.mockState.activeShift?.id) as any;
 
       case "get_expenses":
-        return this.mockState.expenses as any;
+        return this.mockState.expenses.filter((e: any) => e.shift_id === this.mockState.activeShift?.id) as any;
 
       case "add_expense": {
+        if (!this.mockState.activeShift) throw new Error("لا توجد وردية مفتوحة");
         const exp = {
           id: Math.floor(Math.random() * 1000),
+          shift_id: this.mockState.activeShift.id,
           amount: payload.amount,
           description: payload.description,
           category: payload.category,
@@ -596,32 +726,27 @@ class POSBridgeClient {
         return exp as any;
       }
 
-      case "close_shift":
+      case "close_shift": {
+        const shift = this.mockState.activeShift;
+        if (!shift) throw new Error("لا توجد وردية مفتوحة");
+        if (!shift.summary_printed_at) throw new Error("يجب طباعة التقرير اليومي قبل إغلاق الوردية");
+        this.mockState.closedShifts.unshift({
+          ...shift,
+          closed_by: this.mockState.currentUser?.display_name,
+          closed_at: new Date().toISOString(),
+          is_active: false
+        });
         this.mockState.activeShift = null;
+        this.notifyListeners("shiftStatusChanged", { active: false });
         return true as any;
+      }
 
       case "get_shift_history":
-        return [
-          {
-            id: 100,
-            opened_by: "ياسر (مدير)",
-            closed_by: "ياسر (مدير)",
-            opened_at: new Date(Date.now() - 24 * 3600 * 1000 * 2).toISOString(),
-            closed_at: new Date(Date.now() - 24 * 3600 * 1000 * 2 + 8 * 3600 * 1000).toISOString(),
-            is_active: false
-          },
-          {
-            id: 99,
-            opened_by: "كاشير الوردية",
-            closed_by: "ياسر (مدير)",
-            opened_at: new Date(Date.now() - 24 * 3600 * 1000 * 3).toISOString(),
-            closed_at: new Date(Date.now() - 24 * 3600 * 1000 * 3 + 8 * 3600 * 1000).toISOString(),
-            is_active: false
-          }
-        ] as any;
+        return this.mockState.closedShifts as any;
 
       case "print_shift_summary":
         console.log(`[MOCK] Printed shift summary for shift ID: ${payload.shift_id}`);
+        if (this.mockState.activeShift) this.mockState.activeShift.summary_printed_at = new Date().toISOString();
         return true as any;
 
       default:
@@ -634,10 +759,92 @@ class POSBridgeClient {
     order.total = order.subtotal - order.discount_amount + order.service_amount + order.delivery_fee;
   }
 
+  private requireMockAdmin() {
+    if (this.mockState.currentUser?.role !== "admin") {
+      throw new Error("يتطلب صلاحيات مدير النظام");
+    }
+  }
+
+  // Same formula as the backend: expected_cash = sales - expenses - all pending
+  private buildMockShiftSummary(shiftId?: number) {
+    const orders = this.mockState.activeOrders.filter((o: any) => o.shift_id === shiftId && o.status !== "cancelled");
+    const expenses = this.mockState.expenses.filter((e: any) => e.shift_id === shiftId);
+    const sum = (list: any[], key: string) => list.reduce((acc, x) => acc + (x[key] || 0), 0);
+    const unpaid = orders.filter((o: any) => !o.is_paid);
+
+    const total_sales = sum(orders, "total");
+    const total_expenses = sum(expenses, "amount");
+    const pending_delivery = sum(unpaid.filter((o: any) => o.order_type === "delivery"), "total");
+    const pending_dinein = sum(unpaid.filter((o: any) => o.order_type === "dine_in"), "total");
+    const pending_kitchen = sum(unpaid.filter((o: any) => o.order_type !== "delivery" && o.order_type !== "dine_in"), "total");
+
+    const order_breakdown: Record<string, { count: number; revenue: number }> = {};
+    orders.forEach((o: any) => {
+      const row = (order_breakdown[o.order_type] ||= { count: 0, revenue: 0 });
+      row.count += 1;
+      row.revenue += (o.total || 0) - (o.delivery_fee || 0);
+    });
+
+    return {
+      total_sales,
+      total_expenses,
+      pending_delivery,
+      pending_dinein,
+      pending_kitchen,
+      expected_cash: total_sales - total_expenses - pending_delivery - pending_dinein - pending_kitchen,
+      order_count: orders.length,
+      order_breakdown
+    };
+  }
+
+  private buildMockDailySales() {
+    const orders = this.mockState.activeOrders.filter((o: any) => o.status !== "cancelled");
+    const group = (list: any[], keyOf: (o: any) => string) => {
+      const rows: Record<string, { count: number; revenue: number }> = {};
+      list.forEach((o) => {
+        const row = (rows[keyOf(o)] ||= { count: 0, revenue: 0 });
+        row.count += 1;
+        row.revenue += o.total || 0;
+      });
+      return rows;
+    };
+    const gross_revenue = orders.reduce((acc: number, o: any) => acc + (o.total || 0), 0);
+    const total_delivery_fees = orders.reduce((acc: number, o: any) => acc + (o.delivery_fee || 0), 0);
+    const paid = orders.filter((o: any) => o.is_paid);
+
+    const sold: Record<string, { product_name: string; quantity: number; revenue: number }> = {};
+    orders.forEach((o: any) => o.items.forEach((item: any) => {
+      const row = (sold[item.product_name] ||= { product_name: item.product_name, quantity: 0, revenue: 0 });
+      row.quantity += item.quantity;
+      row.revenue += item.total_price;
+    }));
+
+    return {
+      date: new Date().toISOString().slice(0, 10),
+      sales_by_type: {
+        breakdown: Object.entries(group(orders, (o) => o.order_type)).map(([type, r]) => ({ type, ...r })),
+        grand_total: { count: orders.length, revenue: gross_revenue }
+      },
+      payment_breakdown: {
+        payments: Object.entries(group(paid, (o) => o.payment_method || "cash")).map(([method, r]) => ({ method, ...r })),
+        total: paid.reduce((acc: number, o: any) => acc + (o.total || 0), 0)
+      },
+      gross_revenue,
+      restaurant_revenue: gross_revenue - total_delivery_fees,
+      total_delivery_fees,
+      bestsellers: Object.values(sold).sort((a, b) => b.quantity - a.quantity).slice(0, 5)
+    };
+  }
+
   private getMockTableState() {
     const state: any = {};
     this.mockState.parkedOrders.forEach((o: any) => {
-      if (o.table_no) state[o.table_no] = "parked";
+      if (o.table_no) state[o.table_no] = "معلق";
+    });
+    this.mockState.activeOrders.forEach((o: any) => {
+      if (o.order_type === "dine_in" && o.table_no && o.status !== "completed" && o.status !== "cancelled") {
+        state[o.table_no] = "#" + o.invoice_no;
+      }
     });
     return state;
   }

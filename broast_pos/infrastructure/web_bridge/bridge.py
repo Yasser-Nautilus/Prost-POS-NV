@@ -247,7 +247,7 @@ class POSBridge(QObject):
             elif action == "create_user":
                 # Admin only
                 if not self._current_user or self._current_user.role.value != "admin":
-                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير عام"})
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير النظام"})
                 try:
                     role_str = payload.get("role", "cashier")
                     role = UserRole(role_str)
@@ -265,7 +265,7 @@ class POSBridge(QObject):
             elif action == "update_user":
                 # Admin only
                 if not self._current_user or self._current_user.role.value != "admin":
-                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير عام"})
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير النظام"})
                 try:
                     role_val = payload.get("role")
                     role = UserRole(role_val) if role_val else None
@@ -285,7 +285,7 @@ class POSBridge(QObject):
             elif action == "deactivate_user":
                 # Admin only
                 if not self._current_user or self._current_user.role.value != "admin":
-                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير عام"})
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير النظام"})
                 try:
                     user = self._auth.update_user(
                         user_id=payload.get("user_id"),
@@ -526,10 +526,7 @@ class POSBridge(QObject):
                 if not self._reports_ctrl:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
                 # Correct method: get_bestsellers on ReportsController
-                data = self._reports_ctrl.get_bestsellers(
-                    shift_id=payload.get("shift_id"),
-                    limit=payload.get("limit", 20)
-                )
+                data = self._reports_ctrl.get_bestsellers()[:payload.get("limit", 20)]
                 return json.dumps({"success": True, "data": data})
 
             elif action == "print_shift_summary":
