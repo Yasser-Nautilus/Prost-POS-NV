@@ -9,14 +9,14 @@ interface UsersViewProps {
 const ROLE_OPTIONS = [
   { value: "cashier",  label: "كاشير صندوق",          color: "text-brand-teal" },
   { value: "driver",   label: "طيار (مندوب توصيل)",   color: "text-purple-400" },
-  { value: "manager",  label: "مدير وردية",          color: "text-brand-gold" },
-  { value: "admin",    label: "مدير عام",           color: "text-red-400" },
+  { value: "manager",  label: "مدير المطعم",          color: "text-brand-gold" },
+  { value: "admin",    label: "مدير النظام",           color: "text-red-400" },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
   cashier: "كاشير",
-  manager: "مدير وردية",
-  admin:   "مدير عام",
+  manager: "مدير المطعم",
+  admin:   "مدير النظام",
   driver:  "طيار",
 };
 

@@ -156,7 +156,7 @@ function App() {
             <div className="text-right">
               <span className="text-xs font-bold text-white block leading-none">{currentUser.display_name}</span>
               <span className="text-[9px] text-gray-400 block mt-0.5 leading-none">
-                {currentUser.role === "admin" ? "مدير عام" : currentUser.role === "manager" ? "مدير الوردية" : "كاشير الصندوق"}
+                {currentUser.role === "admin" ? "مدير النظام" : currentUser.role === "manager" ? "مدير المطعم" : "كاشير الصندوق"}
               </span>
             </div>
           </div>
@@ -185,7 +185,7 @@ function App() {
             onResumeOrder={(_order) => setActiveTab("pos")}
           />
         )}
-        {activeTab === "reports"  && isManagerOrAbove && <ReportsView currentUser={currentUser} />}
+        {activeTab === "reports"  && isManagerOrAbove && <ReportsView key={activeShift?.id ?? "closed"} currentUser={currentUser} />}
         {activeTab === "products" && isManagerOrAbove && <ProductsView currentUser={currentUser} />}
         {activeTab === "users"    && isAdmin           && <UsersView currentUser={currentUser} />}
       </main>

@@ -247,7 +247,7 @@ class POSBridge(QObject):
             elif action == "create_user":
                 # Admin only
                 if not self._current_user or self._current_user.role.value != "admin":
-                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير عام"})
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير النظام"})
                 try:
                     role_str = payload.get("role", "cashier")
                     role = UserRole(role_str)
@@ -265,7 +265,7 @@ class POSBridge(QObject):
             elif action == "update_user":
                 # Admin only
                 if not self._current_user or self._current_user.role.value != "admin":
-                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير عام"})
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير النظام"})
                 try:
                     role_val = payload.get("role")
                     role = UserRole(role_val) if role_val else None
@@ -285,7 +285,7 @@ class POSBridge(QObject):
             elif action == "deactivate_user":
                 # Admin only
                 if not self._current_user or self._current_user.role.value != "admin":
-                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير عام"})
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير النظام"})
                 try:
                     user = self._auth.update_user(
                         user_id=payload.get("user_id"),
