@@ -11,6 +11,7 @@ from broast_pos.core.models.delivery import DeliveryTrip, DriverStatus
 from broast_pos.features.order_lifecycle.order_controller import OrderController
 from broast_pos.features.delivery_system.delivery_controller import DeliveryController
 from broast_pos.features.financial.financial_controller import FinancialController
+from broast_pos.features.financial.session_controller import SessionController
 from broast_pos.features.reports.reports_controller import ReportsController
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,10 @@ class POSBridge(QObject):
         report_service,
         print_triggers,
         printer_manager,
+        settlement_service=None,
+        audit_service=None,
+        session_service=None,         # CashierSessionService (Phase 5)
+        business_day_service=None,    # BusinessDayService (Phase 5)
         parent=None
     ):
         super().__init__(parent)
@@ -52,12 +57,17 @@ class POSBridge(QObject):
         self._report = report_service
         self._print = print_triggers
         self._printer = printer_manager
+        self._settlement = settlement_service
+        self._audit_svc = audit_service
+        self._session_svc = session_service
+        self._business_day_svc = business_day_service
 
         self._current_user = None
         self._order_ctrl = None
         self._delivery_ctrl = None
         self._financial_ctrl = None
         self._reports_ctrl = None
+        self._session_ctrl = None
 
     def _setup_controllers(self, user: User):
         self._current_user = user
@@ -77,6 +87,7 @@ class POSBridge(QObject):
             order_service=self._order_svc,
             print_triggers=self._print,
             cashier_slot=user.cashier_slot or 1,
+            settlement_service=self._settlement,
         )
         self._financial_ctrl = FinancialController(
             financial_service=self._financial,
@@ -88,6 +99,13 @@ class POSBridge(QObject):
             financial_service=self._financial,
             printer_manager=self._printer,
         )
+        # Phase 5: session controller (only if services are wired)
+        if self._session_svc is not None and self._business_day_svc is not None:
+            self._session_ctrl = SessionController(
+                session_service=self._session_svc,
+                business_day_service=self._business_day_svc,
+                auth_service=self._auth,
+            )
 
     def _on_order_changed_cb(self):
         order = self._order_ctrl._current_order if self._order_ctrl else None
@@ -439,7 +457,7 @@ class POSBridge(QObject):
                 if shift_id is None:
                     active = self._financial.get_active_shift()
                     if active is None:
-                        return json.dumps({"success": True, "data": {"total_sales": 0, "total_expenses": 0, "pending_delivery": 0, "pending_dinein": 0, "pending_kitchen": 0, "expected_cash": 0}})
+                        return json.dumps({"success": True, "data": {"total_sales": 0, "cash_sales": 0, "total_expenses": 0, "pending_delivery": 0, "pending_dinein": 0, "pending_kitchen": 0, "expected_cash": 0}})
                     shift_id = active.id
                 summary = self._financial_ctrl.get_shift_summary(shift_id)
                 return json.dumps({"success": True, "data": summary})
@@ -554,10 +572,98 @@ class POSBridge(QObject):
             elif action in ("get_available_drivers", "get_active_trips", "check_in_driver",
                             "check_out_driver", "create_trip", "dispatch_trip",
                             "return_trip", "settle_trip", "get_trip_details",
-                            "get_driver_attendance_today", "get_daily_driver_summary"):
+                            "get_driver_attendance_today", "get_daily_driver_summary",
+                            "get_unassigned_deliveries", "get_driver_settlement_preview",
+                            "settle_driver", "get_driver_settlements"):
                 if not self._delivery_ctrl:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
                 return self._dispatch_delivery(action, payload)
+
+            # ── Customer History (extended) ───────────────────────────────────
+            elif action == "get_customer_by_id":
+                cust = self._customer.get_customer_by_id(payload.get("customer_id"))
+                return json.dumps({"success": True, "data": self._customer_to_dict(cust) if cust else None})
+
+            elif action == "get_customer_history":
+                try:
+                    history = self._customer.get_customer_history(
+                        customer_id=payload.get("customer_id"),
+                        limit=payload.get("limit", 50),
+                        offset=payload.get("offset", 0),
+                    )
+                    return json.dumps({"success": True, "data": history})
+                except ValueError as e:
+                    return json.dumps({"success": False, "error": str(e)})
+
+            elif action == "get_customer_statistics":
+                try:
+                    stats = self._customer.get_customer_statistics(
+                        customer_id=payload.get("customer_id"),
+                    )
+                    return json.dumps({"success": True, "data": stats})
+                except ValueError as e:
+                    return json.dumps({"success": False, "error": str(e)})
+
+            # ── Order Status History ──────────────────────────────────────────
+            elif action == "get_order_status_history":
+                order_id = payload.get("order_id")
+                history = self._order_svc.get_order_status_history(order_id)
+                return json.dumps({
+                    "success": True,
+                    "data": [
+                        {
+                            "id": h.id,
+                            "order_id": h.order_id,
+                            "old_status": h.old_status,
+                            "new_status": h.new_status,
+                            "changed_by_id": h.changed_by_id,
+                            "changed_by_name": h.changed_by_name,
+                            "reason": h.reason,
+                            "changed_at": h.changed_at,
+                        }
+                        for h in history
+                    ]
+                })
+
+            # ── Audit Log ─────────────────────────────────────────────────────
+            elif action == "get_audit_logs":
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
+                if self._audit_svc is None:
+                    return json.dumps({"success": True, "data": []})
+                logs = self._audit_svc.get_logs_filtered(
+                    date_str=payload.get("date"),
+                    user_id=payload.get("user_id"),
+                    event_type=payload.get("event_type"),
+                    order_id=payload.get("order_id"),
+                    entity_type=payload.get("entity_type"),
+                    limit=payload.get("limit", 100),
+                )
+                return json.dumps({
+                    "success": True,
+                    "data": [
+                        {
+                            "id": lg.id,
+                            "event_type": lg.event_type,
+                            "user_id": lg.user_id,
+                            "user_name": lg.user_name,
+                            "order_id": lg.order_id,
+                            "entity_type": lg.entity_type,
+                            "entity_id": lg.entity_id,
+                            "action": lg.action,
+                            "reason": lg.reason,
+                            "details": lg.details,
+                            "before_data": lg.before_data,
+                            "after_data": lg.after_data,
+                            "timestamp": lg.timestamp,
+                        }
+                        for lg in logs
+                    ]
+                })
+
+            # ── Session (v2) ───────────────────────────────────────────────────
+            elif action.startswith("session."):
+                return self._dispatch_session(action[len("session."):], payload)
 
             return json.dumps({"success": False, "error": f"إجراء غير معروف: {action}"})
 
@@ -604,7 +710,9 @@ class POSBridge(QObject):
                 name=payload.get("name", ""),
                 address=payload.get("address", ""),
                 zone=payload.get("zone", ""),
-                delivery_fee=payload.get("delivery_fee", 0.0)
+                delivery_fee=payload.get("delivery_fee", 0.0),
+                # B-02: pass payment_method so delivery cash/online is recorded
+                payment_method=payload.get("payment_method"),
             )
             return json.dumps({"success": True})
         elif action == "park_order":
@@ -715,13 +823,15 @@ class POSBridge(QObject):
                 return json.dumps({"success": True, "message": msg})
             return json.dumps({"success": False, "message": msg, "error": msg})
         elif action == "get_trip_details":
-            details = self._delivery_ctrl._delivery_svc.get_trip_details(payload.get("trip_id"))
+            # ARCH-001: call public controller method, not private _delivery_svc
+            details = ctrl.get_trip_details(payload.get("trip_id"))
             if details:
                 return json.dumps({"success": True, "data": details})
             return json.dumps({"success": False, "error": "الرحلة غير موجودة"})
         elif action == "get_driver_attendance_today":
-            records = self._delivery_ctrl._delivery_svc.get_driver_attendance_today()
-            drivers = self._delivery_ctrl.get_available_drivers()
+            # ARCH-001: call public controller method, not private _delivery_svc
+            records = ctrl.get_driver_attendance_today()
+            drivers = ctrl.get_available_drivers()
             drivers_by_id = {d["id"]: d for d in drivers}
             # Merge attendance with driver info
             result = []
@@ -733,6 +843,143 @@ class POSBridge(QObject):
                 })
             return json.dumps({"success": True, "data": result})
         elif action == "get_daily_driver_summary":
-            summary = self._delivery_ctrl._delivery_svc.get_all_drivers_daily_summary()
+            # ARCH-001: call public controller method, not private _delivery_svc
+            summary = ctrl.get_all_drivers_daily_summary()
             return json.dumps({"success": True, "data": summary})
+        elif action == "get_unassigned_deliveries":
+            orders = ctrl.get_unassigned_deliveries()
+            return json.dumps({"success": True, "data": orders})
+        elif action == "get_driver_settlement_preview":
+            try:
+                preview = ctrl.get_driver_settlement_preview(
+                    driver_id=payload.get("driver_id"),
+                    settlement_date=payload.get("date"),
+                )
+                if preview:
+                    return json.dumps({"success": True, "data": preview})
+                return json.dumps({"success": False, "error": "لا توجد بيانات"})
+            except ValueError as e:
+                return json.dumps({"success": False, "error": str(e)})
+        elif action == "settle_driver":
+            if not self._current_user:
+                return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
+            ok, result = ctrl.settle_driver(
+                driver_id=payload.get("driver_id"),
+                settled_by_id=self._current_user.id,
+                settled_by_name=self._current_user.display_name or self._current_user.username,
+                settlement_date=payload.get("date"),
+                notes=payload.get("notes"),
+            )
+            if ok:
+                return json.dumps({"success": True, "data": {
+                    "id": result.id,
+                    "driver_name": result.driver_name,
+                    "settlement_date": result.settlement_date,
+                    "trip_count": result.trip_count,
+                    "order_count": result.order_count,
+                    "cash_collected": result.cash_collected,
+                    "online_paid": result.online_paid,
+                    "total_delivery_fees": result.total_delivery_fees,
+                    "total_order_value": result.total_order_value,
+                    "settled_at": result.settled_at,
+                }})
+            return json.dumps({"success": False, "error": result})
+        elif action == "get_driver_settlements":
+            records = ctrl.get_driver_settlements(
+                driver_id=payload.get("driver_id"),
+                date_str=payload.get("date"),
+            )
+            return json.dumps({"success": True, "data": records})
         return json.dumps({"success": False, "error": f"إجراء توصيل غير معروف: {action}"})
+
+    # ── Session sub-router (v2) ───────────────────────────────────────────────
+
+    def _dispatch_session(self, action: str, payload: dict) -> str:
+        """Handle session.* actions — delegates to SessionController."""
+        if self._session_ctrl is None:
+            return json.dumps({
+                "success": False,
+                "error": "نظام الجلسات غير مفعل (تأكد من الإعداد الأولي)"
+            })
+
+        ctrl = self._session_ctrl
+
+        # Resolve day_id from payload, or fall back to active shift
+        day_id = payload.get("day_id")
+        if day_id is None and self._financial:
+            active = self._financial.get_active_shift()
+            if active:
+                day_id = active.id
+
+        try:
+            if action == "open":
+                data = ctrl.open_session(
+                    day_id=day_id or payload["day_id"],
+                    user_id=payload.get("user_id", self._current_user.id),
+                    station=payload.get("station", "ALL"),
+                    opening_float_egp=float(payload.get("opening_float_egp", 0)),
+                    actor_id=self._current_user.id,
+                )
+                return json.dumps({"success": True, "data": data})
+
+            elif action == "close":
+                data = ctrl.close_session(
+                    session_id=payload["session_id"],
+                    counted_cash_egp=float(payload.get("counted_cash_egp", 0)),
+                    actor_id=self._current_user.id,
+                    variance_reason=payload.get("variance_reason"),
+                    manager_pin=payload.get("manager_pin"),
+                )
+                return json.dumps({"success": True, "data": data})
+
+            elif action == "handover":
+                data = ctrl.do_handover(
+                    from_session_id=payload["from_session_id"],
+                    to_user_id=payload["to_user_id"],
+                    station=payload.get("station", "ALL"),
+                    counted_cash_egp=float(payload.get("counted_cash_egp", 0)),
+                    cash_drop_egp=float(payload.get("cash_drop_egp", 0)),
+                    actor_id=self._current_user.id,
+                    variance_reason=payload.get("variance_reason"),
+                    manager_pin=payload.get("manager_pin"),
+                )
+                return json.dumps({"success": True, "data": data})
+
+            elif action == "get_active":
+                if day_id is None:
+                    return json.dumps({"success": True, "data": []})
+                data = ctrl.get_active_sessions(day_id)
+                return json.dumps({"success": True, "data": data})
+
+            elif action == "get_all":
+                if day_id is None:
+                    return json.dumps({"success": True, "data": []})
+                data = ctrl.get_all_sessions(day_id)
+                return json.dumps({"success": True, "data": data})
+
+            elif action == "get_balance":
+                data = ctrl.get_session_balance(payload["session_id"])
+                return json.dumps({"success": True, "data": data})
+
+            elif action == "x_report":
+                if day_id is None:
+                    return json.dumps({"success": False, "error": "لا توجد وردية مفتوحة"})
+                data = ctrl.generate_x_report(day_id)
+                return json.dumps({"success": True, "data": data})
+
+            elif action == "close_day":
+                if day_id is None:
+                    return json.dumps({"success": False, "error": "لا توجد وردية مفتوحة"})
+                data = ctrl.close_business_day(
+                    day_id=day_id,
+                    manager_pin=payload.get("manager_pin"),
+                )
+                return json.dumps({"success": True, "data": data})
+
+            return json.dumps({"success": False, "error": f"إجراء جلسة غير معروف: {action}"})
+
+        except ValueError as exc:
+            return json.dumps({"success": False, "error": str(exc)})
+        except Exception as exc:
+            logger.exception("Error in session dispatch: %s", action)
+            return json.dumps({"success": False, "error": str(exc)})

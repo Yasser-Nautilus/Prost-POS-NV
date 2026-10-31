@@ -222,14 +222,20 @@ class FinancialRepository(BaseRepository[Shift]):
         }
 
     def get_pending_delivery_total(self, shift_id: int) -> float:
-        """Unsettled driver orders total — money not yet in drawer."""
+        """Unsettled CASH delivery orders — money not yet in drawer.
+
+        B-01 fix: Only count CASH delivery orders on unsettled trips.
+        ONLINE orders are pre-paid (is_paid=1 at creation); they were
+        never in the cash drawer and must NOT be deducted here.
+        """
         row = self._db.fetch_one(
             """SELECT COALESCE(SUM(o.total), 0) AS pending
                FROM orders o
                JOIN delivery_trip_orders dto ON dto.order_id = o.id
                JOIN delivery_trips dt ON dt.id = dto.trip_id
                WHERE o.shift_id = ? AND dt.is_settled = 0
-                 AND o.status NOT IN ('cancelled')""",
+                 AND o.status NOT IN ('cancelled')
+                 AND o.payment_method = 'cash'""",
             (shift_id,),
         )
         return row["pending"] if row else 0.0
@@ -240,17 +246,23 @@ class FinancialRepository(BaseRepository[Shift]):
             """SELECT COALESCE(SUM(total), 0) AS pending
                FROM orders
                WHERE shift_id = ? AND order_type = 'dine_in'
-                 AND is_paid = 0 AND status NOT IN ('cancelled')""",
+                                 AND is_paid = 0 AND status NOT IN ('cancelled')
+                                 AND (payment_method = 'cash' OR payment_method IS NULL)""",
             (shift_id,),
         )
         return row["pending"] if row else 0.0
 
     def get_pending_kitchen_total(self, shift_id: int) -> float:
-        """Orders still in preparation total."""
+        """Orders still in preparation or ready (not yet paid) total.
+
+        B-01 fix: add 'ready' to the status filter — a READY order has not
+        been paid yet and the money is not in the drawer.
+        """
         row = self._db.fetch_one(
             """SELECT COALESCE(SUM(total), 0) AS pending
                FROM orders
-               WHERE shift_id = ? AND status IN ('new', 'preparing')""",
+               WHERE shift_id = ? AND status IN ('new', 'preparing', 'ready')
+                 AND (payment_method = 'cash' OR payment_method IS NULL)""",
             (shift_id,),
         )
         return row["pending"] if row else 0.0
@@ -259,6 +271,42 @@ class FinancialRepository(BaseRepository[Shift]):
         """Check if there are any unsettled delivery trips — prerequisite for close."""
         row = self._db.fetch_one(
             "SELECT COUNT(*) AS cnt FROM delivery_trips WHERE is_settled = 0 AND returned_at IS NOT NULL"
+        )
+        return (row["cnt"] if row else 0) > 0
+
+    def has_active_trips(self) -> bool:
+        """B-04: Check if any drivers are still out (dispatched, not yet returned).
+
+        These drivers physically hold cash; the shift cannot close until they return.
+        """
+        row = self._db.fetch_one(
+            """SELECT COUNT(*) AS cnt
+               FROM delivery_trips
+               WHERE dispatched_at IS NOT NULL
+                 AND returned_at IS NULL
+                 AND is_settled = 0"""
+        )
+        return (row["cnt"] if row else 0) > 0
+
+    def has_open_orders(self, shift_id: int) -> bool:
+        """B-04: Check if there are open unpaid CASH orders for the shift.
+
+        Open = status in (new, preparing, ready, delivered) AND is_paid = 0
+        AND payment_method = cash (or NULL — default cash).
+
+        Delivery orders in DELIVERED status are handled by has_active_trips /
+        has_unsettled_trips, so they are excluded here to avoid double-blocking.
+        Returns True if any such order exists (blocks shift close).
+        """
+        row = self._db.fetch_one(
+            """SELECT COUNT(*) AS cnt
+               FROM orders
+               WHERE shift_id = ?
+                 AND status IN ('new', 'preparing', 'ready')
+                 AND is_paid = 0
+                 AND status != 'cancelled'
+                 AND (payment_method = 'cash' OR payment_method IS NULL)""",
+            (shift_id,),
         )
         return (row["cnt"] if row else 0) > 0
 
@@ -304,14 +352,31 @@ class FinancialRepository(BaseRepository[Shift]):
 
     def build_shift_summary(self, shift_id: int) -> ShiftSummary:
         """Build a live ShiftSummary from aggregated data."""
-        # Total sales (all completed non-cancelled orders)
+        # Total sales — ALL paid orders, all payment methods.
+        # B-01: only count is_paid=1 so unconfirmed/unpaid orders are excluded.
+        # Used for revenue reporting only; do NOT use for drawer reconciliation.
         sales_row = self._db.fetch_one(
             """SELECT COALESCE(SUM(total), 0) AS total_sales
                FROM orders
-               WHERE shift_id = ? AND status != 'cancelled'""",
+               WHERE shift_id = ? AND is_paid = 1
+                 AND status != 'cancelled'""",
             (shift_id,),
         )
         total_sales = sales_row["total_sales"] if sales_row else 0.0
+
+        # Cash sales — CASH orders that are actually PAID (money is in drawer).
+        # B-01: add is_paid = 1 so DELIVERED (not yet collected) cash orders
+        # are not counted — the driver still has that cash.
+        # (FIN-001: Visa/online never enter the physical cash drawer.)
+        cash_row = self._db.fetch_one(
+            """SELECT COALESCE(SUM(total), 0) AS cash_sales
+               FROM orders
+               WHERE shift_id = ? AND status != 'cancelled'
+                 AND payment_method = 'cash'
+                 AND is_paid = 1""",
+            (shift_id,),
+        )
+        cash_sales = cash_row["cash_sales"] if cash_row else 0.0
 
         # Total expenses
         exp_row = self._db.fetch_one(
@@ -323,6 +388,7 @@ class FinancialRepository(BaseRepository[Shift]):
 
         return ShiftSummary(
             total_sales=total_sales,
+            cash_sales=cash_sales,
             total_expenses=total_expenses,
             pending_delivery=self.get_pending_delivery_total(shift_id),
             pending_dinein=self.get_pending_dinein_total(shift_id),

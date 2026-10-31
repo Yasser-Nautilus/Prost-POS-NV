@@ -4,9 +4,13 @@ Financial models — Shift, ShiftTransfer, CashTransaction, ShiftSummary.
 Shift is the primary accounting period. All orders and expenses belong to a shift.
 ShiftSummary is computed (not stored) — it aggregates live data for display.
 
-Expected cash formula:
-    expected_cash = total_sales - total_expenses - all_pending
+Expected cash formula (corrected in batch 1.2 — FIN-001):
+    expected_cash = cash_sales − total_expenses − all_pending
     (pending = money not yet physically in the drawer)
+
+    total_sales is kept separately as a “total revenue” figure for
+    reporting; it must NOT be used for drawer reconciliation because it
+    includes Visa/online orders that never entered the cash drawer.
 """
 
 from __future__ import annotations
@@ -64,7 +68,7 @@ class CashTransaction:
     """
     A cash expense record. Immutable — cannot be edited after creation.
 
-    Only "expense" type — cash going out of the drawer.
+    Only “expense” type — cash going out of the drawer.
     Categories: delivery_fees, supplies, other.
     """
     id: Optional[int] = None
@@ -84,10 +88,21 @@ class ShiftSummary:
 
     Aggregated from live order and expense data for dashboard display.
 
-    expected_cash = total_sales - total_expenses - all pending
-    (pending orders are deducted because the cash isn't physically in the drawer)
+    Fields:
+        total_sales   — ALL paid orders (is_paid=1), all payment methods.
+                        Used for revenue reporting only.
+        cash_sales    — CASH orders that are is_paid=1 (money is physically
+                        in the drawer).  B-01 fix: DELIVERED orders (driver
+                        still holds cash) are NOT counted here.
+        expected_cash — Cash that should be in the drawer right now:
+                        cash_sales − total_expenses − pending_cash_not_collected
+
+    Do NOT use total_sales for expected_cash — Visa/online orders never
+    enter the cash drawer and must not inflate the reconciliation figure.
+    DELIVERED (unsettled) cash orders are pending, not yet in the drawer.
     """
-    total_sales: float = 0.0            # all completed orders
+    total_sales: float = 0.0            # ALL completed orders (revenue reporting)
+    cash_sales: float = 0.0             # cash-only completed orders (reconciliation)
     total_expenses: float = 0.0         # all cash-out entries
     pending_delivery: float = 0.0       # unsettled driver orders
     pending_dinein: float = 0.0         # unpaid dine-in tables
@@ -105,8 +120,16 @@ class ShiftSummary:
 
     @property
     def expected_cash(self) -> float:
-        """Cash that should be in the drawer right now."""
+        """Cash that should be in the drawer right now.
+
+        Formula (B-01 corrected):
+            cash_sales (is_paid=1, CASH only)
+          − total_expenses
+          − pending_delivery (CASH unsettled trips only — ONLINE excluded)
+          − pending_dinein   (unpaid cash dine-in)
+          − pending_kitchen  (new/preparing/ready cash orders)
+        """
         return round(
-            self.total_sales - self.total_expenses - self.total_pending,
+            self.cash_sales - self.total_expenses - self.total_pending,
             2,
         )

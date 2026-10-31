@@ -8,6 +8,79 @@ export interface BridgeResponse<T = any> {
   message?: string;
 }
 
+// ── v2 Session Types ──────────────────────────────────────────────────────
+
+export type SessionStation = 'ALL' | 'COUNTER' | 'DELIVERY';
+
+export interface CashierSession {
+  id: number;
+  day_id: number;
+  user_id: number;
+  station: SessionStation;
+  is_open: boolean;
+  opened_at: string;
+  closed_at: string | null;
+  opening_float_pt: number;
+  opening_float_egp: number;
+  counted_cash_pt: number | null;
+  counted_cash_egp: number | null;
+  expected_cash_pt: number | null;
+  expected_cash_egp: number | null;
+  variance_pt: number | null;
+  variance_egp: number | null;
+}
+
+export interface LedgerBreakdownEntry {
+  pt: number;
+  egp: number;
+}
+
+export interface SessionSnapshot {
+  session_id: number;
+  user_id: number;
+  station: SessionStation;
+  is_open: boolean;
+  opened_at: string;
+  closed_at: string | null;
+  opening_float_pt: number;
+  opening_float_egp: number;
+  expected_cash_pt: number;
+  expected_cash_egp: number;
+  counted_cash_pt: number | null;
+  counted_cash_egp: number | null;
+  variance_pt: number | null;
+  variance_egp: number | null;
+  breakdown: Record<string, LedgerBreakdownEntry>;
+}
+
+export interface XReportTotals {
+  expected_cash_pt: number;
+  expected_cash_egp: number;
+  cash_sales_pt: number;
+  cash_sales_egp: number;
+  driver_remittance_pt: number;
+  driver_remittance_egp: number;
+  expenses_pt: number;
+  expenses_egp: number;
+}
+
+export interface XReport {
+  type: 'X';
+  day_id: number;
+  generated_at: string;
+  sessions: SessionSnapshot[];
+  totals: XReportTotals;
+}
+
+export interface ZReport extends XReport {
+  type: 'Z';
+  day_closed_at: string;
+  total_variance_pt: number;
+  total_variance_egp: number;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+
 type SignalCallback = (data: any) => void;
 
 class POSBridgeClient {
@@ -163,6 +236,74 @@ class POSBridgeClient {
     if (this.signalListeners[signal]) {
       this.signalListeners[signal].delete(callback);
     }
+  }
+
+  // ── v2 Session API helpers ─────────────────────────────────────────────
+
+  /** Open a new cashier session for the current business day. */
+  public sessionOpen(params: {
+    day_id?: number;
+    user_id?: number;
+    station?: SessionStation;
+    opening_float_egp?: number;
+  }): Promise<CashierSession> {
+    return this.call<CashierSession>('session.open', params);
+  }
+
+  /** Close a cashier session with a blind cash count. */
+  public sessionClose(params: {
+    session_id: number;
+    counted_cash_egp: number;
+    variance_reason?: string;
+    manager_pin?: string;
+  }): Promise<CashierSession> {
+    return this.call<CashierSession>('session.close', params);
+  }
+
+  /** Handover: atomically close outgoing and open new session. */
+  public sessionHandover(params: {
+    from_session_id: number;
+    to_user_id: number;
+    station?: SessionStation;
+    counted_cash_egp: number;
+    cash_drop_egp?: number;
+    variance_reason?: string;
+    manager_pin?: string;
+  }): Promise<{ closed: CashierSession; new: CashierSession }> {
+    return this.call('session.handover', params);
+  }
+
+  /** Get all open sessions for the current business day. */
+  public sessionGetActive(day_id?: number): Promise<CashierSession[]> {
+    return this.call<CashierSession[]>('session.get_active', { day_id });
+  }
+
+  /** Get all sessions (open + closed) for the current business day. */
+  public sessionGetAll(day_id?: number): Promise<CashierSession[]> {
+    return this.call<CashierSession[]>('session.get_all', { day_id });
+  }
+
+  /** Get live expected cash balance for a session (from ledger). */
+  public sessionGetBalance(session_id: number): Promise<{
+    session_id: number;
+    balance_pt: number;
+    balance_egp: number;
+    is_open: boolean | null;
+  }> {
+    return this.call('session.get_balance', { session_id });
+  }
+
+  /** X-Report: live ledger snapshot for the business day. */
+  public sessionXReport(day_id?: number): Promise<XReport> {
+    return this.call<XReport>('session.x_report', { day_id });
+  }
+
+  /** Z-Report: close business day and get final ledger snapshot. */
+  public sessionCloseDay(params: {
+    day_id?: number;
+    manager_pin?: string;
+  }): Promise<ZReport> {
+    return this.call<ZReport>('session.close_day', params);
   }
 
   private notifyListeners(signal: string, data: any) {
@@ -748,6 +889,283 @@ class POSBridgeClient {
         console.log(`[MOCK] Printed shift summary for shift ID: ${payload.shift_id}`);
         if (this.mockState.activeShift) this.mockState.activeShift.summary_printed_at = new Date().toISOString();
         return true as any;
+
+      // --- Phase 3: Customer History ---
+      case "get_customer_by_id": {
+        const cust = this.mockState.customers.find((c: any) => c.id === payload.customer_id);
+        return (cust ? cust : null) as any;
+      }
+
+      case "get_customer_history": {
+        // Return mock order history for the customer
+        const history = this.mockState.activeOrders
+          .filter((o: any) => o.customer_id === payload.customer_id)
+          .map((o: any) => ({
+            id: o.id,
+            invoice_no: o.invoice_no,
+            order_type: o.order_type || "delivery",
+            status: o.status,
+            total: o.total,
+            payment_method: o.payment_method,
+            is_paid: o.is_paid,
+            customer_address: o.customer_address || "",
+            customer_zone: o.customer_zone || "",
+            created_at: o.created_at || new Date().toISOString(),
+            cancelled_at: null,
+            cancel_reason: null,
+          }));
+        // Add a few mock historical entries for display purposes
+        if (this.mockState.customers.find((c: any) => c.id === payload.customer_id)) {
+          (history as any[]).push(
+            ...([ 
+              { id: 9001, invoice_no: 42, order_type: "delivery", status: "completed", total: 160.0, payment_method: "cash", is_paid: true, customer_address: "شارع المشالي", customer_zone: "مدينة فاقوس", created_at: new Date(Date.now() - 7 * 86400000).toISOString(), cancelled_at: null, cancel_reason: null },
+              { id: 9002, invoice_no: 35, order_type: "delivery", status: "completed", total: 290.0, payment_method: "cash", is_paid: true, customer_address: "شارع المشالي", customer_zone: "مدينة فاقوس", created_at: new Date(Date.now() - 14 * 86400000).toISOString(), cancelled_at: null, cancel_reason: null },
+              { id: 9003, invoice_no: 28, order_type: "delivery", status: "cancelled", total: 95.0, payment_method: "cash", is_paid: false, customer_address: "شارع المشالي", customer_zone: "مدينة فاقوس", created_at: new Date(Date.now() - 21 * 86400000).toISOString(), cancelled_at: new Date(Date.now() - 21 * 86400000 + 1800000).toISOString(), cancel_reason: "العميل غير موجود" },
+            ] as any[])
+          );
+        }
+        return history as any;
+      }
+
+      case "get_customer_statistics": {
+        return {
+          total_orders: 7,
+          completed_orders: 5,
+          cancelled_orders: 1,
+          active_orders: 1,
+          total_spent: 1250.0,
+          avg_order_value: 250.0,
+          largest_order: 420.0,
+          first_order_at: new Date(Date.now() - 60 * 86400000).toISOString(),
+          last_order_at: new Date(Date.now() - 7 * 86400000).toISOString(),
+        } as any;
+      }
+
+      // --- Phase 1: Order Status History ---
+      case "get_order_status_history": {
+        // status labels available if needed
+        const order = this.mockState.activeOrders.find((o: any) => o.id === payload.order_id);
+        const now = Date.now();
+        return [
+          { id: 1, order_id: payload.order_id, old_status: null, new_status: "new", changed_by_id: 1, changed_by_name: "كاشير الوردية", reason: null, changed_at: new Date(now - 3600000).toISOString() },
+          { id: 2, order_id: payload.order_id, old_status: "new", new_status: "preparing", changed_by_id: 1, changed_by_name: "كاشير الوردية", reason: null, changed_at: new Date(now - 2700000).toISOString() },
+          { id: 3, order_id: payload.order_id, old_status: "preparing", new_status: "out_for_delivery", changed_by_id: 10, changed_by_name: "أحمد (طيار)", reason: null, changed_at: new Date(now - 1800000).toISOString() },
+          ...(order?.status === "completed" ? [{ id: 4, order_id: payload.order_id, old_status: "out_for_delivery", new_status: "completed", changed_by_id: 1, changed_by_name: "كاشير الوردية", reason: null, changed_at: new Date(now - 600000).toISOString() }] : []),
+          ...(order?.status === "cancelled" ? [{ id: 4, order_id: payload.order_id, old_status: "preparing", new_status: "cancelled", changed_by_id: 2, changed_by_name: "ياسر (مدير)", reason: "طلب العميل إلغاء الطلب", changed_at: new Date(now - 600000).toISOString() }] : []),
+        ] as any;
+      }
+
+      // --- Phase 2: Audit Log ---
+      case "get_audit_logs": {
+        const sampleEvents = [
+          { id: 1, event_type: "order_cancelled", user_id: 2, user_name: "ياسر (مدير)", order_id: 101, entity_type: "order", entity_id: 101, action: "إلغاء الطلب", reason: "طلب العميل", details: null, before_data: { status: "new" }, after_data: { status: "cancelled" }, timestamp: new Date(Date.now() - 3600000).toISOString() },
+          { id: 2, event_type: "discount_applied", user_id: 2, user_name: "ياسر (مدير)", order_id: 102, entity_type: "order", entity_id: 102, action: "تطبيق خصم 20%", reason: null, details: { discount_type: "percent", value: 20 }, before_data: null, after_data: { discount_amount: 32, total: 128 }, timestamp: new Date(Date.now() - 7200000).toISOString() },
+          { id: 3, event_type: "trip_settled", user_id: 1, user_name: "كاشير الوردية", order_id: null, entity_type: "trip", entity_id: 5, action: "تسوية رحلة", reason: null, details: { trip_id: 5, cash_collected: 450 }, before_data: null, after_data: { cash_collected: 450, fees: 40 }, timestamp: new Date(Date.now() - 10800000).toISOString() },
+          { id: 4, event_type: "driver_settlement_completed", user_id: 1, user_name: "كاشير الوردية", order_id: null, entity_type: "driver", entity_id: 10, action: "تسوية يومية", reason: null, details: { driver_id: 10, date: new Date().toISOString().slice(0,10), cash_collected: 890, delivery_fees: 75 }, before_data: null, after_data: null, timestamp: new Date(Date.now() - 1800000).toISOString() },
+          { id: 5, event_type: "item_removed", user_id: 2, user_name: "ياسر (مدير)", order_id: 103, entity_type: "order", entity_id: 103, action: "حذف عنصر", reason: null, details: { product_name: "بطاطس وسط", quantity: 2 }, before_data: null, after_data: null, timestamp: new Date(Date.now() - 14400000).toISOString() },
+        ];
+        return sampleEvents.filter(e => {
+          if (payload.event_type && e.event_type !== payload.event_type) return false;
+          if (payload.order_id && e.order_id !== payload.order_id) return false;
+          if (payload.entity_type && e.entity_type !== payload.entity_type) return false;
+          return true;
+        }) as any;
+      }
+
+      // --- Phase 4: Driver Settlement ---
+      case "get_driver_settlement_preview": {
+        const driver = this.mockState.drivers.find((d: any) => d.id === payload.driver_id);
+        if (!driver) throw new Error("السائق غير موجود");
+        return {
+          driver_id: payload.driver_id,
+          driver_name: driver.display_name,
+          settlement_date: new Date().toISOString().slice(0, 10),
+          trip_count: 2,
+          order_count: 5,
+          total_order_value: 890.0,
+          cash_collected: 740.0,
+          online_paid: 150.0,
+          total_delivery_fees: 75.0,
+          trips: [
+            {
+              trip_id: 1,
+              dispatched_at: new Date(Date.now() - 7200000).toISOString(),
+              returned_at: new Date(Date.now() - 5400000).toISOString(),
+              order_count: 3,
+              cash: 450.0,
+              online: 100.0,
+              fees: 45.0,
+              orders: [
+                { order_id: 101, invoice_no: 45, customer_name: "ياسر المصري", customer_address: "شارع المشالي", customer_zone: "مدينة فاقوس", total: 160.0, delivery_fee: 15.0, payment_method: "cash", status: "delivered" },
+                { order_id: 102, invoice_no: 46, customer_name: "محمد علي", customer_address: "شارع النصر", customer_zone: "شارع الانتاج", total: 190.0, delivery_fee: 10.0, payment_method: "cash", status: "delivered" },
+                { order_id: 103, invoice_no: 47, customer_name: "أحمد محمد", customer_address: "طريق الغابة", customer_zone: "الغابة", total: 100.0, delivery_fee: 25.0, payment_method: "online", status: "delivered" },
+              ]
+            },
+            {
+              trip_id: 2,
+              dispatched_at: new Date(Date.now() - 3600000).toISOString(),
+              returned_at: new Date(Date.now() - 1800000).toISOString(),
+              order_count: 2,
+              cash: 290.0,
+              online: 50.0,
+              fees: 30.0,
+              orders: [
+                { order_id: 104, invoice_no: 48, customer_name: "سارة أحمد", customer_address: "شارع الملك", customer_zone: "مدينة فاقوس", total: 290.0, delivery_fee: 15.0, payment_method: "cash", status: "delivered" },
+                { order_id: 105, invoice_no: 49, customer_name: "خالد إبراهيم", customer_address: "شارع الجمهورية", customer_zone: "شارع الانتاج", total: 50.0, delivery_fee: 10.0, payment_method: "online", status: "delivered" },
+              ]
+            }
+          ]
+        } as any;
+      }
+
+      case "settle_driver": {
+        const driver = this.mockState.drivers.find((d: any) => d.id === payload.driver_id);
+        if (!driver) throw new Error("السائق غير موجود");
+        return {
+          id: Math.floor(Math.random() * 1000) + 1,
+          driver_name: driver.display_name,
+          settlement_date: new Date().toISOString().slice(0, 10),
+          trip_count: 2,
+          order_count: 5,
+          cash_collected: 740.0,
+          online_paid: 150.0,
+          total_delivery_fees: 75.0,
+          total_order_value: 890.0,
+          settled_at: new Date().toISOString(),
+        } as any;
+      }
+
+      case "get_driver_settlements": {
+        return [] as any; // start empty — populated after settle_driver calls
+      }
+
+      // ── v2 Session mocks ──────────────────────────────────────────────────
+
+      case "session.open": {
+        const newSession: CashierSession = {
+          id: Date.now(),
+          day_id: payload.day_id ?? 1,
+          user_id: payload.user_id ?? this.mockState.currentUser?.id ?? 1,
+          station: payload.station ?? 'ALL',
+          is_open: true,
+          opened_at: new Date().toISOString(),
+          closed_at: null,
+          opening_float_pt: Math.round((payload.opening_float_egp ?? 0) * 100),
+          opening_float_egp: payload.opening_float_egp ?? 0,
+          counted_cash_pt: null, counted_cash_egp: null,
+          expected_cash_pt: Math.round((payload.opening_float_egp ?? 0) * 100),
+          expected_cash_egp: payload.opening_float_egp ?? 0,
+          variance_pt: null, variance_egp: null,
+        };
+        (this.mockState as any).sessions = [
+          ...((this.mockState as any).sessions ?? []),
+          newSession,
+        ];
+        return newSession as any;
+      }
+
+      case "session.close": {
+        const sessions: CashierSession[] = (this.mockState as any).sessions ?? [];
+        const idx = sessions.findIndex((s) => s.id === payload.session_id);
+        if (idx === -1) throw new Error("الجلسة غير موجودة");
+        const s = { ...sessions[idx] };
+        const countedPt = Math.round((payload.counted_cash_egp ?? 0) * 100);
+        s.is_open = false;
+        s.closed_at = new Date().toISOString();
+        s.counted_cash_pt = countedPt;
+        s.counted_cash_egp = payload.counted_cash_egp ?? 0;
+        s.variance_pt = countedPt - (s.expected_cash_pt ?? 0);
+        s.variance_egp = s.variance_pt / 100;
+        sessions[idx] = s;
+        (this.mockState as any).sessions = sessions;
+        return s as any;
+      }
+
+      case "session.handover": {
+        // Close old session
+        const closedRaw = await this.dispatchMock('session.close', {
+          session_id: payload.from_session_id,
+          counted_cash_egp: payload.counted_cash_egp ?? 0,
+        });
+        // New opening float = counted - drop
+        const drop = payload.cash_drop_egp ?? 0;
+        const newFloat = Math.max(0, (payload.counted_cash_egp ?? 0) - drop);
+        const newS = await this.dispatchMock('session.open', {
+          day_id: closedRaw.day_id,
+          user_id: payload.to_user_id,
+          station: payload.station ?? closedRaw.station,
+          opening_float_egp: newFloat,
+        });
+        return { closed: closedRaw, new: newS } as any;
+      }
+
+      case "session.get_active": {
+        const all: CashierSession[] = (this.mockState as any).sessions ?? [];
+        return all.filter((s) => s.is_open) as any;
+      }
+
+      case "session.get_all": {
+        return ((this.mockState as any).sessions ?? []) as any;
+      }
+
+      case "session.get_balance": {
+        const allS: CashierSession[] = (this.mockState as any).sessions ?? [];
+        const found = allS.find((s) => s.id === payload.session_id);
+        if (!found) throw new Error("الجلسة غير موجودة");
+        return {
+          session_id: found.id,
+          balance_pt: found.expected_cash_pt ?? 0,
+          balance_egp: found.expected_cash_egp ?? 0,
+          is_open: found.is_open,
+        } as any;
+      }
+
+      case "session.x_report": {
+        const allSessions: CashierSession[] = (this.mockState as any).sessions ?? [];
+        const totalPt = allSessions.reduce((a, s) => a + (s.expected_cash_pt ?? 0), 0);
+        const snapshots = allSessions.map((s) => ({
+          session_id: s.id, user_id: s.user_id, station: s.station,
+          is_open: s.is_open, opened_at: s.opened_at, closed_at: s.closed_at,
+          opening_float_pt: s.opening_float_pt, opening_float_egp: s.opening_float_egp,
+          expected_cash_pt: s.expected_cash_pt ?? 0,
+          expected_cash_egp: s.expected_cash_egp ?? 0,
+          counted_cash_pt: s.counted_cash_pt, counted_cash_egp: s.counted_cash_egp,
+          variance_pt: s.variance_pt, variance_egp: s.variance_egp,
+          breakdown: {
+            OPENING_FLOAT: { pt: s.opening_float_pt, egp: s.opening_float_egp },
+          },
+        }));
+        return {
+          type: 'X', day_id: payload.day_id ?? 1,
+          generated_at: new Date().toISOString(),
+          sessions: snapshots,
+          totals: {
+            expected_cash_pt: totalPt, expected_cash_egp: totalPt / 100,
+            cash_sales_pt: 0, cash_sales_egp: 0,
+            driver_remittance_pt: 0, driver_remittance_egp: 0,
+            expenses_pt: 0, expenses_egp: 0,
+          },
+        } as any;
+      }
+
+      case "session.close_day": {
+        // Close all open sessions with zero variance
+        const sessionsForClose: CashierSession[] = (this.mockState as any).sessions ?? [];
+        for (const s of sessionsForClose.filter((ss) => ss.is_open)) {
+          await this.dispatchMock('session.close', {
+            session_id: s.id,
+            counted_cash_egp: s.expected_cash_egp ?? 0,
+          });
+        }
+        const xReport = await this.dispatchMock<XReport>('session.x_report', payload);
+        return {
+          ...xReport,
+          type: 'Z',
+          day_closed_at: new Date().toISOString(),
+          total_variance_pt: 0,
+          total_variance_egp: 0,
+        } as any;
+      }
 
       default:
         throw new Error(`الإجراء Mock غير متوفر: ${action}`);

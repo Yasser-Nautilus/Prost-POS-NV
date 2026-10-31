@@ -25,18 +25,26 @@ from broast_pos.core.services.customer_service import CustomerService
 from broast_pos.core.services.financial_service import FinancialService
 from broast_pos.core.services.order_service import OrderService
 from broast_pos.core.services.product_service import ProductService
+from broast_pos.core.services.audit_service import AuditService
+from broast_pos.core.services.driver_settlement_service import DriverSettlementService
 from broast_pos.data.database.connection import DatabaseConnection
 from broast_pos.data.database.migrations import initialise_database
 from broast_pos.data.database.seed import seed_database
 from broast_pos.data.repositories.audit_repository import AuditRepository
 from broast_pos.data.repositories.customer_repository import CustomerRepository
 from broast_pos.data.repositories.order_repository import OrderRepository
+from broast_pos.data.repositories.order_status_history_repository import OrderStatusHistoryRepository
+from broast_pos.data.repositories.driver_settlement_repository import DriverSettlementRepository
 from broast_pos.data.repositories.product_repository import ProductRepository
 from broast_pos.data.repositories.user_repository import UserRepository
 from broast_pos.data.repositories.financial_repository import FinancialRepository
 from broast_pos.data.repositories.delivery_repository import DeliveryRepository
+from broast_pos.data.repositories.cashier_session_repository import CashierSessionRepository
+from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
 from broast_pos.core.services.delivery_service import DeliveryService
 from broast_pos.core.services.report_service import ReportService
+from broast_pos.core.services.cashier_session_service import CashierSessionService
+from broast_pos.core.services.business_day_service import BusinessDayService
 from broast_pos.infrastructure.printing.print_triggers import PrintTriggers
 from broast_pos.infrastructure.printing.printer_manager import PrinterManager
 from broast_pos.ui.styles.theme import apply_theme
@@ -84,6 +92,10 @@ def main() -> int:
     financial_repo = FinancialRepository(db)
     delivery_repo = DeliveryRepository(db)
     customer_repo = CustomerRepository(db)
+    status_history_repo = OrderStatusHistoryRepository(db)
+    settlement_repo = DriverSettlementRepository(db)
+    cashier_session_repo = CashierSessionRepository(db)
+    cash_ledger_repo = CashLedgerRepository(db)
 
     # ------------------------------------------------------------------
     # 3. Services
@@ -91,9 +103,13 @@ def main() -> int:
     auth_service = AuthService(user_repo)
     product_service = ProductService(product_repo)
     customer_service = CustomerService(customer_repo)
+    audit_service = AuditService(audit_repo)
+
     delivery_service = DeliveryService(
         delivery_repo=delivery_repo,
         user_repo=user_repo,
+        audit_repo=audit_repo,
+        # order_service injected below after order_service is created
     )
     financial_service = FinancialService(
         financial_repo=financial_repo,
@@ -101,16 +117,45 @@ def main() -> int:
         auth_service=auth_service,
         delivery_service=delivery_service,
     )
+    cashier_session_service = CashierSessionService(
+        session_repo=cashier_session_repo,
+        ledger_repo=cash_ledger_repo,
+        auth_service=auth_service,
+    )
     order_service = OrderService(
         order_repo=order_repo,
         audit_repo=audit_repo,
         auth_service=auth_service,
         financial_service=financial_service,
+        status_history_repo=status_history_repo,
+        audit_service=audit_service,
+        session_service=cashier_session_service,
+        ledger_repo=cash_ledger_repo,
+        cashier_session_repo=cashier_session_repo,
+    )
+    # Inject order_service back into delivery_service for status history recording
+    delivery_service._order_svc = order_service
+
+    settlement_service = DriverSettlementService(
+        settlement_repo=settlement_repo,
+        delivery_repo=delivery_repo,
+        order_repo=order_repo,
+        user_repo=user_repo,
+        audit_repo=audit_repo,
+        order_svc=order_service,
+        ledger_repo=cash_ledger_repo,
+        cashier_session_repo=cashier_session_repo,
     )
     report_service = ReportService(
         order_repo=order_repo,
         financial_repo=financial_repo,
         delivery_repo=delivery_repo,
+    )
+    business_day_service = BusinessDayService(
+        financial_service=financial_service,
+        session_repo=cashier_session_repo,
+        ledger_repo=cash_ledger_repo,
+        auth_service=auth_service,
     )
 
     # ------------------------------------------------------------------
@@ -147,6 +192,10 @@ def main() -> int:
         report_service=report_service,
         print_triggers=print_triggers,
         printer_manager=printer_manager,
+        settlement_service=settlement_service,
+        audit_service=audit_service,
+        session_service=cashier_session_service,
+        business_day_service=business_day_service,
     )
 
     shell = WebShell(bridge)

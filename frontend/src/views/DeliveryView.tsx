@@ -110,7 +110,9 @@ const TripSettlementDialog: React.FC<{
                     <th className="py-2.5 px-3 text-right">#فاتورة</th>
                     <th className="py-2.5 px-3 text-right">العميل</th>
                     <th className="py-2.5 px-3 text-right">العنوان</th>
+                    <th className="py-2.5 px-3 text-center">الدفع</th>
                     <th className="py-2.5 px-3 text-center font-mono">إجمالي الطلب</th>
+                    <th className="py-2.5 px-3 text-center font-mono">المحصل</th>
                     <th className="py-2.5 px-3 text-center font-mono">خدمة التوصيل</th>
                   </tr>
                 </thead>
@@ -126,8 +128,12 @@ const TripSettlementDialog: React.FC<{
                         {o.customer_zone && <div className="text-brand-gold text-[10px] font-bold">{o.customer_zone}</div>}
                         <div className="truncate max-w-[120px]">{o.customer_address}</div>
                       </td>
+                      <td className="py-2.5 px-3 text-center text-gray-300 text-xs">{o.payment_method || "cash"}</td>
                       <td className="py-2.5 px-3 text-center text-white font-bold font-mono">
                         {(o.total || 0).toFixed(2)} ج.م
+                      </td>
+                      <td className="py-2.5 px-3 text-center text-green-300 font-bold font-mono">
+                        {(o.collected || 0).toFixed(2)} ج.م
                       </td>
                       <td className="py-2.5 px-3 text-center text-brand-gold font-bold font-mono">
                         {(o.delivery_fee || 0).toFixed(2)} ج.م
@@ -139,7 +145,7 @@ const TripSettlementDialog: React.FC<{
 
               {/* Totals */}
               <div className="p-4 border-t border-brand-border/40 bg-brand-card/40 grid grid-cols-2 gap-3">
-                <div className="bg-brand-dark rounded-2xl p-4 text-center border border-brand-border/20">
+                  <div className="bg-brand-dark rounded-2xl p-4 text-center border border-brand-border/20">
                   <div className="text-xs text-gray-400 mb-1">إجمالي قيمة الطلبات</div>
                   <div className="text-2xl font-black text-white font-mono">
                     {(details.total_order_value || 0).toFixed(2)}

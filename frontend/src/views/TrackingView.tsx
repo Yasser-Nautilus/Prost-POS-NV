@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Eye, RefreshCw, Loader2, X,
-  UtensilsCrossed, Truck, Package, ShoppingBag, PlusCircle
+  UtensilsCrossed, Truck, Package, ShoppingBag, PlusCircle, History
 } from "lucide-react";
 import { bridge } from "../bridge";
+import { CustomerHistoryModal } from "../components/CustomerHistoryModal";
 
 interface TrackingViewProps {
   currentUser: any;
@@ -124,8 +125,8 @@ const DineInTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; onR
     </table>
   );
 
-const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; onResume: (o: any) => void; canCancel: boolean }> =
-  ({ orders, onCancel, onResume, canCancel }) => (
+const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; onResume: (o: any) => void; canCancel: boolean; onViewCustomer?: (order: any) => void }> =
+  ({ orders, onCancel, onResume, canCancel, onViewCustomer }) => (
     <table className="w-full text-sm">
       <thead>
         <tr className="bg-brand-card/80 text-gray-400 text-xs">
@@ -146,9 +147,27 @@ const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => v
             <tr key={order.id} className={`border-t border-brand-border/20 ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}>
               <td className="py-2.5 px-3 text-gray-400 font-mono text-xs">#{order.invoice_no || order.id}</td>
               <td className="py-2.5 px-3">
-                <span className="text-white font-bold text-sm">{order.customer_name || "—"}</span>
-                {order.customer_phone && (
-                  <span className="text-gray-500 font-mono block text-[10px]">{order.customer_phone}</span>
+                {onViewCustomer && order.customer_id ? (
+                  <button
+                    onClick={() => onViewCustomer(order)}
+                    className="text-right group"
+                    title="عرض تاريخ العميل"
+                  >
+                    <span className="text-white font-bold text-sm group-hover:text-brand-gold transition-colors flex items-center gap-1">
+                      {order.customer_name || "—"}
+                      <History size={10} className="opacity-0 group-hover:opacity-100 transition-opacity text-brand-gold" />
+                    </span>
+                    {order.customer_phone && (
+                      <span className="text-gray-500 font-mono block text-[10px]">{order.customer_phone}</span>
+                    )}
+                  </button>
+                ) : (
+                  <div>
+                    <span className="text-white font-bold text-sm">{order.customer_name || "—"}</span>
+                    {order.customer_phone && (
+                      <span className="text-gray-500 font-mono block text-[10px]">{order.customer_phone}</span>
+                    )}
+                  </div>
                 )}
               </td>
               <td className="py-2.5 px-3 text-gray-400 text-xs">
@@ -263,6 +282,10 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
   const [pendingCancelOrderId, setPendingCancelOrderId] = useState<number | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelPin, setCancelPin] = useState("");
+
+  // Customer history modal
+  const [historyCustomerId, setHistoryCustomerId] = useState<number | null>(null);
+  const [historyCustomerName, setHistoryCustomerName] = useState<string | undefined>();
 
   const isManagerOrAbove = currentUser?.role === "manager" || currentUser?.role === "admin";
 
@@ -416,6 +439,10 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
                   onCancel={handleCancelClick}
                   onResume={handleResume}
                   canCancel={isManagerOrAbove}
+                  onViewCustomer={(order: any) => {
+                    setHistoryCustomerId(order.customer_id || null);
+                    setHistoryCustomerName(order.customer_name || undefined);
+                  }}
                 />
               )}
               {type === "takeaway" && (
@@ -473,6 +500,18 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
             </div>
           </div>
         </div>
+      )}
+
+      {/* Customer History Modal */}
+      {historyCustomerId !== null && (
+        <CustomerHistoryModal
+          customerId={historyCustomerId}
+          customerName={historyCustomerName}
+          onClose={() => {
+            setHistoryCustomerId(null);
+            setHistoryCustomerName(undefined);
+          }}
+        />
       )}
     </div>
   );

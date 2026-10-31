@@ -9,7 +9,7 @@ and is stored on the address for historical consistency.
 from __future__ import annotations
 
 import re
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from broast_pos.core.models.customer import Customer, CustomerAddress, Zone
 from broast_pos.data.repositories.customer_repository import CustomerRepository
@@ -111,6 +111,56 @@ class CustomerService:
             ValueError: if address not found.
         """
         self._customers.delete(address_id)
+
+    # ------------------------------------------------------------------
+    # Customer lookup by ID
+    # ------------------------------------------------------------------
+
+    def get_customer_by_id(self, customer_id: int) -> Optional[Customer]:
+        """Fetch a customer by primary key (includes addresses)."""
+        return self._customers.get_by_id(customer_id)
+
+    # ------------------------------------------------------------------
+    # Customer history and statistics (Phase 3)
+    # ------------------------------------------------------------------
+
+    def get_customer_history(
+        self,
+        customer_id: int,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """Order history for a customer (newest first).
+
+        Args:
+            customer_id: The customer's primary key.
+            limit: Maximum number of records to return.
+            offset: Pagination offset.
+
+        Returns:
+            List of order dicts: invoice_no, status, total, created_at, …
+        Raises:
+            ValueError: if customer not found.
+        """
+        customer = self._customers.get_by_id(customer_id)
+        if customer is None:
+            raise ValueError("العميل غير موجود")
+        return self._customers.get_customer_order_history(
+            customer_id, limit=limit, offset=offset
+        )
+
+    def get_customer_statistics(self, customer_id: int) -> Dict[str, Any]:
+        """Aggregate stats for a customer.
+
+        Returns dict with: total_orders, completed_orders, cancelled_orders,
+        total_spent, avg_order_value, largest_order, first/last_order_at.
+        Raises:
+            ValueError: if customer not found.
+        """
+        customer = self._customers.get_by_id(customer_id)
+        if customer is None:
+            raise ValueError("العميل غير موجود")
+        return self._customers.get_customer_statistics(customer_id)
 
     # ------------------------------------------------------------------
     # Zone management (manager only)

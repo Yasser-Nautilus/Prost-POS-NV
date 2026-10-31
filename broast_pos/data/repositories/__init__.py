@@ -8,6 +8,8 @@ from broast_pos.data.repositories.customer_repository import CustomerRepository
 from broast_pos.data.repositories.delivery_repository import DeliveryRepository
 from broast_pos.data.repositories.financial_repository import FinancialRepository
 from broast_pos.data.repositories.audit_repository import AuditRepository, AuditEntry
+from broast_pos.data.repositories.order_status_history_repository import OrderStatusHistoryRepository
+from broast_pos.data.repositories.driver_settlement_repository import DriverSettlementRepository
 
 __all__ = [
     "BaseRepository",
@@ -19,4 +21,6 @@ __all__ = [
     "FinancialRepository",
     "AuditRepository",
     "AuditEntry",
+    "OrderStatusHistoryRepository",
+    "DriverSettlementRepository",
 ]

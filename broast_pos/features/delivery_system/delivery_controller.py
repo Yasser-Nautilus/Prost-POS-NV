@@ -32,11 +32,23 @@ class DeliveryController:
         order_service: OrderService,
         print_triggers: PrintTriggers,
         cashier_slot: int = 1,
+        settlement_service=None,  # Optional[DriverSettlementService]
     ) -> None:
         self._delivery_svc = delivery_service
         self._order_svc = order_service
         self._print = print_triggers
         self._cashier_slot = cashier_slot
+        self._settlement_svc = settlement_service  # injected from main.py
+
+        # B-07: inject order_svc into settlement_svc so it can complete orders
+        if settlement_service is not None and order_service is not None:
+            if not getattr(settlement_service, "_order_svc", None):
+                settlement_service._order_svc = order_service
+
+        # B-07: inject settlement_svc into delivery_svc so settle_trip() can
+        # create a driver_settlements record (unifying both settlement paths)
+        if settlement_service is not None:
+            delivery_service._settlement_svc = settlement_service
 
         # UI callbacks
         self._on_drivers_changed: Optional[Callable] = None
@@ -150,7 +162,10 @@ class DeliveryController:
     ) -> Tuple[bool, Any]:
         """Create a delivery trip with selected orders.
 
-        Cross-cashier trips allowed. Mixed payment trips allowed.
+        The backend (DeliveryService.create_trip) is the authoritative
+        enforcer of driver availability and order uniqueness since batch 1.2.
+        The frontend filter in DeliveryView is UX sugar only — do not rely
+        on it for correctness.
         """
         if not order_ids:
             return False, "يجب اختيار طلب واحد على الأقل"
@@ -196,49 +211,8 @@ class DeliveryController:
     # ------------------------------------------------------------------
 
     def get_settlement_details(self, trip_id: int) -> Optional[Dict[str, Any]]:
-        """Get trip details for settlement view.
-
-        Returns breakdown of orders, cash collected, delivery fees,
-        and amount to hand over.
-        """
-        try:
-            trip = self._delivery_svc.get_trip(trip_id)
-            if trip is None:
-                return None
-
-            orders = []
-            total_cash = 0.0
-            total_fees = 0.0
-
-            for oid in trip.order_ids:
-                order = self._order_svc.get_order_by_id(oid)
-                if order is None:
-                    continue
-                is_cash = order.payment_method == PaymentMethod.CASH
-                collected = order.total if is_cash else 0.0
-                if is_cash:
-                    total_cash += order.total
-
-                total_fees += order.delivery_fee or 0
-
-                orders.append({
-                    "invoice_no": order.invoice_no,
-                    "total": order.total,
-                    "delivery_fee": order.delivery_fee or 0,
-                    "payment_method": order.payment_method.value if order.payment_method else "cash",
-                    "collected": collected,
-                })
-
-            return {
-                "trip_id": trip.id,
-                "driver_name": trip.driver_name,
-                "orders": orders,
-                "cash_collected": total_cash,
-                "total_delivery_fees": total_fees,
-                "amount_to_hand_over": total_cash,
-            }
-        except Exception:
-            return None
+        """Return the canonical service settlement payload."""
+        return self.get_trip_details(trip_id)
 
     def settle_trip(self, trip_id: int, print_receipt: bool = False) -> Tuple[bool, str]:
         """Confirm settlement — driver hands over cash.
@@ -270,14 +244,7 @@ class DeliveryController:
     def get_unsettled_trips(self, driver_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """Get all returned but unsettled trips."""
         try:
-            if driver_id is not None:
-                trips = self._delivery_svc.get_unsettled_trips(driver_id)
-            else:
-                # Get all active drivers' unsettled trips
-                trips = []
-                drivers = self._delivery_svc.get_active_drivers()
-                for d in drivers:
-                    trips.extend(self._delivery_svc.get_unsettled_trips(d.id))
+            trips = self._delivery_svc.get_unsettled_trips(driver_id)
 
             return [
                 {
@@ -296,6 +263,40 @@ class DeliveryController:
     # ------------------------------------------------------------------
     # 7. End-of-Day Driver Summary
     # ------------------------------------------------------------------
+
+    def get_trip_details(self, trip_id: int) -> Optional[Dict[str, Any]]:
+        """Public passthrough to DeliveryService.get_trip_details.
+
+        Provides the full per-order breakdown for the settlement dialog.
+        Bridge must call this method instead of reaching into
+        self._delivery_svc directly (ARCH-001 fix).
+        """
+        try:
+            return self._delivery_svc.get_trip_details(trip_id)
+        except Exception:
+            return None
+
+    def get_driver_attendance_today(self) -> List[Dict[str, Any]]:
+        """Public passthrough to DeliveryService.get_driver_attendance_today.
+
+        Bridge must call this method instead of reaching into
+        self._delivery_svc directly (ARCH-001 fix).
+        """
+        try:
+            return self._delivery_svc.get_driver_attendance_today()
+        except Exception:
+            return []
+
+    def get_all_drivers_daily_summary(self) -> List[Dict[str, Any]]:
+        """Public passthrough to DeliveryService.get_all_drivers_daily_summary.
+
+        Bridge must call this method instead of reaching into
+        self._delivery_svc directly (ARCH-001 fix).
+        """
+        try:
+            return self._delivery_svc.get_all_drivers_daily_summary()
+        except Exception:
+            return []
 
     def get_daily_summary(self) -> List[Dict[str, Any]]:
         """Get end-of-day summary for all drivers.
@@ -386,3 +387,89 @@ class DeliveryController:
     def _notify_trips(self) -> None:
         if self._on_trips_changed:
             self._on_trips_changed()
+
+    # ------------------------------------------------------------------
+    # 8. Driver Settlement
+    # ------------------------------------------------------------------
+
+    def get_driver_settlement_preview(
+        self,
+        driver_id: int,
+        settlement_date: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Return settlement preview without committing.
+
+        Raises ValueError if driver not found or no eligible trips.
+        """
+        if self._settlement_svc is None:
+            return None
+        return self._settlement_svc.get_driver_settlement_preview(
+            driver_id=driver_id,
+            settlement_date=settlement_date,
+        )
+
+    def settle_driver(
+        self,
+        driver_id: int,
+        settled_by_id: int,
+        settled_by_name: str,
+        settlement_date: Optional[str] = None,
+        notes: Optional[str] = None,
+    ) -> Tuple[bool, Any]:
+        """Atomically settle all eligible trips for a driver on a date.
+
+        Returns:
+            (True, DriverSettlement) on success.
+            (False, error_message_str) on failure.
+        """
+        if self._settlement_svc is None:
+            return False, "خدمة التسوية غير مهيأة"
+        try:
+            settlement = self._settlement_svc.settle_driver(
+                driver_id=driver_id,
+                settled_by_id=settled_by_id,
+                settled_by_name=settled_by_name,
+                settlement_date=settlement_date,
+                notes=notes,
+            )
+            self._notify_drivers()
+            return True, settlement
+        except Exception as exc:
+            return False, str(exc)
+
+    def get_driver_settlements(
+        self,
+        driver_id: Optional[int] = None,
+        date_str: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return settlement history records."""
+        if self._settlement_svc is None:
+            return []
+        try:
+            if driver_id is not None:
+                settlements = self._settlement_svc.get_settlements_for_driver(driver_id)
+            elif date_str:
+                settlements = self._settlement_svc.get_settlements_for_date(date_str)
+            else:
+                return []
+
+            return [
+                {
+                    "id": s.id,
+                    "driver_id": s.driver_id,
+                    "driver_name": s.driver_name,
+                    "settlement_date": s.settlement_date,
+                    "trip_count": s.trip_count,
+                    "order_count": s.order_count,
+                    "total_order_value": s.total_order_value,
+                    "cash_collected": s.cash_collected,
+                    "online_paid": s.online_paid,
+                    "total_delivery_fees": s.total_delivery_fees,
+                    "settled_by_name": s.settled_by_name,
+                    "notes": s.notes,
+                    "settled_at": s.settled_at,
+                }
+                for s in settlements
+            ]
+        except Exception:
+            return []

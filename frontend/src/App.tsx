@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { 
   ShoppingBag, Truck, BarChart3, LogOut, User, Calendar, 
-  Loader2, Eye, Package, Users
+  Loader2, Eye, Package, Users, Wallet, Shield
 } from "lucide-react";
 import { LoginView } from "./views/LoginView";
 import { POSView } from "./views/POSView";
@@ -10,10 +10,12 @@ import { ReportsView } from "./views/ReportsView";
 import { TrackingView } from "./views/TrackingView";
 import { ProductsView } from "./views/ProductsView";
 import { UsersView } from "./views/UsersView";
+import { DriverSettlementView } from "./views/DriverSettlementView";
+import { AuditLogView } from "./views/AuditLogView";
 import { ShiftDialog } from "./components/ShiftDialog";
 import { bridge } from "./bridge";
 
-type Tab = "pos" | "delivery" | "tracking" | "reports" | "products" | "users";
+type Tab = "pos" | "delivery" | "tracking" | "reports" | "products" | "users" | "settlement" | "audit";
 
 function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -83,12 +85,14 @@ function App() {
 
   // Navigation items — visible tabs depend on role
   const navItems: { id: Tab; label: string; icon: any; visible: boolean }[] = [
-    { id: "pos",      label: "شاشة البيع (POS)",    icon: ShoppingBag, visible: true },
-    { id: "delivery", label: "توصيل الطلبات",       icon: Truck,       visible: true },
-    { id: "tracking", label: "متابعة الطلبات",      icon: Eye,         visible: true },
-    { id: "reports",  label: "التقارير المالية",    icon: BarChart3,   visible: isManagerOrAbove },
-    { id: "products", label: "إدارة المنتجات",      icon: Package,     visible: isManagerOrAbove },
-    { id: "users",    label: "إدارة المستخدمين",    icon: Users,       visible: isAdmin },
+    { id: "pos",        label: "شاشة البيع (POS)",    icon: ShoppingBag, visible: true },
+    { id: "delivery",  label: "توصيل الطلبات",       icon: Truck,       visible: true },
+    { id: "tracking",  label: "متابعة الطلبات",      icon: Eye,         visible: true },
+    { id: "settlement",label: "تسوية السائقين",      icon: Wallet,      visible: isManagerOrAbove },
+    { id: "reports",   label: "التقارير المالية",    icon: BarChart3,   visible: isManagerOrAbove },
+    { id: "products",  label: "إدارة المنتجات",      icon: Package,     visible: isManagerOrAbove },
+    { id: "audit",     label: "سجل التدقيق",         icon: Shield,      visible: isManagerOrAbove },
+    { id: "users",     label: "إدارة المستخدمين",    icon: Users,       visible: isAdmin },
   ];
 
   return (
@@ -185,9 +189,11 @@ function App() {
             onResumeOrder={(_order) => setActiveTab("pos")}
           />
         )}
-        {activeTab === "reports"  && isManagerOrAbove && <ReportsView key={activeShift?.id ?? "closed"} currentUser={currentUser} />}
-        {activeTab === "products" && isManagerOrAbove && <ProductsView currentUser={currentUser} />}
-        {activeTab === "users"    && isAdmin           && <UsersView currentUser={currentUser} />}
+        {activeTab === "reports"    && isManagerOrAbove && <ReportsView key={activeShift?.id ?? "closed"} currentUser={currentUser} />}
+        {activeTab === "products"   && isManagerOrAbove && <ProductsView currentUser={currentUser} />}
+        {activeTab === "settlement" && isManagerOrAbove && <DriverSettlementView currentUser={currentUser} />}
+        {activeTab === "audit"      && isManagerOrAbove && <AuditLogView currentUser={currentUser} />}
+        {activeTab === "users"      && isAdmin           && <UsersView currentUser={currentUser} />}
       </main>
 
       {/* Global Dialogs */}

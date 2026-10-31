@@ -18,8 +18,9 @@ Design decisions:
 import os
 import sqlite3
 import threading
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Generator, Optional
 
 
 # ---------------------------------------------------------------------------
@@ -108,7 +109,11 @@ class DatabaseConnection:
         conn.execute("PRAGMA synchronous = NORMAL;")
         # 2 MB page cache — keeps hot pages in memory
         conn.execute("PRAGMA cache_size = -2000;")
+        # B-06: wait up to 5 seconds before raising OperationalError on a
+        # locked database (concurrent writes in WAL mode).
+        conn.execute("PRAGMA busy_timeout = 5000;")
 
+        self._tx_depth: int = 0  # nesting counter for transaction()
         return conn
 
     # ------------------------------------------------------------------
@@ -153,13 +158,58 @@ class DatabaseConnection:
     # ------------------------------------------------------------------
     # Transaction helpers
     # ------------------------------------------------------------------
+
+    @contextmanager
+    def transaction(self) -> Generator[None, None, None]:
+        """Context manager for atomic multi-step operations.
+
+        Supports nesting via a depth counter — only the outermost
+        ``transaction()`` issues BEGIN/COMMIT/ROLLBACK.  Inner calls are
+        transparent save-points in spirit (SQLite doesn't expose named
+        save-points through the standard driver, so we track depth instead).
+
+        Usage::
+
+            with db.transaction():
+                repo_a.insert(...)   # may call commit() internally — safe
+                repo_b.update(...)   # wrapped in the same transaction
+                audit.log(...)       # all-or-nothing
+
+        Raises:
+            Any exception from the body will trigger a full rollback.
+        """
+        if self._tx_depth == 0:
+            self._conn.execute("BEGIN IMMEDIATE")
+        self._tx_depth += 1
+        try:
+            yield
+            self._tx_depth -= 1
+            if self._tx_depth == 0:
+                self._conn.commit()
+        except Exception:
+            self._tx_depth -= 1
+            if self._tx_depth == 0:
+                try:
+                    self._conn.rollback()
+                except Exception:
+                    pass
+            raise
+
     def begin(self) -> None:
-        """Start an explicit transaction (DEFERRED by default in SQLite)."""
+        """Start an explicit transaction (DEFERRED by default in SQLite).
+
+        Prefer ``transaction()`` context manager for new code.
+        """
         self._conn.execute("BEGIN")
 
     def commit(self) -> None:
-        """Commit the current transaction."""
-        self._conn.commit()
+        """Commit the current transaction.
+
+        If called from inside a ``transaction()`` block this is a **no-op**
+        so repository methods do not accidentally flush partial work.
+        """
+        if self._tx_depth == 0:
+            self._conn.commit()
 
     def rollback(self) -> None:
         """Roll back the current transaction."""

@@ -3,12 +3,15 @@ Customer repository — customer, address, and zone database queries.
 
 Phone is the primary lookup key (11-digit Egyptian, starts with 01).
 Zone delivery fee is fixed — cashier cannot change it per order.
+
+Customer history methods query the orders table directly — no extra
+tables are needed since customers are always linked to orders by customer_id.
 """
 
 from __future__ import annotations
 
 import sqlite3
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from broast_pos.core.models.customer import Customer, CustomerAddress, Zone
 from broast_pos.data.repositories.base_repository import BaseRepository
@@ -104,6 +107,85 @@ class CustomerRepository(BaseRepository[Customer]):
             )
         self._db.commit()
         return address
+
+    # ------------------------------------------------------------------
+    # Customer order history
+    # ------------------------------------------------------------------
+
+    def get_customer_order_history(
+        self,
+        customer_id: int,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """Order history for a customer (newest first).
+
+        Returns lightweight dicts (not full Order objects) to keep the
+        query fast and the payload small for the frontend.
+        """
+        rows = self._db.fetch_all(
+            """SELECT id, invoice_no, order_type, status,
+                      total, payment_method, is_paid,
+                      customer_address, customer_zone,
+                      created_at, cancelled_at, cancel_reason
+               FROM orders
+               WHERE customer_id = ?
+               ORDER BY created_at DESC
+               LIMIT ? OFFSET ?""",
+            (customer_id, limit, offset),
+        )
+        return [
+            {
+                "id": r["id"],
+                "invoice_no": r["invoice_no"],
+                "order_type": r["order_type"],
+                "status": r["status"],
+                "total": r["total"],
+                "payment_method": r["payment_method"],
+                "is_paid": bool(r["is_paid"]),
+                "customer_address": r["customer_address"],
+                "customer_zone": r["customer_zone"],
+                "created_at": r["created_at"],
+                "cancelled_at": r["cancelled_at"],
+                "cancel_reason": r["cancel_reason"],
+            }
+            for r in rows
+        ]
+
+    def get_customer_statistics(self, customer_id: int) -> Dict[str, Any]:
+        """Aggregate stats for a customer (single query, no Python loop)."""
+        row = self._db.fetch_one(
+            """SELECT
+                   COUNT(*)  AS total_orders,
+                   SUM(CASE WHEN status = 'completed'  THEN 1 ELSE 0 END) AS completed_orders,
+                   SUM(CASE WHEN status = 'cancelled'  THEN 1 ELSE 0 END) AS cancelled_orders,
+                   SUM(CASE WHEN status NOT IN ('completed','cancelled') THEN 1 ELSE 0 END) AS active_orders,
+                   SUM(CASE WHEN status = 'completed'  THEN total ELSE 0 END) AS total_spent,
+                   AVG(CASE WHEN status = 'completed'  THEN total END)       AS avg_order_value,
+                   MAX(CASE WHEN status = 'completed'  THEN total END)       AS largest_order,
+                   MIN(created_at) AS first_order_at,
+                   MAX(created_at) AS last_order_at
+               FROM orders
+               WHERE customer_id = ?""",
+            (customer_id,),
+        )
+        if row is None:
+            return {
+                "total_orders": 0, "completed_orders": 0, "cancelled_orders": 0,
+                "active_orders": 0, "total_spent": 0.0, "avg_order_value": 0.0,
+                "largest_order": 0.0, "first_order_at": None, "last_order_at": None,
+            }
+        return {
+            "total_orders": row["total_orders"] or 0,
+            "completed_orders": row["completed_orders"] or 0,
+            "cancelled_orders": row["cancelled_orders"] or 0,
+            "active_orders": row["active_orders"] or 0,
+            "total_spent": round(row["total_spent"] or 0.0, 2),
+            "avg_order_value": round(row["avg_order_value"] or 0.0, 2),
+            "largest_order": round(row["largest_order"] or 0.0, 2),
+            "first_order_at": row["first_order_at"],
+            "last_order_at": row["last_order_at"],
+        }
 
     # ------------------------------------------------------------------
     # Zone queries (manager only)

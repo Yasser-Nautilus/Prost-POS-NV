@@ -20,6 +20,9 @@ from broast_pos.core.models.order import (
 )
 from broast_pos.core.models.product import Category, Product
 from broast_pos.core.models.user import User, UserRole
+from broast_pos.core.models.order_status_history import OrderStatusHistory
+from broast_pos.core.models.driver_settlement import DriverSettlement
+from broast_pos.core.models.audit import AuditEventType
 
 __all__ = [
     # Order
@@ -47,4 +50,8 @@ __all__ = [
     "Shift",
     "ShiftSummary",
     "ShiftTransfer",
+    # New models
+    "OrderStatusHistory",
+    "DriverSettlement",
+    "AuditEventType",
 ]

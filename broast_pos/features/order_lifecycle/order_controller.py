@@ -24,6 +24,7 @@ from broast_pos.core.models.order import (
 from broast_pos.core.services.order_service import OrderService
 from broast_pos.core.services.financial_service import FinancialService
 from broast_pos.core.services.auth_service import AuthService
+from broast_pos.core.policies.discount import compute_discount
 from broast_pos.infrastructure.printing.print_triggers import PrintTriggers
 from broast_pos.features.order_lifecycle.amendment_tracker import AmendmentTracker
 
@@ -202,8 +203,14 @@ class OrderController:
         address: str = "",
         zone: str = "",
         delivery_fee: float = 0.0,
+        payment_method: Optional[str] = None,
     ) -> None:
-        """Set customer info for delivery/pickup orders."""
+        """Set customer info for delivery/pickup orders.
+
+        Args:
+            payment_method: For delivery, either 'cash' (driver collects) or
+                            'online' (pre-paid). Defaults to 'cash' if omitted.
+        """
         if self._current_order:
             self._current_order.customer_id = customer_id
             self._current_order.customer_phone = phone
@@ -211,6 +218,18 @@ class OrderController:
             self._current_order.customer_address = address
             self._current_order.customer_zone = zone
             self._current_order.delivery_fee = delivery_fee
+
+            # B-02: delivery payment method defaults to CASH
+            if payment_method is not None:
+                try:
+                    self._current_order.payment_method = PaymentMethod(payment_method)
+                except ValueError:
+                    self._current_order.payment_method = PaymentMethod.CASH
+            elif self._current_order.order_type == OrderType.DELIVERY:
+                # Ensure delivery always has a payment method — never NULL
+                if self._current_order.payment_method is None:
+                    self._current_order.payment_method = PaymentMethod.CASH
+
             self._recalc_totals()
             self._notify_order_changed()
 
@@ -311,17 +330,9 @@ class OrderController:
         order_dict = self._order_to_dict(saved)
         self._print.on_order_created(order_dict)
 
-        # Handle auto-payment for online delivery
-        if (saved.order_type == OrderType.DELIVERY
-                and saved.payment_method == PaymentMethod.ONLINE):
-            try:
-                self._order_svc.complete_order(
-                    saved.id,
-                    PaymentMethod.ONLINE,
-                    saved.total,
-                )
-            except Exception:
-                pass  # Log but don't fail the save
+        # B-02: ONLINE delivery orders are already marked is_paid=True by
+        # create_order (atomically). No secondary complete_order() call needed.
+        # (The old code here caused F-03 TypeError + state machine violation.)
 
         # Mark table as DB-occupied
         if saved.order_type == OrderType.DINE_IN and saved.table_no:
@@ -559,14 +570,15 @@ class OrderController:
             except (PermissionError, ValueError) as exc:
                 return False, str(exc)
         else:
-            # In-memory order
-            if discount_type == "flat":
-                self._current_order.discount_amount = min(value, self._current_order.subtotal)
-            elif discount_type == "percent":
-                capped = min(value, 100.0)
-                self._current_order.discount_amount = self._current_order.subtotal * (capped / 100.0)
-            else:
-                return False, "نوع الخصم غير صحيح"
+            # In-memory order — B-05: use the same validated policy as the service path
+            try:
+                self._current_order.discount_amount = compute_discount(
+                    subtotal=self._current_order.subtotal,
+                    value=value,
+                    kind=discount_type,
+                )
+            except ValueError as exc:
+                return False, str(exc)
             self._current_order.discount_type = discount_type
             self._recalc_totals()
             self._notify_order_changed()

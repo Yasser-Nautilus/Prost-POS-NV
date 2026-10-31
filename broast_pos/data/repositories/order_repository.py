@@ -222,6 +222,85 @@ class OrderRepository(BaseRepository[Order]):
         ]
 
     # ------------------------------------------------------------------
+    # B-10: Shift-based report queries (correct business date)
+    # ------------------------------------------------------------------
+
+    def get_completed_for_shift(self, shift_id: int) -> List[Order]:
+        """Non-cancelled orders for a specific shift.
+
+        B-10: Use this instead of get_completed_for_date() when you have a
+        shift_id — this correctly handles midnight-spanning shifts where
+        DATE(created_at) would split the shift across two calendar days.
+        """
+        rows = self._db.fetch_all(
+            """SELECT * FROM orders
+               WHERE shift_id = ? AND status != 'cancelled'
+               ORDER BY invoice_no""",
+            (shift_id,),
+        )
+        return [self._row_to_order_with_items(r) for r in rows]
+
+    def get_cancelled_for_shift(self, shift_id: int) -> List[Order]:
+        """Cancelled orders for a specific shift (B-10 shift-based variant)."""
+        rows = self._db.fetch_all(
+            """SELECT * FROM orders
+               WHERE shift_id = ? AND status = 'cancelled'
+               ORDER BY invoice_no""",
+            (shift_id,),
+        )
+        return [self._row_to_order_with_items(r) for r in rows]
+
+    def get_product_sales_for_shift(self, shift_id: int) -> list:
+        """Qty sold per product for a shift, sorted by popularity (B-10).
+
+        Returns:
+            [{"product_name": "...", "quantity": 45, "revenue": 1350.0}, ...]
+        """
+        rows = self._db.fetch_all(
+            """SELECT oi.product_name,
+                      SUM(oi.quantity) AS quantity,
+                      COALESCE(SUM(oi.total_price), 0) AS revenue
+               FROM order_items oi
+               JOIN orders o ON o.id = oi.order_id
+               WHERE o.shift_id = ? AND o.status != 'cancelled'
+               GROUP BY oi.product_name
+               ORDER BY quantity DESC""",
+            (shift_id,),
+        )
+        return [
+            {
+                "product_name": r["product_name"],
+                "quantity": r["quantity"],
+                "revenue": r["revenue"],
+            }
+            for r in rows
+        ]
+
+    def get_daily_revenue_for_shift(self, shift_id: int) -> float:
+        """Total paid revenue for a shift (B-10 shift-based variant)."""
+        row = self._db.fetch_one(
+            """SELECT COALESCE(SUM(total), 0) AS revenue
+               FROM orders
+               WHERE shift_id = ? AND is_paid = 1
+                 AND status != 'cancelled'""",
+            (shift_id,),
+        )
+        return row["revenue"] if row else 0.0
+
+    def get_shift_business_date(self, shift_id: int) -> Optional[str]:
+        """Return the business date (YYYY-MM-DD) for a shift.
+
+        Business date = DATE(shifts.opened_at) — the calendar date on which
+        the shift was opened. All orders in this shift belong to this date
+        for reporting purposes, regardless of when they were created.
+        """
+        row = self._db.fetch_one(
+            "SELECT DATE(opened_at) AS business_date FROM shifts WHERE id = ?",
+            (shift_id,),
+        )
+        return row["business_date"] if row else None
+
+    # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
 

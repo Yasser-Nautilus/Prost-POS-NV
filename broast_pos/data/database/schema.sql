@@ -1,5 +1,5 @@
 -- ============================================================================
--- Prost POS — Database Schema (v1)
+-- Prost POS — Database Schema (v4)
 --
 -- 14 core tables + 1 meta table (schema_version).
 -- NO modifier tables — product variations are separate product rows.
@@ -102,16 +102,19 @@ CREATE TABLE IF NOT EXISTS customer_addresses (
 -- 7. shifts
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS shifts (
-    id                INTEGER PRIMARY KEY AUTOINCREMENT,
-    opened_by         INTEGER NOT NULL REFERENCES users(id),
-    opened_at         TEXT    NOT NULL DEFAULT (datetime('now')),
-    closed_by         INTEGER REFERENCES users(id),       -- NULL while shift is open
-    closed_at         TEXT,                                -- NULL while shift is open
-    next_invoice_no   INTEGER NOT NULL DEFAULT 1,          -- resets to 1 each new shift
-    is_active         INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
-    summary_printed_at TEXT                                -- set when daily summary is first printed; prerequisite for close
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    opened_by          INTEGER NOT NULL REFERENCES users(id),
+    opened_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+    closed_by          INTEGER REFERENCES users(id),
+    closed_at          TEXT,
+    next_invoice_no    INTEGER NOT NULL DEFAULT 1,
+    is_active          INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    summary_printed_at TEXT,
+    -- v5 additions
+    business_date      TEXT,            -- DATE(opened_at, 'localtime') — business reporting date
+    opened_float_note  TEXT,
+    closed_reason      TEXT             -- e.g. 'closed_without_print: printer down'
 );
-
 
 -- ---------------------------------------------------------------------------
 -- 8. orders
@@ -261,13 +264,20 @@ CREATE TABLE IF NOT EXISTS cash_transactions (
 -- 15. audit_log
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS audit_log (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_type  TEXT    NOT NULL,
-    user_id     INTEGER NOT NULL REFERENCES users(id),
-    user_name   TEXT    NOT NULL,
-    order_id    INTEGER REFERENCES orders(id),  -- nullable (not all events are order-related)
-    details     TEXT,                            -- JSON: cancel reason, discount info, etc.
-    timestamp   TEXT    NOT NULL DEFAULT (datetime('now'))
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_type   TEXT    NOT NULL,
+    user_id      INTEGER NOT NULL REFERENCES users(id),
+    user_name    TEXT    NOT NULL,
+    order_id     INTEGER REFERENCES orders(id),  -- nullable (not all events are order-related)
+    details      TEXT,                            -- JSON: cancel reason, discount info, etc.
+    -- Extended fields (added in v3 migration):
+    entity_type  TEXT,                            -- 'order', 'trip', 'customer', 'user', 'shift'
+    entity_id    INTEGER,                         -- ID of the affected entity
+    action       TEXT,                            -- human-readable action description
+    reason       TEXT,                            -- why this action was performed
+    before_data  TEXT,                            -- JSON snapshot before change
+    after_data   TEXT,                            -- JSON snapshot after change
+    timestamp    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
 
@@ -321,3 +331,144 @@ CREATE INDEX IF NOT EXISTS idx_trips_settled
 -- Driver attendance: check-in status for a driver
 CREATE INDEX IF NOT EXISTS idx_attendance_driver
     ON driver_attendance(driver_id);
+
+
+-- ---------------------------------------------------------------------------
+-- 16. order_status_history  (added in v2 migration)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS order_status_history (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id         INTEGER NOT NULL REFERENCES orders(id),
+    old_status       TEXT,                            -- NULL for the initial NEW record
+    new_status       TEXT    NOT NULL,
+    changed_by_id    INTEGER,
+    changed_by_name  TEXT,
+    reason           TEXT,                            -- optional (e.g. cancellation reason)
+    changed_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_order_status_history_order
+    ON order_status_history(order_id);
+
+CREATE INDEX IF NOT EXISTS idx_order_status_history_changed_at
+    ON order_status_history(changed_at);
+
+
+-- ---------------------------------------------------------------------------
+-- 17. driver_settlements  (added in v4 migration)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS driver_settlements (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    driver_id           INTEGER NOT NULL,
+    driver_name         TEXT    NOT NULL,
+
+    settlement_date     TEXT    NOT NULL,    -- YYYY-MM-DD (business date)
+
+    -- Counts
+    trip_count          INTEGER NOT NULL DEFAULT 0,
+    order_count         INTEGER NOT NULL DEFAULT 0,
+
+    -- Financial snapshot (calculated server-side at settlement time)
+    total_order_value   REAL    NOT NULL DEFAULT 0,
+    cash_collected      REAL    NOT NULL DEFAULT 0,
+    online_paid         REAL    NOT NULL DEFAULT 0,
+    total_delivery_fees REAL    NOT NULL DEFAULT 0,
+
+    -- Who performed the settlement
+    settled_by_id       INTEGER NOT NULL,
+    settled_by_name     TEXT    NOT NULL,
+
+    notes               TEXT,
+
+    settled_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_driver_settlements_driver_date
+    ON driver_settlements(driver_id, settlement_date);
+
+
+-- ---------------------------------------------------------------------------
+-- 18. cashier_sessions  (added in v5 migration)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS cashier_sessions (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    day_id                INTEGER NOT NULL REFERENCES shifts(id),
+    user_id               INTEGER NOT NULL REFERENCES users(id),
+    station               TEXT    NOT NULL
+                            CHECK (station IN ('ALL','COUNTER','DELIVERY')),
+    is_open               INTEGER NOT NULL DEFAULT 1
+                            CHECK (is_open IN (0, 1)),
+    opened_at             TEXT    NOT NULL,
+    closed_at             TEXT,
+    opening_float_pt      INTEGER NOT NULL DEFAULT 0
+                            CHECK (opening_float_pt >= 0),  -- piasters
+    counted_cash_pt       INTEGER,          -- blind count at close
+    expected_cash_pt      INTEGER,          -- SUM(ledger) snapshot at close
+    variance_pt           INTEGER,          -- counted − expected
+    variance_approved_by  INTEGER REFERENCES users(id),
+    variance_reason       TEXT,
+    handover_to_session   INTEGER REFERENCES cashier_sessions(id)
+);
+
+-- At most one open session per station per day
+CREATE UNIQUE INDEX IF NOT EXISTS uq_open_station
+    ON cashier_sessions(day_id, station) WHERE is_open = 1;
+
+-- ALL station cannot coexist with COUNTER or DELIVERY (second line of defence;
+-- the service layer provides the Arabic error message)
+CREATE TRIGGER IF NOT EXISTS trg_station_exclusive
+BEFORE INSERT ON cashier_sessions
+WHEN NEW.is_open = 1
+  AND EXISTS (
+      SELECT 1 FROM cashier_sessions s
+      WHERE s.day_id = NEW.day_id
+        AND s.is_open = 1
+        AND (NEW.station = 'ALL' OR s.station = 'ALL')
+  )
+BEGIN
+    SELECT RAISE(ABORT, 'station_conflict:لا يمكن فتح وردية الكل مع وردية تخصص في نفس اليوم');
+END;
+
+
+-- ---------------------------------------------------------------------------
+-- 19. cash_ledger  (added in v5 migration)
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS cash_ledger (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    day_id            INTEGER NOT NULL REFERENCES shifts(id),
+    session_id        INTEGER NOT NULL REFERENCES cashier_sessions(id),
+    entry_type        TEXT NOT NULL CHECK (entry_type IN (
+        'OPENING_FLOAT','HANDOVER_IN','HANDOVER_OUT','SALE_CASH',
+        'DRIVER_REMITTANCE','DRIVER_FEE_PAYOUT','EXPENSE',
+        'CASH_DROP','REVERSAL','ADJUSTMENT'
+    )),
+    amount_pt         INTEGER NOT NULL,   -- signed piasters: + into drawer, − out
+    order_id          INTEGER REFERENCES orders(id),
+    trip_id           INTEGER REFERENCES delivery_trips(id),
+    expense_id        INTEGER,
+    reverses_entry_id INTEGER REFERENCES cash_ledger(id),
+    actor_id          INTEGER NOT NULL REFERENCES users(id),
+    approved_by       INTEGER REFERENCES users(id),
+    reason            TEXT,
+    created_at        TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_ledger_session ON cash_ledger(session_id);
+CREATE INDEX IF NOT EXISTS idx_ledger_day     ON cash_ledger(day_id);
+
+-- Append-only enforcement at DB level
+CREATE TRIGGER IF NOT EXISTS cash_ledger_no_update
+BEFORE UPDATE ON cash_ledger
+BEGIN SELECT RAISE(ABORT, 'cash_ledger is append-only'); END;
+
+CREATE TRIGGER IF NOT EXISTS cash_ledger_no_delete
+BEFORE DELETE ON cash_ledger
+BEGIN SELECT RAISE(ABORT, 'cash_ledger is append-only'); END;
+
+-- Idempotency: one SALE_CASH per order, one DRIVER_REMITTANCE per trip
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_sale
+    ON cash_ledger(order_id) WHERE entry_type = 'SALE_CASH';
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_remit
+    ON cash_ledger(trip_id) WHERE entry_type = 'DRIVER_REMITTANCE';

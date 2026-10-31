@@ -72,6 +72,7 @@ class FinancialController:
             )
             return {
                 "total_sales": summary.total_sales,
+                "cash_sales": summary.cash_sales,       # FIN-001: cash-only for reconciliation
                 "total_expenses": summary.total_expenses,
                 "pending_delivery": summary.pending_delivery,
                 "pending_dinein": summary.pending_dinein,
@@ -84,6 +85,7 @@ class FinancialController:
             logger.error("Error getting shift summary: %s", e)
             return {
                 "total_sales": 0.0,
+                "cash_sales": 0.0,
                 "total_expenses": 0.0,
                 "pending_delivery": 0.0,
                 "pending_dinein": 0.0,

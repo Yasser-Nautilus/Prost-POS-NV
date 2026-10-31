@@ -188,9 +188,15 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                   {summary && (
                     <div className="grid grid-cols-2 gap-4">
                       <div className="bg-brand-card/40 p-4 rounded-xl border border-brand-border/30">
-                        <span className="text-gray-400 text-xs block">مبيعات الوردية (الإجمالي)</span>
+                        <span className="text-gray-400 text-xs block">إجمالي المبيعات (كل الطرق)</span>
                         <span className="text-2xl font-black text-white mt-1 block">
                           {(summary.total_sales || 0).toFixed(2)} ج.م
+                        </span>
+                      </div>
+                      <div className="bg-green-950/30 p-4 rounded-xl border border-green-800/30">
+                        <span className="text-green-400 text-xs block font-semibold">مبيعات كاش فقط</span>
+                        <span className="text-2xl font-black text-green-300 mt-1 block">
+                          {(summary.cash_sales || 0).toFixed(2)} ج.م
                         </span>
                       </div>
                       <div className="bg-brand-card/40 p-4 rounded-xl border border-brand-border/30">
@@ -213,7 +219,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                       </div>
                       <div className="bg-brand-card p-4 rounded-xl border border-brand-gold/30 col-span-2 flex justify-between items-center bg-gradient-to-r from-brand-card to-brand-gold/5">
                         <div>
-                          <span className="text-brand-gold text-xs block font-bold">النقدية الفعلية المفترضة بالدرج</span>
+                          <span className="text-brand-gold text-xs block font-bold">الكاش المتوقع بالدرج (كاش فقط — لا يشمل فيزا/أونلاين)</span>
                           <span className="text-3xl font-black text-brand-gold mt-1 block">
                             {(summary.expected_cash || 0).toFixed(2)} ج.م
                           </span>

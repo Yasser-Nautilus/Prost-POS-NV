@@ -119,6 +119,7 @@ class FinancialService:
         summary = self._financial.get_shift_summary(shift.id)
         snapshot = json.dumps({
             "total_sales": summary.total_sales,
+            "cash_sales": summary.cash_sales,       # FIN-001: cash-only for reconciliation
             "total_expenses": summary.total_expenses,
             "pending_delivery": summary.pending_delivery,
             "pending_dinein": summary.pending_dinein,
@@ -159,12 +160,14 @@ class FinancialService:
     def close_shift(self, shift_id: int, manager_pin: Optional[str] = None) -> Shift:
         """Close the shift — manager only, with prerequisites.
 
-        Prerequisites:
-          1. All driver trips must be settled
-          2. Daily summary must have been printed at least once
+        Prerequisites (in order):
+          1. Daily summary must have been printed at least once.
+          2. No drivers currently in transit (dispatched, not returned).
+          3. All returned trips must be settled (cash handed over).
+          4. No open unpaid cash orders (new / preparing / ready).
 
         Raises:
-            ValueError: if prerequisites not met.
+            ValueError: if any prerequisite not met.
             PermissionError: if PIN is invalid.
         """
         shift = self._financial.get_by_id(shift_id)
@@ -173,21 +176,29 @@ class FinancialService:
 
         manager = self._verify_manager_pin(manager_pin)
 
-        # Check prerequisites
+        # Guard 1: daily summary must be printed first
         if not shift.can_close():
             raise ValueError(
                 "يجب طباعة التقرير اليومي قبل إغلاق الوردية"
             )
 
-        # Check all driver settlements
+        # Guard 2: B-04 — no drivers still out in transit
+        if self._financial.has_active_trips():
+            raise ValueError(
+                "يوجد سائقون في الطريق — يجب انتظار عودة جميع السائقين أولاً"
+            )
+
+        # Guard 3: no returned-but-unsettled trips (cashier hasn't confirmed handover)
         if self._delivery:
-            active_drivers = self._delivery.get_active_drivers()
-            for driver in active_drivers:
-                unsettled = self._delivery.get_unsettled_trips(driver.id)
-                if unsettled:
-                    raise ValueError(
-                        f"يوجد رحلات غير محسوبة للسائق {driver.display_name}"
-                    )
+            unsettled = self._delivery.get_unsettled_trips()
+            if unsettled:
+                raise ValueError("يوجد رحلات غير محسوبة — يجب تسوية الرحلات أولاً")
+
+        # Guard 4: B-04 — no open cash orders still in kitchen / floor
+        if self._financial.has_open_orders(shift_id):
+            raise ValueError(
+                "يوجد طلبات مفتوحة — يجب تأكيد أو إلغاء جميع الطلبات قبل إغلاق الوردية"
+            )
 
         # Close it
         shift.is_active = False

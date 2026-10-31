@@ -28,6 +28,8 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
   const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
   const [pendingTotal, setPendingTotal] = useState(0); // captured before confirm clears cart
   const [isAmending, setIsAmending] = useState(false); // true when editing existing order
+  // B-02: delivery payment mode — 'cash' = driver collects, 'online' = pre-paid
+  const [deliveryPaymentMode, setDeliveryPaymentMode] = useState<"cash" | "online">("cash");
 
   // Dialog Toggles
   const [isDiscountOpen, setIsDiscountOpen] = useState(false);
@@ -228,6 +230,8 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
       if (type === "dine_in") {
         setIsTableGridOpen(true);
       }
+      // B-02: reset delivery payment mode whenever order type changes
+      setDeliveryPaymentMode("cash");
       // Delivery/pickup: add items first, customer info prompted at checkout
     } catch (e: any) {
       alert(e.message);
@@ -264,7 +268,9 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
         phone: customer.phone,
         address: address.street_name,
         zone: address.zone_name,
-        delivery_fee: address.delivery_fee
+        delivery_fee: address.delivery_fee,
+        // B-02: include the selected payment mode for delivery orders
+        payment_method: currentOrder?.order_type === "delivery" ? deliveryPaymentMode : undefined,
       });
       setIsCustomerLookupOpen(false);
     } catch (e: any) {
@@ -465,22 +471,80 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
 
           {/* Delivery customer info block */}
           {currentOrder?.order_type === "delivery" && (
-            <div className="p-3 bg-brand-surface/60 border border-brand-border/50 rounded-xl flex justify-between items-center text-xs">
-              {currentOrder.customer_name ? (
-                <div>
-                  <span className="text-white font-bold block">{currentOrder.customer_name}</span>
-                  <span className="text-gray-400 block mt-1 font-mono">{currentOrder.customer_phone}</span>
-                  <span className="text-brand-gold mt-1 block">العنوان: {currentOrder.customer_address}</span>
-                </div>
-              ) : (
-                <span className="text-gray-400 italic">لم يتم اختيار عميل (مطلوب قبل التأكيد)</span>
-              )}
-              <button
-                onClick={() => setIsCustomerLookupOpen(true)}
-                className="py-1 px-3 bg-brand-gold text-brand-dark hover:bg-opacity-90 font-bold rounded-lg"
-              >
-                {currentOrder.customer_name ? "تغيير" : "اختيار عميل"}
-              </button>
+            <div className="space-y-2">
+              {/* Payment mode toggle — B-02 */}
+              <div className="flex rounded-xl overflow-hidden border border-brand-border/50 text-xs font-bold">
+                <button
+                  id="delivery-payment-cash"
+                  type="button"
+                  onClick={async () => {
+                    setDeliveryPaymentMode("cash");
+                    if (currentOrder?.customer_phone) {
+                      // Re-send with updated payment mode if customer already selected
+                      await bridge.call("set_customer_info", {
+                        customer_id: currentOrder.customer_id,
+                        name: currentOrder.customer_name,
+                        phone: currentOrder.customer_phone,
+                        address: currentOrder.customer_address,
+                        zone: currentOrder.customer_zone,
+                        delivery_fee: currentOrder.delivery_fee,
+                        payment_method: "cash",
+                      });
+                    }
+                  }}
+                  className={`flex-1 py-2 transition-all ${
+                    deliveryPaymentMode === "cash"
+                      ? "bg-emerald-600 text-white"
+                      : "bg-brand-surface text-gray-400 hover:text-white"
+                  }`}
+                >
+                  💵 كاش عند الاستلام
+                </button>
+                <button
+                  id="delivery-payment-online"
+                  type="button"
+                  onClick={async () => {
+                    setDeliveryPaymentMode("online");
+                    if (currentOrder?.customer_phone) {
+                      await bridge.call("set_customer_info", {
+                        customer_id: currentOrder.customer_id,
+                        name: currentOrder.customer_name,
+                        phone: currentOrder.customer_phone,
+                        address: currentOrder.customer_address,
+                        zone: currentOrder.customer_zone,
+                        delivery_fee: currentOrder.delivery_fee,
+                        payment_method: "online",
+                      });
+                    }
+                  }}
+                  className={`flex-1 py-2 transition-all ${
+                    deliveryPaymentMode === "online"
+                      ? "bg-blue-600 text-white"
+                      : "bg-brand-surface text-gray-400 hover:text-white"
+                  }`}
+                >
+                  💳 أونلاين (مدفوع مسبقًا)
+                </button>
+              </div>
+
+              {/* Customer row */}
+              <div className="p-3 bg-brand-surface/60 border border-brand-border/50 rounded-xl flex justify-between items-center text-xs">
+                {currentOrder.customer_name ? (
+                  <div>
+                    <span className="text-white font-bold block">{currentOrder.customer_name}</span>
+                    <span className="text-gray-400 block mt-1 font-mono">{currentOrder.customer_phone}</span>
+                    <span className="text-brand-gold mt-1 block">العنوان: {currentOrder.customer_address}</span>
+                  </div>
+                ) : (
+                  <span className="text-gray-400 italic">لم يتم اختيار عميل (مطلوب قبل التأكيد)</span>
+                )}
+                <button
+                  onClick={() => setIsCustomerLookupOpen(true)}
+                  className="py-1 px-3 bg-brand-gold text-brand-dark hover:bg-opacity-90 font-bold rounded-lg"
+                >
+                  {currentOrder.customer_name ? "تغيير" : "اختيار عميل"}
+                </button>
+              </div>
             </div>
           )}
 

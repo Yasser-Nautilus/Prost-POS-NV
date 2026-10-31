@@ -182,6 +182,12 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
                 "INSERT INTO delivery_trip_orders (trip_id, order_id) VALUES (?, ?)",
                 (trip_id, order_id),
             )
+        self._db.execute(
+            """UPDATE orders
+               SET driver_id = ?, driver_name = ?, updated_at = datetime('now')
+               WHERE id IN ({})""".format(",".join("?" for _ in order_ids)),
+            (driver_id, driver_name, *order_ids),
+        )
         self._db.commit()
 
         return DeliveryTrip(

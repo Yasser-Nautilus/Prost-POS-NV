@@ -4,6 +4,12 @@ Report service — data generation for daily, shift, monthly, and yearly reports
 All methods return plain dicts/dataclasses — NO print formatting here.
 Print formatting is handled by receipt_templates.py in infrastructure.
 Data is permanent — nothing deleted on shift close.
+
+B-10 business-date pattern:
+  Daily reports for the *current shift* should use generate_*_for_shift()
+  methods which filter by shift_id (correct for midnight-spanning shifts).
+  Calendar-date methods (generate_daily_sales etc.) remain for historical
+  reporting where a shift_id is not available.
 """
 
 from __future__ import annotations
@@ -176,8 +182,110 @@ class ReportService:
         return self._delivery.get_daily_summary(d)
 
     # ------------------------------------------------------------------
-    # Shift reports
+    # B-10: Shift-based daily reports (correct business date)
     # ------------------------------------------------------------------
+
+    def generate_daily_sales_for_shift(self, shift_id: int) -> Dict:
+        """Order type breakdown for a specific shift (B-10 shift-based).
+
+        Use this for the *current* or *just-closed* shift report instead of
+        generate_daily_sales(). Correct for midnight-spanning shifts.
+
+        Returns same structure as generate_daily_sales().
+        """
+        business_date = self._orders.get_shift_business_date(shift_id) or ""
+        orders = self._orders.get_completed_for_shift(shift_id)
+
+        type_map: Dict[str, Dict] = {}
+        for order in orders:
+            t = order.order_type.value if hasattr(order.order_type, "value") else str(order.order_type)
+            if t not in type_map:
+                type_map[t] = {"type": t, "count": 0, "revenue": 0.0}
+            type_map[t]["count"] += 1
+            type_map[t]["revenue"] += order.total
+
+        breakdown = list(type_map.values())
+        grand_count = sum(b["count"] for b in breakdown)
+        grand_revenue = sum(b["revenue"] for b in breakdown)
+
+        return {
+            "date": business_date,
+            "shift_id": shift_id,
+            "breakdown": breakdown,
+            "grand_total": {
+                "count": grand_count,
+                "revenue": round(grand_revenue, 2),
+            },
+        }
+
+    def generate_payment_breakdown_for_shift(self, shift_id: int) -> Dict:
+        """Payment method breakdown for a specific shift (B-10 shift-based).
+
+        Returns same structure as generate_payment_breakdown().
+        """
+        business_date = self._orders.get_shift_business_date(shift_id) or ""
+        orders = self._orders.get_completed_for_shift(shift_id)
+
+        method_map: Dict[str, Dict] = {}
+        for order in orders:
+            method = (
+                order.payment_method.value
+                if hasattr(order.payment_method, "value")
+                else str(order.payment_method or "cash")
+            )
+            if method not in method_map:
+                method_map[method] = {"method": method, "count": 0, "revenue": 0.0}
+            method_map[method]["count"] += 1
+            method_map[method]["revenue"] += order.total
+
+        payments = list(method_map.values())
+        return {
+            "date": business_date,
+            "shift_id": shift_id,
+            "payments": payments,
+            "total": round(sum(p["revenue"] for p in payments), 2),
+        }
+
+    def generate_cancellations_for_shift(self, shift_id: int) -> Dict:
+        """Cancelled orders for a specific shift (B-10 shift-based).
+
+        Returns same structure as generate_cancellations().
+        """
+        business_date = self._orders.get_shift_business_date(shift_id) or ""
+        orders = self._orders.get_cancelled_for_shift(shift_id)
+
+        items = [
+            {
+                "order_id": o.id,
+                "invoice_no": o.invoice_no,
+                "total": o.total,
+                "reason": o.cancel_reason or "",
+                "cancelled_by": o.cancelled_by_name or "",
+            }
+            for o in orders
+        ]
+        return {
+            "date": business_date,
+            "shift_id": shift_id,
+            "count": len(items),
+            "orders": items,
+        }
+
+    def generate_product_sales_for_shift(self, shift_id: int) -> List[Dict]:
+        """Qty sold per product for a shift, sorted by popularity (B-10).
+
+        Returns same structure as generate_product_sales().
+        """
+        return self._orders.get_product_sales_for_shift(shift_id)
+
+    def generate_shift_revenue(self, shift_id: int) -> float:
+        """Total paid revenue for a shift (B-10 shift-based).
+
+        Returns only is_paid=1, non-cancelled orders — correct for
+        reconciliation (excludes in-transit, pending kitchen, etc.).
+        """
+        return self._orders.get_daily_revenue_for_shift(shift_id)
+
 
     def generate_shift_transfer(self, shift_id: int) -> Dict:
         """Snapshot at transfer: sales, expenses, pending, expected cash."""
