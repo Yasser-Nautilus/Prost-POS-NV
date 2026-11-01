@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { BarChart3, TrendingUp, DollarSign, RefreshCw, Printer } from "lucide-react";
+import { BarChart3, TrendingUp, DollarSign, RefreshCw, Printer, Eye, X, Loader2 } from "lucide-react";
 import { bridge } from "../bridge";
 
 interface ReportsViewProps {
@@ -24,6 +24,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
   const [recentShifts, setRecentShifts] = useState<any[]>([]);
   const [dailySales, setDailySales] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+
+  // Shift detail — manager opens one shift and sees how it went
+  const [detailShift, setDetailShift] = useState<any>(null);
+  const [detailSummary, setDetailSummary] = useState<any>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const fetchReportData = async () => {
     setLoading(true);
@@ -50,6 +55,22 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
     fetchReportData();
   }, []);
 
+  const handleOpenShiftDetail = async (shift: any) => {
+    setDetailShift(shift);
+    setDetailSummary(null);
+    setDetailLoading(true);
+    try {
+      // Backend computes the summary for any shift by id
+      const sum = await bridge.call("get_shift_summary", { shift_id: shift.id });
+      setDetailSummary(sum);
+    } catch (err: any) {
+      alert("فشل تحميل تفاصيل الوردية: " + err.message);
+      setDetailShift(null);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
   const handleReprintShiftReport = async (shiftId: number) => {
     try {
       await bridge.call("print_shift_summary", { shift_id: shiftId });
@@ -69,8 +90,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
   }
 
   return (
+    <>
     <div className="flex-1 overflow-y-auto p-6 space-y-6 h-[calc(100vh-64px)] bg-brand-dark">
-      
+
       {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-brand-card p-5 rounded-2xl border border-brand-border/40 flex justify-between items-center">
@@ -225,7 +247,11 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
             </thead>
             <tbody>
               {recentShifts.map((shift) => (
-                <tr key={shift.id} className="border-b border-brand-border/20 hover:bg-brand-surface/30">
+                <tr
+                  key={shift.id}
+                  onClick={() => handleOpenShiftDetail(shift)}
+                  className="border-b border-brand-border/20 hover:bg-brand-surface/30 cursor-pointer"
+                >
                   <td className="py-3 font-bold font-mono text-white">#{shift.id}</td>
                   <td className="py-3 text-gray-300">
                     {shift.opened_at ? new Date(shift.opened_at).toLocaleDateString("ar-EG") : "—"}
@@ -238,15 +264,24 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
                     {shift.closed_at ? new Date(shift.closed_at).toLocaleDateString("ar-EG") : "—"}
                   </td>
                   <td className="py-3 text-center">
-                    {!shift.is_active && (
+                    <div className="flex items-center justify-center gap-2">
                       <button
-                        onClick={() => handleReprintShiftReport(shift.id)}
-                        className="py-1.5 px-3 bg-brand-card hover:bg-brand-border/40 text-brand-gold border border-brand-gold/30 hover:border-brand-gold rounded-lg text-xs font-semibold flex items-center gap-1 mx-auto active:translate-y-0.5 btn-hover-active"
+                        onClick={(e) => { e.stopPropagation(); handleOpenShiftDetail(shift); }}
+                        className="py-1.5 px-3 bg-brand-card hover:bg-brand-border/40 text-brand-teal border border-brand-teal/30 hover:border-brand-teal rounded-lg text-xs font-semibold flex items-center gap-1 active:translate-y-0.5 btn-hover-active"
                       >
-                        <Printer size={12} />
-                        إعادة طباعة التقرير
+                        <Eye size={12} />
+                        عرض التفاصيل
                       </button>
-                    )}
+                      {!shift.is_active && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleReprintShiftReport(shift.id); }}
+                          className="py-1.5 px-3 bg-brand-card hover:bg-brand-border/40 text-brand-gold border border-brand-gold/30 hover:border-brand-gold rounded-lg text-xs font-semibold flex items-center gap-1 active:translate-y-0.5 btn-hover-active"
+                        >
+                          <Printer size={12} />
+                          إعادة طباعة التقرير
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -256,5 +291,117 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
       </div>
 
     </div>
+
+    {/* Shift detail modal — manager sees how one shift went */}
+    {detailShift && (
+      <div
+        className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-md"
+        onClick={() => setDetailShift(null)}
+      >
+        <div
+          className="w-full max-w-2xl mx-4 bg-brand-surface border border-brand-border rounded-3xl overflow-hidden shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex justify-between items-center px-6 py-4 border-b border-brand-border/60 bg-brand-card">
+            <h3 className="font-bold text-lg text-brand-gold flex items-center gap-2">
+              <BarChart3 size={20} />
+              تفاصيل الوردية #{detailShift.id}
+            </h3>
+            <button
+              onClick={() => setDetailShift(null)}
+              className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-brand-border/30"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+            {/* Who / when */}
+            <div className="bg-brand-card p-4 rounded-2xl border border-brand-border/40 flex flex-wrap justify-between gap-3 text-xs">
+              <div>
+                <span className="text-gray-400 block">فُتحت</span>
+                <span className="text-white font-medium">
+                  {detailShift.opened_by_name || detailShift.opened_by || "—"}
+                  {detailShift.opened_at ? " · " + new Date(detailShift.opened_at).toLocaleString("ar-EG") : ""}
+                </span>
+              </div>
+              <div className="text-left">
+                <span className="text-gray-400 block">الحالة</span>
+                <span className={detailShift.is_active ? "text-brand-teal font-bold" : "text-gray-300"}>
+                  {detailShift.is_active ? "نشطة" : "مغلقة"}
+                  {detailShift.closed_at ? " · " + new Date(detailShift.closed_at).toLocaleString("ar-EG") : ""}
+                </span>
+              </div>
+            </div>
+
+            {detailLoading ? (
+              <div className="py-12 flex justify-center">
+                <Loader2 className="animate-spin text-brand-gold" size={28} />
+              </div>
+            ) : detailSummary ? (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-brand-card/40 p-4 rounded-xl border border-brand-border/30">
+                    <span className="text-gray-400 text-xs block">إجمالي المبيعات (كل الطرق)</span>
+                    <span className="text-2xl font-black text-white mt-1 block">
+                      {(detailSummary.total_sales || 0).toFixed(2)} ج.م
+                    </span>
+                  </div>
+                  <div className="bg-green-950/30 p-4 rounded-xl border border-green-800/30">
+                    <span className="text-green-400 text-xs block font-semibold">مبيعات كاش فقط</span>
+                    <span className="text-2xl font-black text-green-300 mt-1 block">
+                      {(detailSummary.cash_sales || 0).toFixed(2)} ج.م
+                    </span>
+                  </div>
+                  <div className="bg-brand-card/40 p-4 rounded-xl border border-brand-border/30">
+                    <span className="text-gray-400 text-xs block">المصروفات الخارجة</span>
+                    <span className="text-2xl font-black text-red-400 mt-1 block">
+                      {(detailSummary.total_expenses || 0).toFixed(2)} - ج.م
+                    </span>
+                  </div>
+                  <div className="bg-brand-card/40 p-4 rounded-xl border border-brand-border/30">
+                    <span className="text-gray-400 text-xs block">غير مكيّش (معلّق)</span>
+                    <span className="text-xl font-bold text-yellow-500 mt-1 block">
+                      {((detailSummary.pending_dinein || 0) + (detailSummary.pending_kitchen || 0) + (detailSummary.pending_delivery || 0)).toFixed(2)} ج.م
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-brand-card p-4 rounded-xl border border-brand-gold/30 bg-gradient-to-r from-brand-card to-brand-gold/5">
+                  <span className="text-brand-gold text-xs block font-bold">المفروض بالدرج (كاش متوقع — بدون جرد فعلي)</span>
+                  <span className="text-3xl font-black text-brand-gold mt-1 block">
+                    {(detailSummary.expected_cash || 0).toFixed(2)} ج.م
+                  </span>
+                </div>
+
+                {/* What was sold — by order type */}
+                <div>
+                  <h4 className="text-sm font-bold text-white mb-2">
+                    اللي اتباع (حسب النوع) — {detailSummary.order_count || 0} فاتورة
+                  </h4>
+                  {Object.keys(detailSummary.order_breakdown || {}).length > 0 ? (
+                    Object.entries(detailSummary.order_breakdown).map(([type, row]: any) => (
+                      <div key={type} className="flex justify-between gap-3 text-sm py-1.5 border-b border-brand-border/20">
+                        <span className="text-gray-300">
+                          {ORDER_TYPE_LABELS[type] || type} ({row.count})
+                        </span>
+                        <span className="font-bold text-white font-mono">
+                          {(row.revenue || 0).toFixed(2)} ج.م
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-gray-500">لا توجد مبيعات في هذه الوردية</p>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="text-gray-500 text-sm text-center py-8">لا توجد بيانات</p>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
