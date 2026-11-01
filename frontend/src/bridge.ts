@@ -65,7 +65,7 @@ export interface XReportTotals {
 }
 
 export interface XReport {
-  type: 'X';
+  type: 'X' | 'Z';
   day_id: number;
   generated_at: string;
   sessions: SessionSnapshot[];
@@ -847,8 +847,33 @@ class POSBridgeClient {
       case "get_report_daily_sales":
         return this.buildMockDailySales() as any;
 
-      case "get_shift_summary":
-        return this.buildMockShiftSummary(payload?.shift_id ?? this.mockState.activeShift?.id) as any;
+      case "get_shift_summary": {
+        const fullSummary: any = this.buildMockShiftSummary(payload?.shift_id ?? this.mockState.activeShift?.id);
+        // Mirror backend: a cashier never receives the sales totals.
+        if (this.mockState.currentUser?.role === "cashier") {
+          delete fullSummary.total_sales;
+          delete fullSummary.cash_sales;
+          delete fullSummary.expected_cash;
+        }
+        return fullSummary;
+      }
+
+      case "get_users_for_transfer":
+        return this.mockState.users
+          .filter((u: any) => u.is_active)
+          .map(({ pin: _pin, ...u }: any) => u) as any;
+
+      case "transfer_shift": {
+        if (!this.mockState.activeShift) throw new Error("لا توجد وردية مفتوحة");
+        const manager = this.mockState.users.find(
+          (u: any) => u.pin === payload?.manager_pin && u.is_active && (u.role === "admin" || u.role === "manager")
+        );
+        if (!manager) throw new Error("PIN غير صحيح أو ليس لديك صلاحية");
+        // Invoice numbering continues — the shift stays open under the new cashier.
+        this.mockState.activeShift.opened_by = payload?.to_user_id ?? this.mockState.activeShift.opened_by;
+        console.log(`[MOCK] Shift transferred to user ${payload?.to_user_id}`);
+        return true as any;
+      }
 
       case "get_expenses":
         return this.mockState.expenses.filter((e: any) => e.shift_id === this.mockState.activeShift?.id) as any;
@@ -1191,6 +1216,10 @@ class POSBridgeClient {
     const unpaid = orders.filter((o: any) => !o.is_paid);
 
     const total_sales = sum(orders, "total");
+    const cash_sales = sum(
+      orders.filter((o: any) => o.is_paid && (o.payment_method || "cash") === "cash"),
+      "total"
+    );
     const total_expenses = sum(expenses, "amount");
     const pending_delivery = sum(unpaid.filter((o: any) => o.order_type === "delivery"), "total");
     const pending_dinein = sum(unpaid.filter((o: any) => o.order_type === "dine_in"), "total");
@@ -1205,11 +1234,12 @@ class POSBridgeClient {
 
     return {
       total_sales,
+      cash_sales,
       total_expenses,
       pending_delivery,
       pending_dinein,
       pending_kitchen,
-      expected_cash: total_sales - total_expenses - pending_delivery - pending_dinein - pending_kitchen,
+      expected_cash: cash_sales - total_expenses - pending_delivery - pending_dinein - pending_kitchen,
       order_count: orders.length,
       order_breakdown
     };

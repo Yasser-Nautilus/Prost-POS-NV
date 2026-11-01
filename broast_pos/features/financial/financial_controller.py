@@ -61,8 +61,18 @@ class FinancialController:
             logger.error("Error opening shift: %s", e)
             raise ValueError(str(e))
 
+    # Sales figures a cashier must never see — only the manager learns the
+    # revenue / drawer totals, at shift change. The cashier only knows his
+    # own expenses and the still-uncashed orders.
+    _CASHIER_HIDDEN_KEYS = ("total_sales", "cash_sales", "expected_cash")
+
     def get_shift_summary(self, shift_id: int) -> Dict[str, Any]:
-        """Get live financial summary of a shift."""
+        """Get live financial summary of a shift.
+
+        Role-aware: a cashier receives only expenses and pending-order
+        figures. Sales totals and expected drawer cash are stripped from
+        the payload so they never reach the cashier's screen at all.
+        """
         try:
             summary = self._financial_svc.get_shift_summary(shift_id)
             # Compute total order count from breakdown by type
@@ -70,7 +80,7 @@ class FinancialController:
                 v.get("count", 0)
                 for v in (summary.order_breakdown or {}).values()
             )
-            return {
+            payload = {
                 "total_sales": summary.total_sales,
                 "cash_sales": summary.cash_sales,       # FIN-001: cash-only for reconciliation
                 "total_expenses": summary.total_expenses,
@@ -81,6 +91,13 @@ class FinancialController:
                 "order_count": order_count,
                 "order_breakdown": summary.order_breakdown,
             }
+
+            current_user = self._auth_svc.get_current_user()
+            if current_user is not None and not current_user.is_manager_or_above():
+                for key in self._CASHIER_HIDDEN_KEYS:
+                    payload.pop(key, None)
+
+            return payload
         except Exception as e:
             logger.error("Error getting shift summary: %s", e)
             return {
