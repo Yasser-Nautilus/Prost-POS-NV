@@ -263,6 +263,20 @@ class TestSettleTripDelegatesToSettlementSvc:
         call_kwargs = settlement_svc.settle_driver.call_args[1]
         assert call_kwargs["driver_id"] == 10
 
+    def test_settle_trip_passes_through_the_settling_user(self):
+        """Regression: settle_trip must settle as the logged-in user, not id 0
+        (actor_id = 0 violated the cash_ledger -> users foreign key)."""
+        trip = _trip(driver_id=10)
+        orders = {101: _order(101, payment=PaymentMethod.CASH)}
+        settlement_svc = MagicMock()
+        svc, _ = self._build_delivery_svc(trip, orders, settlement_svc)
+
+        svc.settle_trip(trip_id=1, settled_by_id=7, settled_by_name="مدير المطعم")
+
+        call_kwargs = settlement_svc.settle_driver.call_args[1]
+        assert call_kwargs["settled_by_id"] == 7
+        assert call_kwargs["settled_by_name"] == "مدير المطعم"
+
     def test_settle_trip_legacy_path_when_no_settlement_svc(self):
         """Without settlement_svc, settle_trip() falls back to legacy path."""
         trip = _trip(driver_id=10)

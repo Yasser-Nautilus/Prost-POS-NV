@@ -356,7 +356,12 @@ class DeliveryService:
     # Settlement
     # ------------------------------------------------------------------
 
-    def settle_trip(self, trip_id: int) -> DeliveryTrip:
+    def settle_trip(
+        self,
+        trip_id: int,
+        settled_by_id: int = 0,
+        settled_by_name: str = "نظام تسوية",
+    ) -> DeliveryTrip:
         """Cashier confirms cash handover after driver returns.
 
         B-07: If a DriverSettlementService is injected, delegates to
@@ -383,10 +388,12 @@ class DeliveryService:
         # This guarantees a driver_settlements record is always created.
         if self._settlement_svc is not None and trip.driver_id:
             # settle_driver() handles: mark_settled + complete orders + audit
+            # Settle as the logged-in user so cash-ledger / audit records a
+            # real actor (actor_id = 0 violated the cash_ledger → users FK).
             self._settlement_svc.settle_driver(
                 driver_id=trip.driver_id,
-                settled_by_id=0,           # system-initiated (cashier unknown here)
-                settled_by_name="نظام تسوية",
+                settled_by_id=settled_by_id,
+                settled_by_name=settled_by_name,
             )
             updated_trip = self._delivery.get_trip_by_id(trip_id)
             return updated_trip or trip
