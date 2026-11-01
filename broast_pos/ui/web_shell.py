@@ -1,14 +1,56 @@
 import os
 import sys
 import logging
-from PyQt6.QtCore import QUrl
+from PyQt6.QtCore import QUrl, Qt
 from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QWidget, QMessageBox
 from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtWebEngineCore import QWebEngineSettings, QWebEngineScript
+from PyQt6.QtWebEngineCore import QWebEngineSettings, QWebEngineScript, QWebEnginePage
 from PyQt6.QtWebChannel import QWebChannel
 from broast_pos.infrastructure.web_bridge.bridge import POSBridge
 
 logger = logging.getLogger(__name__)
+
+
+class POSWebPage(QWebEnginePage):
+    """Web page that renders the frontend's JavaScript dialogs as Qt dialogs.
+
+    window.alert() and window.confirm() block the page's JavaScript until they
+    are answered. Without an explicit handler the dialog can fail to appear in
+    the embedded view, leaving the whole interface frozen. Rendering them here,
+    parented to the main window, keeps every alert() and confirm() in the
+    frontend working.
+    """
+
+    def __init__(self, dialog_parent, parent=None) -> None:
+        super().__init__(parent)
+        self._dialog_parent = dialog_parent
+
+    def _box(self, text: str, icon) -> QMessageBox:
+        box = QMessageBox(self._dialog_parent)
+        box.setIcon(icon)
+        box.setWindowTitle("Prost POS")
+        box.setText(text)
+        box.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
+        return box
+
+    def javaScriptAlert(self, securityOrigin, msg: str) -> None:
+        box = self._box(msg, QMessageBox.Icon.Information)
+        ok = box.addButton("حسناً", QMessageBox.ButtonRole.AcceptRole)
+        box.setDefaultButton(ok)
+        box.exec()
+
+    def javaScriptConfirm(self, securityOrigin, msg: str) -> bool:
+        box = self._box(msg, QMessageBox.Icon.Question)
+        yes = box.addButton("نعم", QMessageBox.ButtonRole.YesRole)
+        no = box.addButton("إلغاء", QMessageBox.ButtonRole.RejectRole)
+        # Default to cancel — these confirm destructive or session-ending steps.
+        box.setDefaultButton(no)
+        box.exec()
+        return box.clickedButton() is yes
+
+    def javaScriptConsoleMessage(self, level, message: str, lineNumber: int, sourceID: str) -> None:
+        """Forward frontend console output to the application log."""
+        logger.warning("JS [%s:%s] %s", sourceID, lineNumber, message)
 
 
 class WebShell(QMainWindow):
@@ -41,7 +83,10 @@ class WebShell(QMainWindow):
         self.web_view = QWebEngineView(central)
         layout.addWidget(self.web_view)
 
-        page = self.web_view.page()
+        # Own page subclass so alert()/confirm() from the frontend are shown
+        # as Qt dialogs parented to this window instead of blocking silently.
+        page = POSWebPage(self, self.web_view)
+        self.web_view.setPage(page)
 
         # ── Settings ─────────────────────────────────────────────────────────
         s = self.web_view.settings()

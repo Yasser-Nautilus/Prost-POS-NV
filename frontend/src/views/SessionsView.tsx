@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Wallet, Plus, Power, RefreshCw, ArrowLeftRight, BarChart3, Lock,
+  Wallet, Plus, Power, RefreshCw, BarChart3, Lock,
   User, Clock, AlertTriangle, CheckCircle2, FileText, Loader2, X
 } from "lucide-react";
-import { bridge, CashierSession, XReport, SessionStation } from "../bridge";
+import { bridge } from "../bridge";
+import type { CashierSession, XReport, SessionStation } from "../bridge";
 import { PinDialog } from "../components/PinDialog";
-import { Numpad } from "../components/Numpad";
 
 interface SessionsViewProps {
   currentUser: any;
@@ -285,7 +285,7 @@ const CloseSessionDialog: React.FC<{
       <PinDialog
         isOpen={showPin}
         onClose={() => setShowPin(false)}
-        onConfirm={(pin) => { setShowPin(false); doClose(pin); }}
+        onSuccess={(_managerUser, rawPin) => { setShowPin(false); doClose(rawPin); }}
         title="اعتماد المدير"
       />
     </>
