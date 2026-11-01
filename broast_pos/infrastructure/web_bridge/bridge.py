@@ -818,7 +818,13 @@ class POSBridge(QObject):
             ok, msg = ctrl.return_trip(payload.get("trip_id"))
             return json.dumps({"success": ok, "message" if ok else "error": msg})
         elif action == "settle_trip":
-            ok, msg = ctrl.settle_trip(payload.get("trip_id"))
+            if not self._current_user:
+                return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
+            ok, msg = ctrl.settle_trip(
+                payload.get("trip_id"),
+                settled_by_id=self._current_user.id,
+                settled_by_name=self._current_user.display_name or self._current_user.username,
+            )
             if ok:
                 return json.dumps({"success": True, "message": msg})
             return json.dumps({"success": False, "message": msg, "error": msg})

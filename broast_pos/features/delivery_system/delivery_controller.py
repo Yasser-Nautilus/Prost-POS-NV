@@ -214,7 +214,13 @@ class DeliveryController:
         """Return the canonical service settlement payload."""
         return self.get_trip_details(trip_id)
 
-    def settle_trip(self, trip_id: int, print_receipt: bool = False) -> Tuple[bool, str]:
+    def settle_trip(
+        self,
+        trip_id: int,
+        print_receipt: bool = False,
+        settled_by_id: int = 0,
+        settled_by_name: str = "نظام تسوية",
+    ) -> Tuple[bool, str]:
         """Confirm settlement — driver hands over cash.
 
         Args:
@@ -230,7 +236,7 @@ class DeliveryController:
             settlement_details = self.get_settlement_details(trip_id)
 
         try:
-            trip = self._delivery_svc.settle_trip(trip_id)
+            trip = self._delivery_svc.settle_trip(trip_id, settled_by_id, settled_by_name)
         except Exception as exc:
             return False, str(exc)
 
