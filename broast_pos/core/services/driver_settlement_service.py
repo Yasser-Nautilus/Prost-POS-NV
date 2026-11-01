@@ -82,9 +82,10 @@ class DriverSettlementService:
         if driver is None:
             raise ValueError(f"السائق #{driver_id} غير موجود")
 
-        trips = self._delivery.get_driver_trips_for_date(driver_id, target_date)
+        # Variante A: every returned, not-yet-settled trip for this driver is
+        # eligible, regardless of the day it was created.
         eligible_trips = [
-            t for t in trips
+            t for t in self._delivery.get_unsettled_trips(driver_id)
             if t.returned_at is not None and not t.is_settled
         ]
 
@@ -149,9 +150,11 @@ class DriverSettlementService:
         driver_name = driver.display_name or driver.username
 
         # ── Step 2: Load eligible trips ───────────────────────────────────
-        trips = self._delivery.get_driver_trips_for_date(driver_id, target_date)
+        # Variante A: every returned, not-yet-settled trip for this driver is
+        # eligible, regardless of the day it was created — so trips spanning
+        # midnight or left over from a previous day can still be settled.
         eligible_trips = [
-            t for t in trips
+            t for t in self._delivery.get_unsettled_trips(driver_id)
             if t.returned_at is not None and not t.is_settled
         ]
 

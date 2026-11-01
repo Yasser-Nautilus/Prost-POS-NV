@@ -99,6 +99,7 @@ class TestSettleDriverCompletesOrders:
         delivery_repo = MagicMock()
         trip = _trip()
         delivery_repo.get_driver_trips_for_date.return_value = [trip]
+        delivery_repo.get_unsettled_trips.return_value = [trip]
         delivery_repo._db = MagicMock()
         # Simulate transaction() as a no-op context manager
         delivery_repo._db.transaction.return_value.__enter__ = MagicMock(return_value=None)
@@ -116,6 +117,45 @@ class TestSettleDriverCompletesOrders:
             order_svc=order_svc,
         )
         return svc, order_svc
+
+    def test_settle_driver_settles_returned_trip_from_a_previous_day(self):
+        """Variante A regression: a returned, unsettled trip is settleable even
+        when no trip was created today — it was previously excluded by the
+        created_at = today filter, which caused 'no eligible trips' errors."""
+        from broast_pos.core.services.driver_settlement_service import DriverSettlementService
+
+        orders = {101: _order(101), 102: _order(102)}
+        order_repo = MagicMock()
+        order_repo.get_by_id.side_effect = lambda oid: orders.get(oid)
+
+        user_repo = MagicMock()
+        user_repo.get_by_id.return_value = MagicMock(
+            id=10, display_name="محمود", username="mahmoud", is_active=True
+        )
+
+        trip = _trip()  # returned_at on 2026-10-04 — not "today"
+        delivery_repo = MagicMock()
+        delivery_repo.get_driver_trips_for_date.return_value = []   # nothing created today
+        delivery_repo.get_unsettled_trips.return_value = [trip]      # but a returned trip exists
+        delivery_repo._db = MagicMock()
+        delivery_repo._db.transaction.return_value.__enter__ = MagicMock(return_value=None)
+        delivery_repo._db.transaction.return_value.__exit__ = MagicMock(return_value=False)
+        delivery_repo._db.execute.return_value = None
+
+        settlement_repo = MagicMock()
+        settlement_repo.create_settlement.side_effect = lambda s: s
+
+        svc = DriverSettlementService(
+            settlement_repo=settlement_repo,
+            delivery_repo=delivery_repo,
+            order_repo=order_repo,
+            user_repo=user_repo,
+        )
+
+        result = svc.settle_driver(driver_id=10, settled_by_id=1, settled_by_name="مدير")
+
+        assert result.trip_count == 1
+        delivery_repo.get_unsettled_trips.assert_called_once_with(10)
 
     def test_settle_driver_calls_change_order_status_for_delivered_orders(self):
         """B-07: settle_driver() must complete DELIVERED orders."""
@@ -157,6 +197,7 @@ class TestSettleDriverCompletesOrders:
 
         delivery_repo = MagicMock()
         delivery_repo.get_driver_trips_for_date.return_value = [_trip()]
+        delivery_repo.get_unsettled_trips.return_value = [_trip()]
         delivery_repo._db = MagicMock()
         delivery_repo._db.transaction.return_value.__enter__ = MagicMock(return_value=None)
         delivery_repo._db.transaction.return_value.__exit__ = MagicMock(return_value=False)
