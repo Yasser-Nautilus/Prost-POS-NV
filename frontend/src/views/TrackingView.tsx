@@ -142,7 +142,12 @@ const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => v
       <tbody>
         {orders.map((order, i) => {
           const status = STATUS_LABELS[order.status] || { label: order.status, color: "text-gray-400" };
-          const canAddItems = order.status === "new"; // only unassigned delivery orders
+          // Items can be added until the order actually leaves: for delivery that
+          // is when it goes out with a driver, for pickup when it is completed.
+          const canAddItems =
+            order.status !== "out_for_delivery" &&
+            order.status !== "completed" &&
+            order.status !== "cancelled";
           return (
             <tr key={order.id} className={`border-t border-brand-border/20 ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}>
               <td className="py-2.5 px-3 text-gray-400 font-mono text-xs">#{order.invoice_no || order.id}</td>
