@@ -14,7 +14,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Wallet, ChevronRight, CheckCircle, AlertCircle, Clock,
   Package, RefreshCcw, Loader2, User, DollarSign,
-  Banknote, CreditCard, TruckIcon, FileText, Lock
+  Banknote, CreditCard, TruckIcon, Lock
 } from "lucide-react";
 import { bridge } from "../bridge";
 
@@ -328,21 +328,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                 </div>
               </div>
 
-              {/* Notes */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
-                  <FileText size={14} />
-                  ملاحظات (اختياري)
-                </label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="أي ملاحظات إضافية للتسوية..."
-                  className="w-full bg-brand-card border border-brand-border rounded-xl p-3 text-white text-sm placeholder-gray-500 resize-none focus:outline-none focus:border-brand-gold/50 transition-all"
-                  rows={2}
-                  dir="rtl"
-                />
-              </div>
+
 
               {error && (
                 <div className="flex items-start gap-2 p-3 bg-red-900/20 border border-red-700/30 rounded-xl text-red-300 text-sm">
