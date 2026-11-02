@@ -249,6 +249,8 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
         await bridge.call("change_table", { table_number: tableNo });
         setSelectedTable(tableNo);
         setIsTableGridOpen(false);
+        await fetchCurrentOrder();
+        fetchTableState();
         return;
       }
       // Occupied table: open its order so the cashier can add to it
@@ -259,6 +261,8 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
         await bridge.call("load_order_by_table", { table_number: tableNo });
         setSelectedTable(tableNo);
         setIsTableGridOpen(false);
+        await fetchCurrentOrder();
+        fetchTableState();
         return;
       }
       // Free table: stays open so the selection is visible until confirmed
