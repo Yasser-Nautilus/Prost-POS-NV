@@ -145,10 +145,10 @@ const TripSettlementDialog: React.FC<{
 
               {/* Totals */}
               <div className="p-4 border-t border-brand-border/40 bg-brand-card/40 grid grid-cols-2 gap-3">
-                  <div className="bg-brand-dark rounded-2xl p-4 text-center border border-brand-border/20">
-                  <div className="text-xs text-gray-400 mb-1">إجمالي قيمة الطلبات</div>
-                  <div className="text-2xl font-black text-white font-mono">
-                    {(details.total_order_value || 0).toFixed(2)}
+                <div className="bg-brand-dark rounded-2xl p-4 text-center border border-brand-border/20">
+                  <div className="text-xs text-gray-400 mb-1">المبلغ المطلوب تسليمه (نقدي)</div>
+                  <div className="text-2xl font-black text-emerald-400 font-mono">
+                    {((details.amount_to_hand_over !== undefined ? details.amount_to_hand_over : details.cash_collected) ?? 0).toFixed(2)}
                     <span className="text-sm font-normal text-gray-400 ml-1">ج.م</span>
                   </div>
                 </div>

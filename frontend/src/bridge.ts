@@ -730,12 +730,20 @@ class POSBridgeClient {
         const trip = this.mockState.trips.find((t: any) => t.id === payload.trip_id);
         if (!trip) throw new Error("الرحلة غير موجودة");
         const orders = this.mockState.activeOrders.filter((o: any) => trip.order_ids?.includes(o.id));
+        const cashOrders = orders.filter((o: any) => (o.payment_method || "cash") === "cash");
+        const cashCollected = cashOrders.reduce((sum: number, o: any) => sum + (o.total || 0), 0);
         return {
           trip_id: trip.id,
           driver_name: trip.driver_name,
-          orders: orders.map((o: any) => ({ ...o, order_id: o.id })),
+          orders: orders.map((o: any) => ({
+            ...o,
+            order_id: o.id,
+            collected: (o.payment_method || "cash") === "cash" ? (o.total || 0) : 0
+          })),
           total_order_value: orders.reduce((sum: number, o: any) => sum + (o.total || 0), 0),
-          total_delivery_fees: orders.reduce((sum: number, o: any) => sum + (o.delivery_fee || 0), 0)
+          total_delivery_fees: orders.reduce((sum: number, o: any) => sum + (o.delivery_fee || 0), 0),
+          cash_collected: cashCollected,
+          amount_to_hand_over: cashCollected
         } as any;
       }
 
