@@ -398,6 +398,7 @@ class OrderController:
         order_id: int,
         payment_method: str,
         amount_paid: float,
+        finalize: bool = True,
     ) -> Tuple[bool, str]:
         """Process payment and print receipt.
 
@@ -405,6 +406,8 @@ class OrderController:
             order_id: The saved order ID.
             payment_method: 'cash', 'visa', or 'online'.
             amount_paid: Amount received from customer.
+            finalize: When False the order is paid but stays active (takeaway —
+                it is auto-closed once its pickup window elapses).
 
         Returns:
             (success, message)
@@ -412,7 +415,7 @@ class OrderController:
         try:
             method = PaymentMethod(payment_method)
             completed = self._order_svc.complete_order(
-                order_id, method, amount_paid
+                order_id, method, amount_paid, finalize=finalize
             )
         except Exception as exc:
             return False, f"فشل في الدفع: {exc}"
@@ -654,12 +657,24 @@ class OrderController:
     # ------------------------------------------------------------------
 
     def get_active_orders(self) -> List[Order]:
-        """Return all active orders."""
+        """Return all active orders.
+
+        Opportunistically closes takeaway orders whose pickup window elapsed so
+        the live board self-cleans on every refresh (no background job needed).
+        """
+        try:
+            self._order_svc.auto_complete_expired_takeaways()
+        except Exception as exc:
+            logger.error("Auto-close takeaways failed: %s", exc)
         return self._order_svc.get_active_orders()
 
     def get_active_by_type(self, order_type: str) -> List[Order]:
         """Return active orders filtered by type."""
         return self._order_svc.get_active_by_type(OrderType(order_type))
+
+    def get_order_history(self) -> List[Order]:
+        """Finished orders (completed + cancelled) for today — the archive."""
+        return self._order_svc.get_order_history()
 
     @property
     def current_order(self) -> Optional[Order]:

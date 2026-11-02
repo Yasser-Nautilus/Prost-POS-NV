@@ -27,6 +27,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
   const [selectedTable, setSelectedTable] = useState<number | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<number | null>(null);
   const [pendingTotal, setPendingTotal] = useState(0); // captured before confirm clears cart
+  const [pendingOrderType, setPendingOrderType] = useState<string | null>(null); // type of the order being paid
   const [isAmending, setIsAmending] = useState(false); // true when editing existing order
   // B-02: delivery payment mode — 'cash' = driver collects, 'online' = pre-paid
   const [deliveryPaymentMode, setDeliveryPaymentMode] = useState<"cash" | "online">("cash");
@@ -347,8 +348,9 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
 
     // ── Normal mode: confirm new order ────────────────────────────────
     try {
-      // Capture total NOW before confirm_order resets the order state
+      // Capture total + type NOW before confirm_order resets the order state
       const capturedTotal = currentOrder?.total || 0;
+      const capturedType = currentOrder?.order_type || null;
 
       // Step 1: confirm_order — validates, saves to DB, prints kitchen ticket
       const confirmRes = await bridge.call<{
@@ -358,9 +360,10 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
       }>("confirm_order");
 
       if (confirmRes.needs_immediate_payment) {
-        // Step 2A: Takeaway/dine-in — show PaymentDialog to collect payment
+        // Step 2A: Takeaway/pickup — show PaymentDialog to collect payment
         setPendingOrderId(confirmRes.order_id);
         setPendingTotal(capturedTotal); // use captured total, not current (cleared) order
+        setPendingOrderType(capturedType);
         setIsPaymentOpen(true);
       } else {
         // Step 2B: Delivery — no immediate payment (driver collects)
@@ -381,21 +384,27 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
     if (!currentOrder?.id || !currentOrder.items?.length) return;
     setPendingOrderId(currentOrder.id);
     setPendingTotal(currentOrder.total || 0);
+    setPendingOrderType(currentOrder.order_type || null);
     setIsPaymentOpen(true);
   };
 
   const handlePaymentConfirm = async (paymentMethod: string, amountPaid: number, _change: number) => {
     if (!pendingOrderId) return;
+    // Takeaway is paid now but stays on the live board until it is picked up
+    // (auto-closed after its window). Other types close immediately.
+    const keepOpen = pendingOrderType === "takeaway";
     try {
-      // complete_payment — marks order paid, prints customer receipt
+      // complete_payment — records payment, prints customer receipt
       await bridge.call("complete_payment", {
         order_id: pendingOrderId,
         payment_method: paymentMethod,
         amount_paid: amountPaid,
+        keep_open: keepOpen,
       });
 
       setIsPaymentOpen(false);
       setPendingOrderId(null);
+      setPendingOrderType(null);
       setIsAmending(false);
       setSelectedTable(null);
 
@@ -403,7 +412,9 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
       await fetchCurrentOrder();
       fetchParkedCount();
 
-      alert("تم تأكيد الطلب وتسجيل الدفع بنجاح!");
+      alert(keepOpen
+        ? "تم تسجيل الدفع — الطلب في قائمة الانتظار حتى الاستلام"
+        : "تم تأكيد الطلب وتسجيل الدفع بنجاح!");
     } catch (e: any) {
       alert("فشل تسجيل الدفع: " + e.message);
     }
@@ -855,9 +866,10 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
           setIsPaymentOpen(false);
           setPendingOrderId(null);
           setPendingTotal(0);
+          setPendingOrderType(null);
         }}
         total={pendingTotal}
-        orderType={currentOrder?.order_type}
+        orderType={pendingOrderType || currentOrder?.order_type}
         onConfirm={handlePaymentConfirm}
       />
 

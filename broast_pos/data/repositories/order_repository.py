@@ -140,6 +140,19 @@ class OrderRepository(BaseRepository[Order]):
         """Non-cancelled orders for a date — alias for get_orders_for_report."""
         return self.get_orders_for_report(date_str)
 
+    def get_finished_for_date(self, date_str: str) -> List[Order]:
+        """Completed or cancelled orders for a date (archive/history).
+
+        Newest first (by payment time, falling back to creation time).
+        """
+        rows = self._db.fetch_all(
+            """SELECT * FROM orders
+               WHERE DATE(created_at) = ? AND status IN ('completed', 'cancelled')
+               ORDER BY COALESCE(paid_at, created_at) DESC, invoice_no DESC""",
+            (date_str,),
+        )
+        return [self._row_to_order_with_items(r) for r in rows]
+
     def get_cancelled_for_date(self, date_str: str) -> List[Order]:
         """Cancelled orders for a specific date (YYYY-MM-DD)."""
         rows = self._db.fetch_all(
