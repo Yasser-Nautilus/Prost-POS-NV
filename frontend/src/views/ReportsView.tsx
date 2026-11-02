@@ -17,6 +17,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: "كاش",
   visa: "فيزا",
   online: "أونلاين",
+  unpaid: "غير مدفوع",
 };
 
 export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentUser }) => {

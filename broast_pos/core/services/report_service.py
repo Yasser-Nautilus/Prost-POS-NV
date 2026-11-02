@@ -83,6 +83,20 @@ class ReportService:
             },
         }
 
+    def _payment_bucket(self, order) -> Optional[str]:
+        """Return the payment-method key an order should be counted under
+        in the "by payment method" breakdown, or None to exclude it.
+
+        An order's payment_method is None while it is still open (e.g. a
+        confirmed dine-in table that has not been paid yet). Those produced
+        the stray "None" row in the dashboard.
+        """
+        pm = order.payment_method
+        method = pm.value if hasattr(pm, "value") else (str(pm) if pm else None)
+        # Open/unpaid orders (no payment_method yet) get their own bucket
+        # instead of leaking a raw "None" into the breakdown.
+        return method or "unpaid"
+
     def generate_payment_breakdown(
         self, target_date: Optional[date] = None,
     ) -> Dict:
@@ -104,11 +118,15 @@ class ReportService:
 
         method_map: Dict[str, Dict[str, Any]] = {}
         for order in orders:
-            m = order.payment_method.value if hasattr(order.payment_method, "value") else str(order.payment_method)
-            if m not in method_map:
-                method_map[m] = {"method": m, "count": 0, "revenue": 0.0}
-            method_map[m]["count"] += 1
-            method_map[m]["revenue"] += order.total
+            # Open dine-in tables (confirmed but not yet paid) have no
+            # payment_method yet. Decide how such orders are treated here.
+            bucket = self._payment_bucket(order)
+            if bucket is None:
+                continue
+            if bucket not in method_map:
+                method_map[bucket] = {"method": bucket, "count": 0, "revenue": 0.0}
+            method_map[bucket]["count"] += 1
+            method_map[bucket]["revenue"] += order.total
 
         payments = list(method_map.values())
 
@@ -228,11 +246,9 @@ class ReportService:
 
         method_map: Dict[str, Dict] = {}
         for order in orders:
-            method = (
-                order.payment_method.value
-                if hasattr(order.payment_method, "value")
-                else str(order.payment_method or "cash")
-            )
+            method = self._payment_bucket(order)
+            if method is None:
+                continue
             if method not in method_map:
                 method_map[method] = {"method": method, "count": 0, "revenue": 0.0}
             method_map[method]["count"] += 1
