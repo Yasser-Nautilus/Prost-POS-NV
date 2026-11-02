@@ -884,6 +884,7 @@ class POSBridge(QObject):
                 settled_by_name=self._current_user.display_name or self._current_user.username,
                 settlement_date=payload.get("date"),
                 notes=payload.get("notes"),
+                trip_id=payload.get("trip_id"),
             )
             if ok:
                 return json.dumps({"success": True, "data": {

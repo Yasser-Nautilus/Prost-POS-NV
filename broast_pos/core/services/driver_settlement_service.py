@@ -65,11 +65,13 @@ class DriverSettlementService:
         self,
         driver_id: int,
         settlement_date: Optional[str] = None,
+        trip_id: Optional[int] = None,
     ) -> Dict:
         """Calculate what a settlement would look like, without committing.
 
         Returns a summary dict the frontend can display for manager review.
         If settlement_date is None, uses today.
+        If trip_id is provided, only that specific trip is previewed.
 
         Returns:
             Dict with driver info, trip/order counts, and financial breakdown.
@@ -82,15 +84,24 @@ class DriverSettlementService:
         if driver is None:
             raise ValueError(f"السائق #{driver_id} غير موجود")
 
-        # Whole-day view: all returned trips the driver made that day,
-        # including ones already settled per-trip (the handover happens per
-        # trip; this is the end-of-day summary over the full day).
-        day_trips = [
+        all_day_trips = [
             t for t in self._delivery.get_driver_trips_for_date(driver_id, target_date)
             if t.returned_at is not None
         ]
 
-        if not day_trips:
+        if trip_id is not None:
+            # Single-trip preview: only the requested trip
+            eligible_trips = [t for t in all_day_trips if t.id == trip_id]
+            if not eligible_trips:
+                raise ValueError(
+                    f"الرحلة #{trip_id} غير موجودة او لم تعد بعد"
+                )
+        else:
+            # Full-day view: ALL returned trips (settled + unsettled) for display
+            # The frontend marks settled ones as locked and unsettled ones as actionable.
+            eligible_trips = all_day_trips
+
+        if not eligible_trips:
             raise ValueError(
                 f"لا توجد رحلات مؤهلة للتسوية ليوم {target_date}"
             )
@@ -99,7 +110,7 @@ class DriverSettlementService:
             driver_id=driver_id,
             driver_name=driver.display_name or driver.username,
             settlement_date=target_date,
-            eligible_trips=day_trips,
+            eligible_trips=eligible_trips,
         )
 
     # ------------------------------------------------------------------
@@ -113,17 +124,21 @@ class DriverSettlementService:
         settled_by_name: str,
         settlement_date: Optional[str] = None,
         notes: Optional[str] = None,
+        trip_id: Optional[int] = None,
     ) -> DriverSettlement:
-        """Atomically settle all eligible trips for a driver on a date.
+        """Settle one specific trip (if trip_id given) or all unsettled trips for a driver.
+
+        If trip_id is provided, only that single trip is settled and the others remain pending.
+        If trip_id is None, all returned unsettled trips for the date are settled together.
 
         Steps (all in one transaction):
           1. Validate driver exists.
-          2. Load all returned, unsettled trips for the date.
+          2. Load the target trip(s).
           3. Validate there is at least one eligible trip.
           4. Calculate financial totals from actual order records.
           5. BEGIN TRANSACTION
           6. Create driver_settlements record.
-          7. Mark all eligible trips as settled.
+          7. Mark the eligible trip(s) as settled.
           8. Log audit event.
           9. COMMIT (or ROLLBACK on error).
 
@@ -133,13 +148,13 @@ class DriverSettlementService:
             settled_by_name: Manager/cashier display name (for the record).
             settlement_date: YYYY-MM-DD; defaults to today.
             notes: Optional notes from the manager.
+            trip_id: If provided, settle only this specific trip.
 
         Returns:
             The saved DriverSettlement record.
 
         Raises:
-            ValueError: if driver not found, no eligible trips, or
-                        trips not eligible (not returned, already settled).
+            ValueError: if driver not found, trip not found, or already settled.
         """
         target_date = settlement_date or date.today().isoformat()
 
@@ -150,23 +165,35 @@ class DriverSettlementService:
 
         driver_name = driver.display_name or driver.username
 
-        # ── Step 2: Load the day's returned trips ─────────────────────────
-        # Whole-day settlement: every returned trip the driver made that day,
-        # including ones already settled per-trip. The day record summarizes
-        # the full day and closes it.
-        day_trips = [
+        # ── Step 2: Load the target trip(s) ──────────────────────────────
+        all_day_trips = [
             t for t in self._delivery.get_driver_trips_for_date(driver_id, target_date)
             if t.returned_at is not None
         ]
 
-        # ── Step 3: Must have at least one returned trip ──────────────────
+        if trip_id is not None:
+            # Single-trip settlement: only settle the requested trip
+            day_trips = [t for t in all_day_trips if t.id == trip_id]
+            if not day_trips:
+                raise ValueError(
+                    f"الرحلة #{trip_id} غير موجودة او لم تعد بعد"
+                )
+            if day_trips[0].is_settled:
+                raise ValueError(
+                    f"الرحلة #{trip_id} تمت تسويتها بالفعل"
+                )
+        else:
+            # Full-day settlement: all returned, unsettled trips
+            day_trips = [t for t in all_day_trips if not t.is_settled]
+
+        # ── Step 3: Must have at least one eligible trip ──────────────────
         if not day_trips:
             raise ValueError(
                 f"لا توجد رحلات مؤهلة للتسوية — السائق {driver_name} ليوم {target_date}"
             )
 
-        # Guard: don't create a second day record for an already-closed day.
-        if self._settlements.get_by_driver_date(driver_id, target_date) is not None:
+        # Guard (full-day only): don't create a second day record for already-closed day.
+        if trip_id is None and self._settlements.get_by_driver_date(driver_id, target_date) is not None:
             raise ValueError(
                 f"تمت تسوية السائق {driver_name} ليوم {target_date} بالفعل"
             )
@@ -378,6 +405,7 @@ class DriverSettlementService:
                 "trip_id": trip.id,
                 "dispatched_at": str(trip.dispatched_at) if trip.dispatched_at else None,
                 "returned_at": str(trip.returned_at) if trip.returned_at else None,
+                "is_settled": trip.is_settled,
                 "order_count": len(trip_orders),
                 "cash": trip_cash,
                 "online": trip_online,
