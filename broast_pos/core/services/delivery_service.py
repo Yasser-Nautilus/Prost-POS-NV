@@ -362,16 +362,15 @@ class DeliveryService:
         settled_by_id: int = 0,
         settled_by_name: str = "نظام تسوية",
     ) -> DeliveryTrip:
-        """Cashier confirms cash handover after driver returns.
+        """Cashier confirms the per-trip cash handover after the driver returns.
 
-        B-07: If a DriverSettlementService is injected, delegates to
-        settle_driver() which atomically:
-          - Creates a driver_settlements record.
-          - Marks the trip as settled.
-          - Completes orders (DELIVERED → COMPLETED).
+        This settles ONLY this one trip (the running, per-trip handover):
+          - Marks this trip as settled.
+          - Completes this trip's orders (DELIVERED → COMPLETED).
+          - Books this trip's cash into the ledger (when settlement_svc is wired).
 
-        Falls back to the legacy settle_trip path when settlement_svc
-        is not injected (backward-compatible).
+        The end-of-day whole-day driver settlement is a separate path
+        (DriverSettlementService.settle_driver), which only summarizes the day.
 
         Raises:
             ValueError: if trip not found, not returned, or already settled.
@@ -384,22 +383,7 @@ class DeliveryService:
         if trip.is_settled:
             raise ValueError("الرحلة تم تسويتها بالفعل")
 
-        # B-07: delegate to the unified settlement path if available.
-        # This guarantees a driver_settlements record is always created.
-        if self._settlement_svc is not None and trip.driver_id:
-            # settle_driver() handles: mark_settled + complete orders + audit
-            # Settle as the logged-in user so cash-ledger / audit records a
-            # real actor (actor_id = 0 violated the cash_ledger → users FK).
-            self._settlement_svc.settle_driver(
-                driver_id=trip.driver_id,
-                settled_by_id=settled_by_id,
-                settled_by_name=settled_by_name,
-            )
-            updated_trip = self._delivery.get_trip_by_id(trip_id)
-            return updated_trip or trip
-
-        # ── Legacy path (no settlement_svc injected) ────────────────────────
-        # Calculate financial snapshot
+        # Calculate financial snapshot for this trip only
         cash_total = 0.0
         fees_total = 0.0
         for oid in trip.order_ids:
@@ -410,6 +394,11 @@ class DeliveryService:
                 fees_total += order.delivery_fee or 0.0
 
         self._delivery.mark_settled(trip_id, cash_total, fees_total)
+
+        # Book this trip's cash into the ledger (per-trip handover).
+        # Idempotent per trip_id, so the end-of-day settlement never re-books it.
+        if self._settlement_svc is not None:
+            self._settlement_svc.remit_trip_cash(trip, cash_total, settled_by_id)
 
         # Complete orders via centralized path
         for oid in trip.order_ids:
