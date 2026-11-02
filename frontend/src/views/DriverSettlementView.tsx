@@ -276,8 +276,11 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-xs text-gray-400">
-                      <span>{order.customer_address || order.customer_zone || "—"}</span>
-                      <span className="text-white font-bold">{fmtEGP(order.total)}</span>
+                      <span className="truncate max-w-[130px]">{order.customer_address || order.customer_zone || "—"}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-amber-400" title="رسوم التوصيل">توصيل: {fmtEGP(order.delivery_fee || 0)}</span>
+                        <span className="text-white font-bold">{fmtEGP(order.total)}</span>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -473,7 +476,8 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                         {trip.orders?.map((order: any) => (
                           <div key={order.order_id} className="flex justify-between text-xs">
                             <span className="text-gray-400 truncate max-w-[180px]">{order.customer_name}</span>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-amber-400 font-medium">توصيل: {fmtEGP(order.delivery_fee || 0)}</span>
                               <span className={order.payment_method === "cash" ? "text-green-400" : "text-cyan-400"}>
                                 {order.payment_method === "cash" ? "نقدي" : "أونلاين"}
                               </span>
