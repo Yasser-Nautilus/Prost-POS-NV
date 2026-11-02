@@ -219,6 +219,21 @@ class TestOutputStructure:
         assert methods.get("cash") == pytest.approx(150.0)
         assert methods.get("online") == pytest.approx(200.0)
 
+    def test_payment_breakdown_unpaid_bucket(self):
+        # Open/unpaid orders (no payment_method) go into an "unpaid" bucket,
+        # never a raw "None" key.
+        orders = [
+            _order(1, payment=PaymentMethod.CASH, total=100.0),
+            _order(2, payment=None, total=710.0),
+        ]
+        svc, _ = _report_svc(orders_by_shift={1: orders})
+        result = svc.generate_payment_breakdown_for_shift(shift_id=1)
+
+        methods = {p["method"]: p["revenue"] for p in result["payments"]}
+        assert "None" not in methods
+        assert methods.get("cash") == pytest.approx(100.0)
+        assert methods.get("unpaid") == pytest.approx(710.0)
+
     def test_cancellations_structure(self):
         cancelled = _order(5, status=OrderStatus.CANCELLED, total=75.0)
         cancelled.cancel_reason = "طلب العميل"
