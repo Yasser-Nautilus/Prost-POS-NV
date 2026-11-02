@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
-  ShoppingBag, Search, Tag, CreditCard, RotateCcw, 
-  Plus, Minus, Trash2, AlertCircle, Archive, X 
+  ShoppingBag, Search, Tag, CreditCard, RotateCcw,
+  Plus, Minus, Trash2, AlertCircle, Archive, X, Save
 } from "lucide-react";
 import { bridge } from "../bridge";
 import { DiscountDialog } from "../components/DiscountDialog";
@@ -242,6 +242,14 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
   const handleTableSelect = async (tableNo: number) => {
     if (tableNo === selectedTable) return;
     try {
+      // Amending a saved order: move it to the new table (persisted).
+      // change_table rejects tables already held by another open order.
+      if (isAmending && currentOrder?.id) {
+        await bridge.call("change_table", { table_number: tableNo });
+        setSelectedTable(tableNo);
+        setIsTableGridOpen(false);
+        return;
+      }
       // Occupied table: open its order so the cashier can add to it
       if (tableNo in occupiedTables) {
         if (currentOrder?.items?.length > 0 && !window.confirm(
@@ -367,6 +375,15 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
     }
   };
 
+  // Settle an open dine-in table: pay the full order total and close it.
+  // The order is already saved, so this just collects payment (no re-confirm).
+  const handleCashOut = () => {
+    if (!currentOrder?.id || !currentOrder.items?.length) return;
+    setPendingOrderId(currentOrder.id);
+    setPendingTotal(currentOrder.total || 0);
+    setIsPaymentOpen(true);
+  };
+
   const handlePaymentConfirm = async (paymentMethod: string, amountPaid: number, _change: number) => {
     if (!pendingOrderId) return;
     try {
@@ -379,6 +396,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
 
       setIsPaymentOpen(false);
       setPendingOrderId(null);
+      setIsAmending(false);
       setSelectedTable(null);
 
       // Clear workspace and start fresh
@@ -708,14 +726,40 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
             </button>
           )}
 
-          <button
-            onClick={handleCheckoutClick}
-            disabled={!currentOrder || currentOrder.items.length === 0}
-            className={`w-full py-3 ${isAmending ? "bg-orange-500 hover:bg-orange-400" : "bg-brand-gold hover:bg-opacity-95"} text-brand-dark disabled:opacity-50 font-black text-base rounded-xl flex items-center justify-center gap-2 shadow-lg active:translate-y-0.5 btn-hover-active transition-colors`}
-          >
-            <CreditCard size={20} />
-            {isAmending ? "حفظ التعديلات" : "تأكيد ودفع الفاتورة"}
-          </button>
+          {isAmending && currentOrder?.order_type === "dine_in" ? (
+            // Open dine-in table: save added items (no charge) OR settle & close.
+            <div className="space-y-2">
+              <button
+                onClick={handleCheckoutClick}
+                disabled={!currentOrder || currentOrder.items.length === 0}
+                className="w-full py-3 bg-orange-500 hover:bg-orange-400 text-brand-dark disabled:opacity-50 font-black text-base rounded-xl flex items-center justify-center gap-2 shadow-lg active:translate-y-0.5 btn-hover-active transition-colors"
+              >
+                <Save size={20} />
+                حفظ التعديلات
+              </button>
+              <button
+                onClick={handleCashOut}
+                disabled={!currentOrder || currentOrder.items.length === 0}
+                className="w-full py-3 bg-brand-gold hover:bg-opacity-95 text-brand-dark disabled:opacity-50 font-black text-base rounded-xl flex items-center justify-center gap-2 shadow-lg active:translate-y-0.5 btn-hover-active transition-colors"
+              >
+                <CreditCard size={20} />
+                دفع وإغلاق الفاتورة
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={handleCheckoutClick}
+              disabled={!currentOrder || currentOrder.items.length === 0}
+              className={`w-full py-3 ${isAmending ? "bg-orange-500 hover:bg-orange-400" : "bg-brand-gold hover:bg-opacity-95"} text-brand-dark disabled:opacity-50 font-black text-base rounded-xl flex items-center justify-center gap-2 shadow-lg active:translate-y-0.5 btn-hover-active transition-colors`}
+            >
+              <CreditCard size={20} />
+              {isAmending
+                ? "حفظ التعديلات"
+                : currentOrder?.order_type === "dine_in"
+                ? "تأكيد الطلب"
+                : "تأكيد ودفع الفاتورة"}
+            </button>
+          )}
         </div>
 
       </div>

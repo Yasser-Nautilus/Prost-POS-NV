@@ -61,8 +61,11 @@ const LiveTimer: React.FC<{ since: string | null; urgentSecs?: number }> = ({ si
 
 // ─── Per-type table columns ───────────────────────────────────────────────────
 
-const DineInTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; onResume: (o: any) => void; canCancel: boolean }> =
-  ({ orders, onCancel, onResume, canCancel }) => (
+// Dine-in rows are fully clickable: tapping a table opens it in the POS so the
+// cashier can add items, settle & close, or move it to another table. No inline
+// action column — the whole row is the affordance.
+const DineInTable: React.FC<{ orders: any[]; onResume: (o: any) => void }> =
+  ({ orders, onResume }) => (
     <table className="w-full text-sm">
       <thead>
         <tr className="bg-brand-card/80 text-gray-400 text-xs">
@@ -72,14 +75,18 @@ const DineInTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; onR
           <th className="py-2.5 px-3 text-center">الحالة</th>
           <th className="py-2.5 px-3 text-center">المنقضي</th>
           <th className="py-2.5 px-3 text-center font-mono">الإجمالي</th>
-          <th className="py-2.5 px-3 text-center">إجراء</th>
         </tr>
       </thead>
       <tbody>
         {orders.map((order, i) => {
           const status = STATUS_LABELS[order.status] || { label: order.status, color: "text-gray-400" };
           return (
-            <tr key={order.id} className={`border-t border-brand-border/20 ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}>
+            <tr
+              key={order.id}
+              onClick={() => onResume(order)}
+              title="افتح الطاولة"
+              className={`border-t border-brand-border/20 cursor-pointer hover:bg-brand-gold/5 transition-colors ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}
+            >
               <td className="py-2.5 px-3 text-gray-400 font-mono text-xs">#{order.invoice_no || order.id}</td>
               <td className="py-2.5 px-3">
                 <span className="text-brand-gold font-black text-lg font-mono">{order.table_no || "—"}</span>
@@ -98,25 +105,6 @@ const DineInTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; onR
               </td>
               <td className="py-2.5 px-3 text-center text-brand-gold font-black font-mono text-sm">
                 {(order.total || 0).toFixed(2)} ج.م
-              </td>
-              <td className="py-2.5 px-3">
-                <div className="flex items-center gap-1.5 justify-center">
-                  <button
-                    onClick={() => onResume(order)}
-                    className="py-1 px-2 bg-brand-gold/10 text-brand-gold border border-brand-gold/30 hover:bg-brand-gold/20 rounded-lg text-[10px] font-bold flex items-center gap-0.5 transition-all"
-                    title="إضافة أصناف للطلب"
-                  >
-                    <PlusCircle size={11} /> إضافة
-                  </button>
-                  {canCancel && order.status !== "completed" && order.status !== "cancelled" && (
-                    <button
-                      onClick={() => onCancel(order.id)}
-                      className="py-1 px-2 bg-red-950/20 text-red-400 border border-red-900/30 hover:bg-red-950/40 rounded-lg text-[10px] font-bold transition-all"
-                    >
-                      <X size={11} />
-                    </button>
-                  )}
-                </div>
               </td>
             </tr>
           );
@@ -433,9 +421,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
               {(type === "dine_in") && (
                 <DineInTable
                   orders={typeOrders}
-                  onCancel={handleCancelClick}
                   onResume={handleResume}
-                  canCancel={isManagerOrAbove}
                 />
               )}
               {(type === "delivery" || type === "pickup") && (

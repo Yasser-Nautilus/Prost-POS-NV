@@ -520,6 +520,33 @@ class OrderService:
         """Load the active dine-in order for a table."""
         return self._orders.get_by_table(table_number)
 
+    def change_table(self, order_id: int, new_table_number: int) -> Order:
+        """Move a saved dine-in order to a different (free) table.
+
+        Returns:
+            Updated order.
+        Raises:
+            ValueError: if the order is missing/not dine-in/closed, or the
+                        target table is already taken by another open order.
+        """
+        order = self._orders.get_by_id(order_id)
+        if order is None:
+            raise ValueError("الطلب غير موجود")
+        if order.order_type != OrderType.DINE_IN:
+            raise ValueError("نقل الطاولة متاح لطلبات الصالة فقط")
+        if order.status in (OrderStatus.COMPLETED, OrderStatus.CANCELLED):
+            raise ValueError("لا يمكن نقل طاولة طلب مكتمل أو ملغي")
+        if new_table_number == order.table_no:
+            return order
+
+        # Reject if the target table is held by a different open order
+        existing = self._orders.get_by_table(new_table_number)
+        if existing is not None and existing.id != order_id:
+            raise ValueError("الطاولة مشغولة بطلب آخر")
+
+        order.table_no = new_table_number
+        return self._orders.save(order)
+
     def get_active_orders(self) -> List[Order]:
         """All non-completed, non-cancelled orders."""
         return self._orders.get_active_orders()

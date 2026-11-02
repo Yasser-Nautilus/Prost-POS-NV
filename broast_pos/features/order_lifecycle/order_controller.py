@@ -195,6 +195,39 @@ class OrderController:
         if self._current_order:
             self._current_order.table_no = table_number
 
+    def change_table(self, new_table_number: int) -> Tuple[bool, str]:
+        """Move the current order to a different table.
+
+        For a brand-new (unsaved) order the table only lives in memory, so this
+        just assigns it. For an already-saved order it persists the move via the
+        service, frees the old table and marks the new one occupied.
+        """
+        if self._current_order is None:
+            return False, "لا يوجد طلب حالي"
+
+        old_table = self._current_order.table_no
+
+        # Unsaved order — nothing persisted yet, assign in memory.
+        if self._current_order.id is None:
+            self._current_order.table_no = new_table_number
+            self._notify_order_changed()
+            return True, "تم تعيين الطاولة"
+
+        try:
+            saved = self._order_svc.change_table(
+                self._current_order.id, new_table_number
+            )
+        except ValueError as exc:
+            return False, str(exc)
+
+        self._current_order = saved
+        if old_table and old_table != new_table_number:
+            self._occupied_tables.pop(old_table, None)
+        self._occupied_tables[new_table_number] = f"#{saved.invoice_no}"
+        self._notify_order_changed()
+        self._notify_table_changed()
+        return True, "تم نقل الطاولة"
+
     def set_customer_info(
         self,
         customer_id: Optional[int] = None,
@@ -347,8 +380,11 @@ class OrderController:
 
         return True, ConfirmResult(
             invoice_no=saved.invoice_no,
+            # Dine-in now confirms without collecting payment: the table stays
+            # open and is settled later from the tracking view ("دفع وإغلاق
+            # الفاتورة"). Takeaway/pickup still pay immediately at confirm time.
             needs_immediate_payment=(
-                saved.order_type in (OrderType.TAKEAWAY, OrderType.DINE_IN, OrderType.PICKUP)
+                saved.order_type in (OrderType.TAKEAWAY, OrderType.PICKUP)
             ),
             order_id=saved.id,
         )
