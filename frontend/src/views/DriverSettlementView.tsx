@@ -13,7 +13,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Wallet, ChevronRight, CheckCircle, AlertCircle, Clock,
-  Package, RefreshCcw, Loader2, User, DollarSign,
+  Package, RefreshCcw, Loader2, User,
   Banknote, CreditCard, TruckIcon, Lock
 } from "lucide-react";
 import { bridge } from "../bridge";
@@ -302,9 +302,8 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
               )}
 
               {/* Financial summary cards */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <Stat label="عدد الطلبات" value={String(preview.order_count)} unit="" icon={Package} color="purple" />
-                <Stat label="إجمالي الطلبات" value={fmtEGP(preview.total_order_value)} unit="" icon={DollarSign} color="amber" />
                 <Stat label="رسوم التوصيل" value={fmtEGP(preview.total_delivery_fees)} unit="" icon={TruckIcon} color="teal" />
                 <Stat label="أونلاين" value={fmtEGP(preview.online_paid)} unit="" icon={CreditCard} color="cyan" />
               </div>
