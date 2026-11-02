@@ -207,12 +207,12 @@ class FinancialRepository(BaseRepository[Shift]):
     # ------------------------------------------------------------------
 
     def get_shift_order_summary(self, shift_id: int) -> Dict[str, dict]:
-        """Aggregate orders by type: {type: {count, revenue}}."""
+        """Aggregate orders by type: {type: {count, revenue}} (H5: only paid, non-cancelled orders)."""
         rows = self._db.fetch_all(
             """SELECT order_type, COUNT(*) AS count,
                       COALESCE(SUM(total - delivery_fee), 0) AS revenue
                FROM orders
-               WHERE shift_id = ? AND status != 'cancelled'
+               WHERE shift_id = ? AND status != 'cancelled' AND is_paid = 1
                GROUP BY order_type""",
             (shift_id,),
         )

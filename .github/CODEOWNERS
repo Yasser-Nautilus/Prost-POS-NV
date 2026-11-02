@@ -1,0 +1,4 @@
+# Code Owners for Prost-POS-NV
+* @Yasser-Nautilus
+/broast_pos/core/services/ @Yasser-Nautilus
+/broast_pos/data/ @Yasser-Nautilus

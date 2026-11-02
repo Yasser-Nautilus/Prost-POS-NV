@@ -322,6 +322,9 @@ class DeliveryService:
             raise ValueError("الطلب غير مسند لأي رحلة")
         if old_trip.is_settled:
             raise ValueError("لا يمكن نقل طلب من رحلة تم تسويتها")
+        # H4: Block reassigning order if old trip is currently out in transit
+        if old_trip.dispatched_at is not None and old_trip.returned_at is None:
+            raise ValueError("لا يمكن نقل طلب من رحلة في الطريق حالياً — يجب انتظار عودة السائق")
 
         # Remove order from old trip
         old_trip.order_ids = [
@@ -349,6 +352,28 @@ class DeliveryService:
         order.driver_id = new_driver_id
         order.driver_name = new_driver_name
         self._orders.save(order)
+
+        # H4 & H6: Audit reassign event
+        try:
+            self._audit.log(
+                event_type="order_reassigned",
+                user_id=new_driver_id,
+                user_name=new_driver_name,
+                order_id=order_id,
+                entity_type="order",
+                entity_id=order_id,
+                action=f"نقل الطلب من السائق {old_trip.driver_name} الى {new_driver_name}",
+                details={
+                    "old_driver_id": old_trip.driver_id,
+                    "old_driver_name": old_trip.driver_name,
+                    "new_driver_id": new_driver_id,
+                    "new_driver_name": new_driver_name,
+                    "old_trip_id": old_trip.id,
+                    "new_trip_id": new_trip.id,
+                },
+            )
+        except Exception as exc:
+            logger.warning("Failed to log order_reassigned audit: %s", exc)
 
         return new_trip
 

@@ -13,6 +13,8 @@ All numbers are calculated server-side from actual order records.
 
 from __future__ import annotations
 
+import json
+
 import logging
 from datetime import date
 from typing import Dict, List, Optional, TYPE_CHECKING
@@ -186,6 +188,14 @@ class DriverSettlementService:
             # Full-day settlement: all returned trips for the day (summarizes the full day)
             day_trips = all_day_trips
 
+        # H3: Block settlement if driver has any trip currently in transit
+        all_driver_trips = self._delivery.get_driver_trips_for_date(driver_id, target_date)
+        in_transit = [t for t in all_driver_trips if t.dispatched_at is not None and t.returned_at is None]
+        if in_transit:
+            raise ValueError(
+                f"لا يمكن تسوية السائق {driver_name} — توجد رحلة قيد التوصيل في الطريق لم تعد بعد"
+            )
+
         # ── Step 3: Must have at least one eligible trip ──────────────────
         if not day_trips:
             raise ValueError(
@@ -298,16 +308,19 @@ class DriverSettlementService:
                         AuditEventType.DRIVER_SETTLEMENT_COMPLETED,
                         settled_by_id,
                         settled_by_name,
-                        f'{{"driver_id": {driver_id}, "driver_name": "{driver_name}", '
-                        f'"date": "{target_date}", '
-                        f'"trip_count": {summary["trip_count"]}, '
-                        f'"order_count": {summary["order_count"]}, '
-                        f'"cash_collected": {summary["cash_collected"]}, '
-                        f'"online_paid": {summary["online_paid"]}, '
-                        f'"delivery_fees": {summary["total_delivery_fees"]}}}',
+                        json.dumps({
+                            "driver_id": driver_id,
+                            "driver_name": driver_name,
+                            "date": target_date,
+                            "trip_count": summary["trip_count"],
+                            "order_count": summary["order_count"],
+                            "cash_collected": summary["cash_collected"],
+                            "online_paid": summary["online_paid"],
+                            "delivery_fees": summary["total_delivery_fees"],
+                        }, ensure_ascii=False),
                         "driver",
                         driver_id,
-                        f'{{"settlement_id": {settlement.id}}}',
+                        json.dumps({"settlement_id": settlement.id}, ensure_ascii=False),
                     ),
                 )
                 # db.transaction() commits on clean exit — no explicit commit needed
