@@ -82,14 +82,15 @@ class DriverSettlementService:
         if driver is None:
             raise ValueError(f"السائق #{driver_id} غير موجود")
 
-        # Variante A: every returned, not-yet-settled trip for this driver is
-        # eligible, regardless of the day it was created.
-        eligible_trips = [
-            t for t in self._delivery.get_unsettled_trips(driver_id)
-            if t.returned_at is not None and not t.is_settled
+        # Whole-day view: all returned trips the driver made that day,
+        # including ones already settled per-trip (the handover happens per
+        # trip; this is the end-of-day summary over the full day).
+        day_trips = [
+            t for t in self._delivery.get_driver_trips_for_date(driver_id, target_date)
+            if t.returned_at is not None
         ]
 
-        if not eligible_trips:
+        if not day_trips:
             raise ValueError(
                 f"لا توجد رحلات مؤهلة للتسوية ليوم {target_date}"
             )
@@ -98,7 +99,7 @@ class DriverSettlementService:
             driver_id=driver_id,
             driver_name=driver.display_name or driver.username,
             settlement_date=target_date,
-            eligible_trips=eligible_trips,
+            eligible_trips=day_trips,
         )
 
     # ------------------------------------------------------------------
@@ -149,19 +150,25 @@ class DriverSettlementService:
 
         driver_name = driver.display_name or driver.username
 
-        # ── Step 2: Load eligible trips ───────────────────────────────────
-        # Variante A: every returned, not-yet-settled trip for this driver is
-        # eligible, regardless of the day it was created — so trips spanning
-        # midnight or left over from a previous day can still be settled.
-        eligible_trips = [
-            t for t in self._delivery.get_unsettled_trips(driver_id)
-            if t.returned_at is not None and not t.is_settled
+        # ── Step 2: Load the day's returned trips ─────────────────────────
+        # Whole-day settlement: every returned trip the driver made that day,
+        # including ones already settled per-trip. The day record summarizes
+        # the full day and closes it.
+        day_trips = [
+            t for t in self._delivery.get_driver_trips_for_date(driver_id, target_date)
+            if t.returned_at is not None
         ]
 
-        # ── Step 3: Must have at least one eligible trip ──────────────────
-        if not eligible_trips:
+        # ── Step 3: Must have at least one returned trip ──────────────────
+        if not day_trips:
             raise ValueError(
                 f"لا توجد رحلات مؤهلة للتسوية — السائق {driver_name} ليوم {target_date}"
+            )
+
+        # Guard: don't create a second day record for an already-closed day.
+        if self._settlements.get_by_driver_date(driver_id, target_date) is not None:
+            raise ValueError(
+                f"تمت تسوية السائق {driver_name} ليوم {target_date} بالفعل"
             )
 
         # ── Step 4: Calculate financials server-side ──────────────────────
@@ -169,7 +176,7 @@ class DriverSettlementService:
             driver_id=driver_id,
             driver_name=driver_name,
             settlement_date=target_date,
-            eligible_trips=eligible_trips,
+            eligible_trips=day_trips,
         )
 
         # Build settlement object
@@ -195,8 +202,12 @@ class DriverSettlementService:
                 # 6. Create settlement record
                 self._settlements.create_settlement(settlement)
 
-                # 7. Mark all eligible trips as settled + complete their orders
-                for trip in eligible_trips:
+                # 7. Settle the day's trips. Trips already settled per-trip
+                #    keep their handover (cash + completion done earlier) and
+                #    are only summarized above — skip their side effects here.
+                for trip in day_trips:
+                    if trip.is_settled:
+                        continue
                     trip_cash = 0.0
                     trip_fees = 0.0
                     for oid in trip.order_ids:
@@ -386,6 +397,32 @@ class DriverSettlementService:
             "total_delivery_fees": round(total_delivery_fees, 2),
             "trips": per_trip_details,
         }
+
+    # ------------------------------------------------------------------
+    # Per-trip cash handover (used by DeliveryService.settle_trip)
+    # ------------------------------------------------------------------
+
+    def remit_trip_cash(self, trip, trip_cash: float, actor_id: int) -> None:
+        """Book one trip's cash into the ledger (per-trip handover).
+
+        Idempotent per trip_id (uq_ledger_remit), so the end-of-day driver
+        settlement never double-books a trip already settled per-trip.
+        """
+        if self._ledger is None or trip_cash <= 0 or not actor_id:
+            return
+        day_id: Optional[int] = None
+        for oid in trip.order_ids:
+            order = self._orders.get_by_id(oid)
+            if order and order.shift_id:
+                day_id = order.shift_id
+                break
+        if day_id is not None:
+            self._create_driver_remittance_entry(
+                trip_id=trip.id,
+                day_id=day_id,
+                trip_cash=trip_cash,
+                actor_id=actor_id,
+            )
 
     # ------------------------------------------------------------------
     # Phase 3: Ledger helper

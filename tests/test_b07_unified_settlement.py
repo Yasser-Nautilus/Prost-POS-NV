@@ -1,12 +1,12 @@
 """
-Tests for B-07 — Unified Settlement.
+Tests for trip vs. driver settlement separation.
 
-Before B-07:
-  settle_trip()   → marks trip settled + completes orders,  but NEVER creates driver_settlements record
-  settle_driver() → creates driver_settlements record + marks trips settled, but NEVER completes orders
+Per-trip settlement (DeliveryService.settle_trip) is the running cash handover:
+  it settles ONLY that one trip (mark settled + complete its orders + book its cash).
 
-After B-07:
-  Both paths produce all three outcomes: settled trip + completed orders + driver_settlements record.
+Driver settlement (DriverSettlementService.settle_driver) is the end-of-day close:
+  it summarizes ALL the driver's returned trips for the date into one day record,
+  without re-booking cash or re-completing trips already settled per-trip.
 
 Test strategy: unit-test with mocks — no real DB.
 """
@@ -108,6 +108,7 @@ class TestSettleDriverCompletesOrders:
 
         settlement_repo = MagicMock()
         settlement_repo.create_settlement.side_effect = lambda s: s
+        settlement_repo.get_by_driver_date.return_value = None  # no existing day record
 
         svc = DriverSettlementService(
             settlement_repo=settlement_repo,
@@ -118,10 +119,9 @@ class TestSettleDriverCompletesOrders:
         )
         return svc, order_svc
 
-    def test_settle_driver_settles_returned_trip_from_a_previous_day(self):
-        """Variante A regression: a returned, unsettled trip is settleable even
-        when no trip was created today — it was previously excluded by the
-        created_at = today filter, which caused 'no eligible trips' errors."""
+    def test_settle_driver_summarizes_the_days_returned_trips(self):
+        """Whole-day settlement: the day record is built from the driver's
+        returned trips for that date (get_driver_trips_for_date)."""
         from broast_pos.core.services.driver_settlement_service import DriverSettlementService
 
         orders = {101: _order(101), 102: _order(102)}
@@ -133,10 +133,9 @@ class TestSettleDriverCompletesOrders:
             id=10, display_name="محمود", username="mahmoud", is_active=True
         )
 
-        trip = _trip()  # returned_at on 2026-10-04 — not "today"
+        trip = _trip()  # returned
         delivery_repo = MagicMock()
-        delivery_repo.get_driver_trips_for_date.return_value = []   # nothing created today
-        delivery_repo.get_unsettled_trips.return_value = [trip]      # but a returned trip exists
+        delivery_repo.get_driver_trips_for_date.return_value = [trip]
         delivery_repo._db = MagicMock()
         delivery_repo._db.transaction.return_value.__enter__ = MagicMock(return_value=None)
         delivery_repo._db.transaction.return_value.__exit__ = MagicMock(return_value=False)
@@ -144,6 +143,7 @@ class TestSettleDriverCompletesOrders:
 
         settlement_repo = MagicMock()
         settlement_repo.create_settlement.side_effect = lambda s: s
+        settlement_repo.get_by_driver_date.return_value = None
 
         svc = DriverSettlementService(
             settlement_repo=settlement_repo,
@@ -155,7 +155,61 @@ class TestSettleDriverCompletesOrders:
         result = svc.settle_driver(driver_id=10, settled_by_id=1, settled_by_name="مدير")
 
         assert result.trip_count == 1
-        delivery_repo.get_unsettled_trips.assert_called_once_with(10)
+        assert delivery_repo.get_driver_trips_for_date.call_args[0][0] == 10
+
+    def test_settle_driver_rejects_second_settlement_same_day(self):
+        """Guard: a day already closed cannot be settled again."""
+        from broast_pos.core.services.driver_settlement_service import DriverSettlementService
+
+        order_repo = MagicMock()
+        order_repo.get_by_id.return_value = _order(101)
+        user_repo = MagicMock()
+        user_repo.get_by_id.return_value = MagicMock(display_name="محمود", username="m")
+
+        delivery_repo = MagicMock()
+        delivery_repo.get_driver_trips_for_date.return_value = [_trip()]
+        delivery_repo._db = MagicMock()
+
+        settlement_repo = MagicMock()
+        settlement_repo.get_by_driver_date.return_value = MagicMock()  # already settled
+
+        svc = DriverSettlementService(
+            settlement_repo=settlement_repo, delivery_repo=delivery_repo,
+            order_repo=order_repo, user_repo=user_repo,
+        )
+        with pytest.raises(ValueError, match="بالفعل"):
+            svc.settle_driver(driver_id=10, settled_by_id=1, settled_by_name="مدير")
+
+    def test_settle_driver_skips_side_effects_for_already_settled_trips(self):
+        """Trips already settled per-trip are only summarized, not re-completed."""
+        from broast_pos.core.services.driver_settlement_service import DriverSettlementService
+
+        orders = {101: _order(101, status=OrderStatus.DELIVERED)}
+        order_repo = MagicMock()
+        order_repo.get_by_id.side_effect = lambda oid: orders.get(oid)
+        order_svc = MagicMock()
+        user_repo = MagicMock()
+        user_repo.get_by_id.return_value = MagicMock(display_name="محمود", username="m")
+
+        settled_trip = _trip(trip_id=1, order_ids=[101], is_settled=True)
+        delivery_repo = MagicMock()
+        delivery_repo.get_driver_trips_for_date.return_value = [settled_trip]
+        delivery_repo._db = MagicMock()
+        delivery_repo._db.transaction.return_value.__enter__ = MagicMock(return_value=None)
+        delivery_repo._db.transaction.return_value.__exit__ = MagicMock(return_value=False)
+
+        settlement_repo = MagicMock()
+        settlement_repo.create_settlement.side_effect = lambda s: s
+        settlement_repo.get_by_driver_date.return_value = None
+
+        svc = DriverSettlementService(
+            settlement_repo=settlement_repo, delivery_repo=delivery_repo,
+            order_repo=order_repo, user_repo=user_repo, order_svc=order_svc,
+        )
+        result = svc.settle_driver(driver_id=10, settled_by_id=1, settled_by_name="مدير")
+
+        assert result.trip_count == 1               # counted in the summary
+        order_svc.change_order_status.assert_not_called()  # but not re-completed
 
     def test_settle_driver_calls_change_order_status_for_delivered_orders(self):
         """B-07: settle_driver() must complete DELIVERED orders."""
@@ -210,7 +264,10 @@ class TestSettleDriverCompletesOrders:
         user_repo.get_by_id.return_value = MagicMock(display_name="x", username="x")
 
         svc = DriverSettlementService(
-            settlement_repo=MagicMock(**{"create_settlement.side_effect": lambda s: s}),
+            settlement_repo=MagicMock(**{
+                "create_settlement.side_effect": lambda s: s,
+                "get_by_driver_date.return_value": None,
+            }),
             delivery_repo=delivery_repo,
             order_repo=order_repo,
             user_repo=user_repo,
@@ -247,35 +304,36 @@ class TestSettleTripDelegatesToSettlementSvc:
         )
         return svc, delivery_repo
 
-    def test_settle_trip_delegates_when_settlement_svc_present(self):
-        """B-07: settle_trip() must call settlement_svc.settle_driver()."""
-        trip = _trip(driver_id=10)
-        orders = {
-            101: _order(101, payment=PaymentMethod.CASH),
-            102: _order(102, payment=PaymentMethod.ONLINE),
-        }
+    def test_settle_trip_settles_only_this_trip(self):
+        """settle_trip settles ONLY this one trip — it must NOT trigger the
+        whole-day settle_driver sweep, and it books only this trip's cash."""
+        trip = _trip(driver_id=10, order_ids=[101])
+        orders = {101: _order(101, payment=PaymentMethod.CASH)}
         settlement_svc = MagicMock()
         svc, delivery_repo = self._build_delivery_svc(trip, orders, settlement_svc)
+        svc._order_svc = MagicMock()
+        svc._order_svc.change_order_status.side_effect = lambda **kw: orders[kw["order_id"]]
 
         svc.settle_trip(trip_id=1)
 
-        settlement_svc.settle_driver.assert_called_once()
-        call_kwargs = settlement_svc.settle_driver.call_args[1]
-        assert call_kwargs["driver_id"] == 10
+        settlement_svc.settle_driver.assert_not_called()     # no day-wide sweep
+        delivery_repo.mark_settled.assert_called_once()      # just this trip
+        settlement_svc.remit_trip_cash.assert_called_once()  # this trip's cash booked
 
-    def test_settle_trip_passes_through_the_settling_user(self):
-        """Regression: settle_trip must settle as the logged-in user, not id 0
-        (actor_id = 0 violated the cash_ledger -> users foreign key)."""
-        trip = _trip(driver_id=10)
+    def test_settle_trip_books_cash_as_the_settling_user(self):
+        """Per-trip cash is booked for the logged-in user (actor_id = 0 would
+        violate the cash_ledger -> users foreign key)."""
+        trip = _trip(driver_id=10, order_ids=[101])
         orders = {101: _order(101, payment=PaymentMethod.CASH)}
         settlement_svc = MagicMock()
         svc, _ = self._build_delivery_svc(trip, orders, settlement_svc)
+        svc._order_svc = MagicMock()
+        svc._order_svc.change_order_status.side_effect = lambda **kw: orders[kw["order_id"]]
 
         svc.settle_trip(trip_id=1, settled_by_id=7, settled_by_name="مدير المطعم")
 
-        call_kwargs = settlement_svc.settle_driver.call_args[1]
-        assert call_kwargs["settled_by_id"] == 7
-        assert call_kwargs["settled_by_name"] == "مدير المطعم"
+        args = settlement_svc.remit_trip_cash.call_args[0]
+        assert args[2] == 7   # actor_id
 
     def test_settle_trip_legacy_path_when_no_settlement_svc(self):
         """Without settlement_svc, settle_trip() falls back to legacy path."""
