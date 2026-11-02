@@ -388,27 +388,39 @@ class DeliveryService:
         fees_total = 0.0
         for oid in trip.order_ids:
             order = self._orders.get_by_id(oid)
-            if order:
-                if order.payment_method == PaymentMethod.CASH:
-                    cash_total += order.total
-                fees_total += order.delivery_fee or 0.0
+            if not order or order.status == OrderStatus.CANCELLED:
+                continue
+            if order.payment_method == PaymentMethod.CASH:
+                cash_total += order.total
+            fees_total += order.delivery_fee or 0.0
 
-        self._delivery.mark_settled(trip_id, cash_total, fees_total)
-
-        # Book this trip's cash into the ledger (per-trip handover).
-        # Idempotent per trip_id, so the end-of-day settlement never re-books it.
-        if self._settlement_svc is not None:
-            self._settlement_svc.remit_trip_cash(trip, cash_total, settled_by_id)
-
-        # Complete orders via centralized path
-        for oid in trip.order_ids:
-            order = self._orders.get_by_id(oid)
-            if order and order.status == OrderStatus.DELIVERED:
-                self._change_order_status(
-                    order_id=oid,
-                    new_status=OrderStatus.COMPLETED,
-                    changed_by_name="تسوية",
-                )
+        # C3: Atomic execution - if remit_trip_cash or status change fails, do not mark settled
+        db = getattr(self._delivery, "_db", None)
+        if db is not None and hasattr(db, "transaction"):
+            with db.transaction():
+                if self._settlement_svc is not None:
+                    self._settlement_svc.remit_trip_cash(trip, cash_total, settled_by_id)
+                self._delivery.mark_settled(trip_id, cash_total, fees_total)
+                for oid in trip.order_ids:
+                    order = self._orders.get_by_id(oid)
+                    if order and order.status == OrderStatus.DELIVERED:
+                        self._change_order_status(
+                            order_id=oid,
+                            new_status=OrderStatus.COMPLETED,
+                            changed_by_name="تسوية",
+                        )
+        else:
+            if self._settlement_svc is not None:
+                self._settlement_svc.remit_trip_cash(trip, cash_total, settled_by_id)
+            self._delivery.mark_settled(trip_id, cash_total, fees_total)
+            for oid in trip.order_ids:
+                order = self._orders.get_by_id(oid)
+                if order and order.status == OrderStatus.DELIVERED:
+                    self._change_order_status(
+                        order_id=oid,
+                        new_status=OrderStatus.COMPLETED,
+                        changed_by_name="تسوية",
+                    )
 
         # Audit event
         try:

@@ -183,8 +183,8 @@ class DriverSettlementService:
                     f"الرحلة #{trip_id} تمت تسويتها بالفعل"
                 )
         else:
-            # Full-day settlement: all returned, unsettled trips
-            day_trips = [t for t in all_day_trips if not t.is_settled]
+            # Full-day settlement: all returned trips for the day (summarizes the full day)
+            day_trips = all_day_trips
 
         # ── Step 3: Must have at least one eligible trip ──────────────────
         if not day_trips:
@@ -239,10 +239,11 @@ class DriverSettlementService:
                     trip_fees = 0.0
                     for oid in trip.order_ids:
                         order = self._orders.get_by_id(oid)
-                        if order:
-                            if order.payment_method == PaymentMethod.CASH:
-                                trip_cash += order.total
-                            trip_fees += order.delivery_fee or 0.0
+                        if not order or order.status == OrderStatus.CANCELLED:
+                            continue
+                        if order.payment_method == PaymentMethod.CASH:
+                            trip_cash += order.total
+                        trip_fees += order.delivery_fee or 0.0
 
                     db.execute(
                         """UPDATE delivery_trips
@@ -368,7 +369,7 @@ class DriverSettlementService:
 
             for oid in trip.order_ids:
                 order = self._orders.get_by_id(oid)
-                if not order:
+                if not order or order.status == OrderStatus.CANCELLED:
                     continue
 
                 order_total = order.total or 0.0
@@ -435,22 +436,26 @@ class DriverSettlementService:
 
         Idempotent per trip_id (uq_ledger_remit), so the end-of-day driver
         settlement never double-books a trip already settled per-trip.
+        C3: Fails loudly if session or actor_id is invalid.
         """
-        if self._ledger is None or trip_cash <= 0 or not actor_id:
+        if self._ledger is None or trip_cash <= 0:
             return
+        if not actor_id:
+            raise ValueError("لا يمكن توريد نقدية الرحلة بدون مستخدم مسؤول (actor_id)")
         day_id: Optional[int] = None
         for oid in trip.order_ids:
             order = self._orders.get_by_id(oid)
             if order and order.shift_id:
                 day_id = order.shift_id
                 break
-        if day_id is not None:
-            self._create_driver_remittance_entry(
-                trip_id=trip.id,
-                day_id=day_id,
-                trip_cash=trip_cash,
-                actor_id=actor_id,
-            )
+        if day_id is None:
+            raise ValueError("لا توجد وردية مفتوحة لتوريد نقدية هذه الرحلة")
+        self._create_driver_remittance_entry(
+            trip_id=trip.id,
+            day_id=day_id,
+            trip_cash=trip_cash,
+            actor_id=actor_id,
+        )
 
     # ------------------------------------------------------------------
     # Phase 3: Ledger helper
@@ -489,7 +494,7 @@ class DriverSettlementService:
         )
 
         if session is None:
-            return
+            raise ValueError("لا توجد جلسة كاشير نشطة (توصيل أو عامة) لتوريد نقدية الرحلة")
 
         amount_pt = round(trip_cash * 100)
         try:

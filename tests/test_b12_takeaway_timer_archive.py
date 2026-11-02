@@ -25,7 +25,9 @@ def _item(price: float = 100.0) -> OrderItem:
     return OrderItem(product_id=1, product_name="بروست", unit_price=price, quantity=1)
 
 
-def _takeaway(order_id=7, status=OrderStatus.NEW, paid_at=None, created_at=None) -> Order:
+def _takeaway(order_id=7, status=OrderStatus.NEW, paid_at=None, created_at=None, is_paid=None) -> Order:
+    if is_paid is None:
+        is_paid = paid_at is not None
     return Order(
         id=order_id,
         invoice_no=55,
@@ -37,6 +39,7 @@ def _takeaway(order_id=7, status=OrderStatus.NEW, paid_at=None, created_at=None)
         shift_id=1,
         paid_at=paid_at,
         created_at=created_at,
+        is_paid=is_paid,
     )
 
 
@@ -106,12 +109,15 @@ class TestAutoCompleteTakeaways:
         assert recent.status == OrderStatus.NEW
         repo.save.assert_not_called()
 
-    def test_falls_back_to_created_at_when_unpaid(self):
+    def test_unpaid_takeaway_never_auto_completed(self):
+        """C1: Unpaid takeaways must NEVER be auto-completed even if old."""
         svc, repo = _svc()
-        old_unpaid = _takeaway(order_id=9, paid_at=None, created_at=_ago(45))
+        old_unpaid = _takeaway(order_id=9, paid_at=None, created_at=_ago(45), is_paid=False)
         repo.get_active_by_type.return_value = [old_unpaid]
         closed = svc.auto_complete_expired_takeaways(minutes=30)
-        assert closed == [9]
+        assert closed == []
+        assert old_unpaid.status == OrderStatus.NEW
+        repo.save.assert_not_called()
 
     def test_only_queries_takeaway_type(self):
         svc, repo = _svc()

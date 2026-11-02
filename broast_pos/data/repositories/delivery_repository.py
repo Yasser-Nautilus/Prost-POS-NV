@@ -154,6 +154,14 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
         """Alias for get_by_id — used by DeliveryService."""
         return self.get_by_id(trip_id)
 
+    def remove_order_from_trip(self, trip_id: int, order_id: int) -> None:
+        """C4: Remove an order from an unsettled trip."""
+        self._db.execute(
+            "DELETE FROM delivery_trip_orders WHERE trip_id = ? AND order_id = ?",
+            (trip_id, order_id),
+        )
+        self._db.commit()
+
     def get_trip_for_order(self, order_id: int) -> Optional[DeliveryTrip]:
         """Find the trip that currently contains a given order."""
         row = self._db.fetch_one(

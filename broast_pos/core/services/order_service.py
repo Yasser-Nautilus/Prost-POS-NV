@@ -82,6 +82,7 @@ class OrderService:
         session_service: Optional["CashierSessionService"] = None,
         ledger_repo=None,           # CashLedgerRepository (Phase 3)
         cashier_session_repo=None,  # CashierSessionRepository (Phase 3)
+        delivery_repo=None,         # DeliveryRepository (C4)
     ) -> None:
         self._orders = order_repo or OrderRepository()
         self._audit = audit_repo or AuditRepository()
@@ -98,6 +99,7 @@ class OrderService:
         # Phase 3: cash ledger wiring (optional — skipped if not injected)
         self._ledger = ledger_repo      # CashLedgerRepository | None
         self._cashier_sessions = cashier_session_repo  # CashierSessionRepository | None
+        self._delivery_repo = delivery_repo
 
     # ------------------------------------------------------------------
     # Create order
@@ -265,8 +267,8 @@ class OrderService:
         if order is None:
             raise ValueError("الطلب غير موجود")
 
-        if order.status in (OrderStatus.COMPLETED, OrderStatus.CANCELLED):
-            raise ValueError("لا يمكن تعديل طلب مكتمل أو ملغي")
+        if order.status in (OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED):
+            raise ValueError("لا يمكن تعديل طلب في هذه الحالة (مكتمل، ملغي، أو خارج للتوصيل)")
 
         # Removing items requires manager override
         if removed_items:
@@ -428,6 +430,15 @@ class OrderService:
 
         saved = self._orders.save(order)
 
+        # C4: If order was assigned to an unsettled delivery trip, remove it
+        if self._delivery_repo is not None:
+            try:
+                trip = self._delivery_repo.get_trip_for_order(order_id)
+                if trip and not trip.is_settled:
+                    self._delivery_repo.remove_order_from_trip(trip.id, order_id)
+            except Exception:
+                pass
+
         # Record status history
         try:
             self._status_history.record_transition(
@@ -440,6 +451,10 @@ class OrderService:
             )
         except Exception:
             pass
+
+        # C6: Write REVERSAL entry if cancelling a paid order with cash in drawer
+        if order.is_paid and self._ledger is not None:
+            self._create_cancel_reversal_entry(order, manager.id, reason)
 
         # B-03: Audit trail — always via AuditService (never direct repo)
         self._audit_svc.log(
@@ -480,6 +495,9 @@ class OrderService:
             ValueError: if discount_type is invalid, value ≤ 0, flat > subtotal,
                         or percent > 100.
         """
+        if order.is_paid:
+            raise ValueError("لا يمكن تطبيق خصم على طلب مدفوع بالفعل")
+
         manager = self._verify_manager_pin(manager_pin)
 
         before_total = order.total
@@ -585,6 +603,9 @@ class OrderService:
         cutoff = datetime.datetime.now() - datetime.timedelta(minutes=minutes)
         closed: List[int] = []
         for order in self._orders.get_active_by_type(OrderType.TAKEAWAY):
+            # C1: NEVER auto-complete unpaid takeaway orders
+            if not order.is_paid:
+                continue
             ref = order.paid_at or order.created_at
             if not ref:
                 continue
@@ -728,6 +749,32 @@ class OrderService:
     # ------------------------------------------------------------------
     # Phase 3: Cash ledger helpers
     # ------------------------------------------------------------------
+
+    def _create_cancel_reversal_entry(
+        self, order: Order, actor_id: int, reason: str
+    ) -> None:
+        """C6: Create a REVERSAL entry when a paid cash order is cancelled."""
+        from broast_pos.core.models.cashier_session import CashLedgerEntry, LedgerEntryType
+        import datetime as _dt
+
+        sale_entry = self._ledger.get_entry_by_order(order.id, LedgerEntryType.SALE_CASH)
+        if sale_entry is None:
+            return
+
+        reversal_amount_pt = -abs(sale_entry.amount_pt)
+        self._ledger.append(CashLedgerEntry(
+            id=None,
+            day_id=sale_entry.day_id,
+            session_id=sale_entry.session_id,
+            entry_type=LedgerEntryType.REVERSAL,
+            amount_pt=reversal_amount_pt,
+            order_id=order.id,
+            reverses_entry_id=sale_entry.id,
+            actor_id=actor_id,
+            approved_by=actor_id,
+            reason=f"الغاء طلب #{order.invoice_no}: {reason}",
+            created_at=_dt.datetime.now(_dt.timezone.utc).isoformat(),
+        ))
 
     def _create_sale_cash_entry(
         self,

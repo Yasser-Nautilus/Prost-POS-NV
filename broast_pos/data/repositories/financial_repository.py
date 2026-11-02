@@ -298,14 +298,14 @@ class FinancialRepository(BaseRepository[Shift]):
         has_unsettled_trips, so they are excluded here to avoid double-blocking.
         Returns True if any such order exists (blocks shift close).
         """
+        # C1 & B-04: Block shift close if ANY order in new/preparing/ready is unpaid
         row = self._db.fetch_one(
             """SELECT COUNT(*) AS cnt
                FROM orders
                WHERE shift_id = ?
                  AND status IN ('new', 'preparing', 'ready')
                  AND is_paid = 0
-                 AND status != 'cancelled'
-                 AND (payment_method = 'cash' OR payment_method IS NULL)""",
+                 AND (order_type != 'delivery' OR status != 'delivered')""",
             (shift_id,),
         )
         return (row["cnt"] if row else 0) > 0
