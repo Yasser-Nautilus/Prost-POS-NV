@@ -195,8 +195,16 @@ const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => v
                 )}
               </td>
               <td className="py-2.5 px-3 text-gray-400 text-xs">
-                {order.customer_zone && <div className="text-brand-gold">{order.customer_zone}</div>}
-                {order.customer_address && <div className="truncate max-w-[120px]">{order.customer_address}</div>}
+                {order.order_type === "pickup" ? (
+                  <span className="py-0.5 px-2 bg-purple-900/40 border border-purple-700/50 text-purple-300 rounded-md text-[11px] font-bold inline-block">
+                    {order.customer_address || "استلام محل"}
+                  </span>
+                ) : (
+                  <>
+                    {order.customer_zone && <div className="text-brand-gold">{order.customer_zone}</div>}
+                    {order.customer_address && <div className="truncate max-w-[120px]">{order.customer_address}</div>}
+                  </>
+                )}
               </td>
               <td className="py-2.5 px-3 text-center">
                 <span className={`text-[10px] font-bold ${status.color}`}>{status.label}</span>

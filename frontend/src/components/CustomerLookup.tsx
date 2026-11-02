@@ -4,15 +4,18 @@ import { bridge } from "../bridge";
 
 interface CustomerLookupProps {
   isOpen: boolean;
+  orderType?: string;
   onClose: () => void;
   onSelect: (customer: any, selectedAddress: any) => void;
 }
 
 export const CustomerLookup: React.FC<CustomerLookupProps> = ({
   isOpen,
+  orderType,
   onClose,
   onSelect
 }) => {
+  const isPickup = orderType === "pickup";
   const [phone, setPhone] = useState("");
   const [customer, setCustomer] = useState<any>(null);
   const [searched, setSearched] = useState(false);
@@ -69,6 +72,14 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
       });
       setCustomer(res);
       setIsRegistering(false);
+      if (isPickup) {
+        onSelect(res, {
+          street_name: "استلام محل",
+          zone_name: "",
+          delivery_fee: 0,
+        });
+        return;
+      }
       // Auto open add address
       setIsAddingAddress(true);
     } catch (err: any) {
@@ -104,7 +115,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
         
         {/* Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-brand-border/60 bg-brand-card">
-          <h3 className="font-bold text-lg text-brand-gold">البحث عن عميل الدليفري</h3>
+          <h3 className="font-bold text-lg text-brand-gold">{isPickup ? "البحث عن عميل (استلام محل)" : "البحث عن عميل الدليفري"}</h3>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-brand-border/30"
@@ -142,7 +153,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
             <div className="space-y-4">
               {customer ? (
                 <div className="bg-brand-card/40 border border-brand-border/40 rounded-2xl p-5 space-y-4">
-                  <div className="flex justify-between items-start">
+                  <div className="flex justify-between items-start gap-4">
                     <div>
                       <h4 className="text-xl font-bold text-white">{customer.name}</h4>
                       <p className="text-gray-400 font-mono text-sm mt-1">{customer.phone}</p>
@@ -150,8 +161,22 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                         <p className="text-yellow-600/90 text-sm mt-1">ملاحظات: {customer.notes}</p>
                       )}
                     </div>
-                    
-                    {!isAddingAddress && (
+
+                    <div className="flex items-center gap-2">
+                      {isPickup && (
+                        <button
+                          onClick={() => onSelect(customer, {
+                            street_name: "استلام محل",
+                            zone_name: "",
+                            delivery_fee: 0,
+                          })}
+                          className="py-2 px-4 bg-brand-gold text-brand-dark hover:bg-opacity-90 rounded-xl font-bold text-sm flex items-center gap-1.5 active:translate-y-0.5 btn-hover-active shadow-md"
+                        >
+                          <Check size={16} />
+                          اختيار لاستلام المحل
+                        </button>
+                      )}
+                      {!isAddingAddress && (
                       <button
                         onClick={() => setIsAddingAddress(true)}
                         className="py-2 px-3 bg-brand-border/30 hover:bg-brand-border/60 text-brand-gold rounded-lg font-semibold text-xs flex items-center gap-1 active:translate-y-0.5 btn-hover-active"
@@ -160,6 +185,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                         إضافة عنوان جديد
                       </button>
                     )}
+                    </div>
                   </div>
 
                   {/* Add Address Form */}
