@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Eye, RefreshCw, Loader2, X,
-  UtensilsCrossed, Truck, Package, ShoppingBag, PlusCircle, History
+  UtensilsCrossed, Truck, Package, ShoppingBag, PlusCircle, History, Archive, Clock
 } from "lucide-react";
+
+// Takeaway stays on the live board this long after payment, then auto-archives.
+// Keep in sync with OrderService.TAKEAWAY_AUTO_CLOSE_MINUTES on the backend.
+const TAKEAWAY_WINDOW_SECS = 30 * 60;
 import { bridge } from "../bridge";
 import { CustomerHistoryModal } from "../components/CustomerHistoryModal";
 
@@ -55,6 +59,33 @@ const LiveTimer: React.FC<{ since: string | null; urgentSecs?: number }> = ({ si
   return (
     <span className={`font-mono font-bold tabular-nums text-xs ${isUrgent ? "text-red-400 animate-pulse" : "text-brand-gold"}`}>
       {display}
+    </span>
+  );
+};
+
+/** Countdown to a deadline `windowSecs` after `since` → "MM:SS" remaining. */
+const CountdownTimer: React.FC<{ since: string | null; windowSecs: number }> = ({ since, windowSecs }) => {
+  const remaining = () => {
+    if (!since) return windowSecs;
+    const elapsed = Math.floor((Date.now() - new Date(since).getTime()) / 1000);
+    return windowSecs - elapsed;
+  };
+  const [left, setLeft] = useState(remaining);
+  useEffect(() => {
+    const id = setInterval(() => setLeft(remaining()), 1000);
+    return () => clearInterval(id);
+  }, [since, windowSecs]);
+
+  if (left <= 0) {
+    return <span className="font-bold text-[10px] text-gray-500">انتهى — يُؤرشَف</span>;
+  }
+  const m = Math.floor(left / 60);
+  const s = left % 60;
+  const urgent = left <= 300; // last 5 minutes
+  return (
+    <span className={`inline-flex items-center gap-1 font-mono font-bold tabular-nums text-xs ${urgent ? "text-red-400 animate-pulse" : "text-brand-teal"}`}>
+      <Clock size={11} />
+      {m}:{s.toString().padStart(2, "0")}
     </span>
   );
 };
@@ -212,7 +243,7 @@ const TakeawayTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; o
           <th className="py-2.5 px-3 text-right">#فاتورة</th>
           <th className="py-2.5 px-3 text-right">العناصر</th>
           <th className="py-2.5 px-3 text-center">الحالة</th>
-          <th className="py-2.5 px-3 text-center">المنقضي</th>
+          <th className="py-2.5 px-3 text-center">المتبقي للاستلام</th>
           <th className="py-2.5 px-3 text-center font-mono">الإجمالي</th>
           <th className="py-2.5 px-3 text-center">إجراء</th>
         </tr>
@@ -233,7 +264,7 @@ const TakeawayTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; o
                 <span className={`text-[10px] font-bold ${status.color}`}>{status.label}</span>
               </td>
               <td className="py-2.5 px-3 text-center">
-                <LiveTimer since={order.created_at} urgentSecs={900} />
+                <CountdownTimer since={order.paid_at || order.created_at} windowSecs={TAKEAWAY_WINDOW_SECS} />
               </td>
               <td className="py-2.5 px-3 text-center text-brand-gold font-black font-mono text-sm">
                 {(order.total || 0).toFixed(2)} ج.م
@@ -263,12 +294,71 @@ const TakeawayTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; o
     </table>
   );
 
+// ─── Order history / archive ──────────────────────────────────────────────────
+
+const HISTORY_STATUS: Record<string, { label: string; color: string }> = {
+  completed: { label: "مكتمل", color: "text-green-400 bg-green-900/20 border-green-800/30" },
+  cancelled: { label: "ملغي",  color: "text-red-400 bg-red-900/20 border-red-800/30" },
+};
+
+/** Local time "HH:MM" for an ISO datetime string. */
+function formatClock(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
+}
+
+const HistoryTable: React.FC<{ orders: any[] }> = ({ orders }) => (
+  <table className="w-full text-sm">
+    <thead>
+      <tr className="bg-brand-card/80 text-gray-400 text-xs">
+        <th className="py-2.5 px-3 text-right">#فاتورة</th>
+        <th className="py-2.5 px-3 text-right">النوع</th>
+        <th className="py-2.5 px-3 text-right">العناصر</th>
+        <th className="py-2.5 px-3 text-center">الحالة</th>
+        <th className="py-2.5 px-3 text-center">الوقت</th>
+        <th className="py-2.5 px-3 text-center font-mono">الإجمالي</th>
+      </tr>
+    </thead>
+    <tbody>
+      {orders.map((order, i) => {
+        const t = ORDER_TYPE_LABELS[order.order_type] || ORDER_TYPE_LABELS.takeaway;
+        const st = HISTORY_STATUS[order.status] || { label: order.status, color: "text-gray-400" };
+        return (
+          <tr key={order.id} className={`border-t border-brand-border/20 ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}>
+            <td className="py-2.5 px-3 text-gray-400 font-mono text-xs">#{order.invoice_no || order.id}</td>
+            <td className="py-2.5 px-3">
+              <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border ${t.color}`}>{t.label}</span>
+            </td>
+            <td className="py-2.5 px-3 text-gray-400 text-xs">
+              {(order.items || []).slice(0, 2).map((it: any, j: number) => (
+                <div key={j}>{it.product_name} ×{it.quantity}</div>
+              ))}
+              {(order.items || []).length > 2 && <div className="text-gray-600">+{order.items.length - 2} أخرى</div>}
+            </td>
+            <td className="py-2.5 px-3 text-center">
+              <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border ${st.color}`}>{st.label}</span>
+            </td>
+            <td className="py-2.5 px-3 text-center text-gray-400 font-mono text-xs">{formatClock(order.paid_at || order.created_at)}</td>
+            <td className="py-2.5 px-3 text-center text-brand-gold font-black font-mono text-sm">
+              {(order.total || 0).toFixed(2)} ج.م
+            </td>
+          </tr>
+        );
+      })}
+    </tbody>
+  </table>
+);
+
 // ─── Main View ────────────────────────────────────────────────────────────────
 
 export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResumeOrder }) => {
   const [orders, setOrders] = useState<any[]>([]);
+  const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterType, setFilterType] = useState<string>("all");
+  const isHistory = filterType === "history";
 
   // Cancel dialog state
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -294,11 +384,29 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
     }
   }, []);
 
+  const fetchHistory = useCallback(async () => {
+    try {
+      const res = await bridge.call("get_order_history");
+      setHistory(res || []);
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  // Keep polling active orders even while viewing history — that poll also runs
+  // the backend's takeaway auto-close sweep, so the archive stays current.
   useEffect(() => {
     fetchOrders();
     const id = setInterval(fetchOrders, 30_000);
     return () => clearInterval(id);
   }, [fetchOrders]);
+
+  useEffect(() => {
+    if (!isHistory) return;
+    fetchHistory();
+    const id = setInterval(fetchHistory, 30_000);
+    return () => clearInterval(id);
+  }, [isHistory, fetchHistory]);
 
   const filteredOrders =
     filterType === "all" ? orders : orders.filter((o) => o.order_type === filterType);
@@ -363,11 +471,13 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-2xl bg-brand-gold/10 text-brand-gold flex items-center justify-center">
-            <Eye size={20} />
+            {isHistory ? <Archive size={20} /> : <Eye size={20} />}
           </div>
           <div>
-            <h2 className="text-xl font-black text-white">متابعة الطلبات النشطة</h2>
-            <p className="text-xs text-gray-400">{filteredOrders.length} طلب نشط</p>
+            <h2 className="text-xl font-black text-white">{isHistory ? "سجل الأوردرات" : "متابعة الطلبات النشطة"}</h2>
+            <p className="text-xs text-gray-400">
+              {isHistory ? `${history.length} طلب في السجل (اليوم)` : `${filteredOrders.length} طلب نشط`}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -390,8 +500,21 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
               {f.label}
             </button>
           ))}
+          {/* Archive tab — finished orders of all types */}
+          <div className="w-px h-6 bg-brand-border/40 mx-1" />
           <button
-            onClick={fetchOrders}
+            onClick={() => setFilterType("history")}
+            className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${
+              isHistory
+                ? "bg-brand-gold/10 border-brand-gold text-brand-gold"
+                : "bg-brand-card border-brand-border/40 text-gray-400 hover:text-white"
+            }`}
+          >
+            <Archive size={13} />
+            سجل الأوردرات
+          </button>
+          <button
+            onClick={isHistory ? fetchHistory : fetchOrders}
             className={`p-2 bg-brand-card border border-brand-border/40 hover:border-brand-gold text-gray-400 hover:text-brand-gold rounded-xl transition-all ${loading ? "animate-spin" : ""}`}
           >
             <RefreshCw size={16} />
@@ -399,8 +522,24 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
         </div>
       </div>
 
-      {/* Order tables by type */}
-      {filteredOrders.length === 0 ? (
+      {/* Body: archive (finished orders) or active orders by type */}
+      {isHistory ? (
+        history.length === 0 ? (
+          <div className="py-20 text-center text-gray-500">
+            <Archive size={48} className="mx-auto mb-3 text-brand-border/30" />
+            <p>لا توجد طلبات في السجل اليوم</p>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-brand-border/40 overflow-hidden">
+            <div className="px-4 py-2.5 flex items-center gap-2 border-b border-brand-border/30 text-gray-300 bg-brand-card/40">
+              <Archive size={15} />
+              <span className="font-bold text-sm">كل الطلبات المنتهية</span>
+              <span className="ml-auto bg-black/20 text-xs font-bold px-2 py-0.5 rounded-full">{history.length}</span>
+            </div>
+            <HistoryTable orders={history} />
+          </div>
+        )
+      ) : filteredOrders.length === 0 ? (
         <div className="py-20 text-center text-gray-500">
           <Eye size={48} className="mx-auto mb-3 text-brand-border/30" />
           <p>لا توجد طلبات نشطة حالياً</p>

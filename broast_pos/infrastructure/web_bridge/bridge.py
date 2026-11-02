@@ -561,7 +561,7 @@ class POSBridge(QObject):
                             "remove_item", "set_item_note", "set_table", "change_table", "set_customer_info",
                             "park_order", "resume_parked_order", "get_parked_orders",
                             "confirm_order", "complete_payment", "get_table_state",
-                            "get_active_orders", "get_active_by_type", "cancel_order",
+                            "get_active_orders", "get_active_by_type", "get_order_history", "cancel_order",
                             "apply_discount", "reprint_receipt",
                             "load_order", "load_order_by_table", "save_amendment"):
                 if not self._order_ctrl:
@@ -739,14 +739,18 @@ class POSBridge(QObject):
                 }})
             return json.dumps({"success": False, "error": str(res)})
         elif action == "complete_payment":
+            # keep_open=True pays the order but leaves it active (takeaway).
             ok, msg = ctrl.complete_payment(
                 order_id=payload.get("order_id"),
                 payment_method=payload.get("payment_method"),
-                amount_paid=payload.get("amount_paid", 0.0)
+                amount_paid=payload.get("amount_paid", 0.0),
+                finalize=not payload.get("keep_open", False),
             )
             if ok:
                 return json.dumps({"success": True, "message": msg})
             return json.dumps({"success": False, "message": msg, "error": msg})
+        elif action == "get_order_history":
+            return json.dumps({"success": True, "data": [self._order_to_dict(o) for o in ctrl.get_order_history()]})
         elif action == "get_table_state":
             return json.dumps({"success": True, "data": ctrl.get_table_state()})
         elif action == "load_order":

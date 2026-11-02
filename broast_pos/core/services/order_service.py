@@ -316,12 +316,17 @@ class OrderService:
         amount_received: float = 0.0,
         actor_id: Optional[int] = None,
         actor_name: str = "نظام",
+        finalize: bool = True,
     ) -> Order:
-        """Record payment and mark order as completed.
+        """Record payment and (optionally) mark order as completed.
 
         Args:
             actor_id, actor_name: The cashier (or system) that triggered completion.
                 Defaults to "نظام" for backward-compat, but callers should pass real actor.
+            finalize: When True (default) the order is closed (status COMPLETED).
+                When False the payment is recorded but the order stays active —
+                used for takeaway, which is paid up front yet kept on the live
+                board until the pickup window elapses (then auto-closed).
         Raises:
             ValueError: if order not found, already completed, or invalid payment.
         """
@@ -351,12 +356,14 @@ class OrderService:
         order.paid_at = datetime.datetime.now().isoformat()
 
         old_status = order.status
-        order.status = OrderStatus.COMPLETED
+        if finalize:
+            order.status = OrderStatus.COMPLETED
         saved = self._orders.save(order)
 
         # Phase 3: Create SALE_CASH ledger entry for cash payments (ADR-1).
         # Non-cash (visa/online) do NOT enter the physical drawer (FR-CASH-4).
-        # This runs inside the same request; commit is handled by the caller/bridge.
+        # The money arrives now regardless of finalize, so the entry is always
+        # recorded at payment time.
         if self._ledger is not None and payment_method == PaymentMethod.CASH:
             self._create_sale_cash_entry(
                 order=saved,
@@ -365,17 +372,18 @@ class OrderService:
                 cashier_id=actor_id,
             )
 
-        # Record status history
-        try:
-            self._status_history.record_transition(
-                order_id=order_id,
-                old_status=old_status.value,
-                new_status=OrderStatus.COMPLETED.value,
-                changed_by_id=actor_id,
-                changed_by_name=actor_name,
-            )
-        except Exception:
-            pass
+        # Record status history only when the order is actually closed here.
+        if finalize:
+            try:
+                self._status_history.record_transition(
+                    order_id=order_id,
+                    old_status=old_status.value,
+                    new_status=OrderStatus.COMPLETED.value,
+                    changed_by_id=actor_id,
+                    changed_by_name=actor_name,
+                )
+            except Exception:
+                pass
 
         return saved
 
@@ -554,6 +562,62 @@ class OrderService:
     def get_active_by_type(self, order_type: OrderType) -> List[Order]:
         """Active orders filtered by type."""
         return self._orders.get_active_by_type(order_type)
+
+    # Takeaway stays visible on the live board for this long after payment,
+    # then auto-closes into history. Kept as a constant for easy tuning.
+    TAKEAWAY_AUTO_CLOSE_MINUTES = 30
+
+    def auto_complete_expired_takeaways(
+        self, minutes: Optional[int] = None
+    ) -> List[int]:
+        """Close paid takeaway orders whose pickup window has elapsed.
+
+        Takeaway is paid up front but kept on the live board while the customer
+        waits (~20-30 min). Once the window passes the order is treated as handed
+        over and moved to history (status COMPLETED). The money was already
+        recorded at payment time, so this only closes the order.
+
+        Returns:
+            The IDs of the orders that were closed.
+        """
+        if minutes is None:
+            minutes = self.TAKEAWAY_AUTO_CLOSE_MINUTES
+        cutoff = datetime.datetime.now() - datetime.timedelta(minutes=minutes)
+        closed: List[int] = []
+        for order in self._orders.get_active_by_type(OrderType.TAKEAWAY):
+            ref = order.paid_at or order.created_at
+            if not ref:
+                continue
+            try:
+                ts = datetime.datetime.fromisoformat(ref)
+            except (ValueError, TypeError):
+                continue
+            if ts > cutoff:
+                continue
+            old_status = order.status
+            order.status = OrderStatus.COMPLETED
+            self._orders.save(order)
+            try:
+                self._status_history.record_transition(
+                    order_id=order.id,
+                    old_status=old_status.value,
+                    new_status=OrderStatus.COMPLETED.value,
+                    changed_by_id=None,
+                    changed_by_name="النظام (تلقائي)",
+                )
+            except Exception:
+                pass
+            closed.append(order.id)
+        return closed
+
+    def get_order_history(self, date_str: Optional[str] = None) -> List[Order]:
+        """Finished orders (completed + cancelled) for a date, newest first.
+
+        Defaults to today. Powers the order archive ("سجل الأوردرات").
+        """
+        if date_str is None:
+            date_str = datetime.date.today().isoformat()
+        return self._orders.get_finished_for_date(date_str)
 
     def get_unassigned_deliveries(self) -> List[Order]:
         """Delivery orders not yet assigned to a driver."""
