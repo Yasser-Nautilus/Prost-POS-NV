@@ -320,21 +320,17 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
     }
 
     // ── Amending mode: save changes to existing order ──────────────────
+    // Saving an amendment only confirms the added/removed items — it must NOT
+    // collect payment again (that would re-charge the full total of an order
+    // that is still open). Payment stays a separate step, so this behaves the
+    // same for every order type.
     if (isAmending) {
       try {
-        const capturedTotal = currentOrder?.total || 0;
         await bridge.call("save_amendment");
         setIsAmending(false);
-        // For non-delivery orders, open payment so cashier can collect
-        if (currentOrder.order_type !== "delivery") {
-          setPendingOrderId(currentOrder.id);
-          setPendingTotal(capturedTotal);
-          setIsPaymentOpen(true);
-        } else {
-          setSelectedTable(null);
-          await fetchCurrentOrder();
-          alert("تم حفظ تعديلات الطلب بنجاح!");
-        }
+        setSelectedTable(null);
+        await fetchCurrentOrder();
+        alert("تم حفظ تعديلات الطلب بنجاح!");
       } catch (e: any) {
         alert("فشل حفظ التعديلات: " + e.message);
       }
