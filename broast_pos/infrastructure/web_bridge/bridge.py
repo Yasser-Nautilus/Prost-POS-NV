@@ -558,7 +558,7 @@ class POSBridge(QObject):
 
             # ── Order Workspace ───────────────────────────────────────────────
             elif action in ("new_order", "get_current_order", "add_item", "change_item_quantity",
-                            "remove_item", "set_item_note", "set_table", "set_customer_info",
+                            "remove_item", "set_item_note", "set_table", "change_table", "set_customer_info",
                             "park_order", "resume_parked_order", "get_parked_orders",
                             "confirm_order", "complete_payment", "get_table_state",
                             "get_active_orders", "get_active_by_type", "cancel_order",
@@ -703,6 +703,11 @@ class POSBridge(QObject):
         elif action == "set_table":
             ctrl.set_table(payload.get("table_number"))
             return json.dumps({"success": True})
+        elif action == "change_table":
+            ok, msg = ctrl.change_table(payload.get("table_number"))
+            if ok:
+                return json.dumps({"success": True, "message": msg})
+            return json.dumps({"success": False, "error": msg})
         elif action == "set_customer_info":
             ctrl.set_customer_info(
                 customer_id=payload.get("customer_id"),
