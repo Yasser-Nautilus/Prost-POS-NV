@@ -402,6 +402,7 @@ class DeliveryController:
         self,
         driver_id: int,
         settlement_date: Optional[str] = None,
+        trip_id: Optional[int] = None,
     ) -> Optional[Dict[str, Any]]:
         """Return settlement preview without committing.
 
@@ -412,6 +413,7 @@ class DeliveryController:
         return self._settlement_svc.get_driver_settlement_preview(
             driver_id=driver_id,
             settlement_date=settlement_date,
+            trip_id=trip_id,
         )
 
     def settle_driver(
@@ -421,6 +423,7 @@ class DeliveryController:
         settled_by_name: str,
         settlement_date: Optional[str] = None,
         notes: Optional[str] = None,
+        trip_id: Optional[int] = None,
     ) -> Tuple[bool, Any]:
         """Atomically settle all eligible trips for a driver on a date.
 
@@ -437,6 +440,7 @@ class DeliveryController:
                 settled_by_name=settled_by_name,
                 settlement_date=settlement_date,
                 notes=notes,
+                trip_id=trip_id,
             )
             self._notify_drivers()
             return True, settlement

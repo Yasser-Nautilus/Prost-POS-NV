@@ -1,19 +1,20 @@
 /**
- * DriverSettlementView — End-of-day driver settlement management.
+ * DriverSettlementView — Per-trip driver settlement management.
  *
  * Features:
  * - Select a driver → view their unsettled trips for today
+ * - Each trip has its own "Settle this trip" button
  * - Full order breakdown per trip (cash vs online, fees)
  * - Preview settlement before confirming
  * - Manager confirms and atomic settlement is recorded
- * - Settlement history available per driver
+ * - Already-settled trips are shown as read-only (greyed out)
  */
 
 import { useState, useEffect, useCallback } from "react";
 import {
   Wallet, ChevronRight, CheckCircle, AlertCircle, Clock,
   Package, RefreshCcw, Loader2, User, DollarSign,
-  Banknote, CreditCard, TruckIcon, FileText
+  Banknote, CreditCard, TruckIcon, FileText, Lock
 } from "lucide-react";
 import { bridge } from "../bridge";
 
@@ -21,7 +22,7 @@ interface DriverSettlementViewProps {
   currentUser: any;
 }
 
-type ViewState = "select_driver" | "preview" | "success";
+type ViewState = "select_driver" | "trip_list" | "preview" | "success";
 
 const fmtEGP = (n: number) => `${n.toFixed(2)} ج.م`;
 const fmtTime = (iso: string | null) => iso
@@ -34,11 +35,17 @@ const fmtDate = (iso: string | null) => iso
 export function DriverSettlementView({ currentUser: _currentUser }: DriverSettlementViewProps) {
   const [drivers, setDrivers] = useState<any[]>([]);
   const [selectedDriver, setSelectedDriver] = useState<any | null>(null);
+  /** All trips for the selected driver (both settled and unsettled) */
+  const [allTripsPreview, setAllTripsPreview] = useState<any | null>(null);
+  /** The single trip selected for settlement preview */
   const [preview, setPreview] = useState<any | null>(null);
+  const [selectedTripId, setSelectedTripId] = useState<number | null>(null);
   const [viewState, setViewState] = useState<ViewState>("select_driver");
   const [loading, setLoading] = useState(false);
+  const [tripsLoading, setTripsLoading] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tripsError, setTripsError] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<any | null>(null);
   const [notes, setNotes] = useState("");
   const [expandedTrip, setExpandedTrip] = useState<number | null>(null);
@@ -59,32 +66,56 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
     loadDrivers();
   }, [loadDrivers]);
 
+  /** Step 1: select a driver → load ALL their trips for the day */
   const handleSelectDriver = async (driver: any) => {
     setSelectedDriver(driver);
-    setPreview(null);
-    setError(null);
-    setPreviewLoading(true);
+    setAllTripsPreview(null);
+    setTripsError(null);
+    setTripsLoading(true);
+    setViewState("trip_list");
     try {
+      // Fetch full-day preview (no trip_id = all trips)
       const data = await bridge.call("get_driver_settlement_preview", {
         driver_id: driver.id,
       });
-      setPreview(data);
-      setViewState("preview");
+      setAllTripsPreview(data);
     } catch (e: any) {
-      setError(e.message || "لا توجد رحلات مؤهلة للتسوية اليوم");
-      setViewState("preview");
+      setTripsError(e.message || "لا توجد رحلات لهذا السائق اليوم");
+    } finally {
+      setTripsLoading(false);
+    }
+  };
+
+  /** Step 2: click "Settle" on a specific trip → load single-trip preview */
+  const handleSettleTrip = async (tripId: number) => {
+    if (!selectedDriver) return;
+    setSelectedTripId(tripId);
+    setPreview(null);
+    setError(null);
+    setPreviewLoading(true);
+    setViewState("preview");
+    try {
+      const data = await bridge.call("get_driver_settlement_preview", {
+        driver_id: selectedDriver.id,
+        trip_id: tripId,
+      });
+      setPreview(data);
+    } catch (e: any) {
+      setError(e.message || "تعذر تحميل تفاصيل الرحلة");
     } finally {
       setPreviewLoading(false);
     }
   };
 
+  /** Step 3: confirm settlement for the selected trip */
   const handleConfirmSettlement = async () => {
-    if (!selectedDriver || !preview) return;
+    if (!selectedDriver || !preview || !selectedTripId) return;
     setLoading(true);
     setError(null);
     try {
       const result = await bridge.call("settle_driver", {
         driver_id: selectedDriver.id,
+        trip_id: selectedTripId,
         notes: notes || undefined,
       });
       setSuccessData(result);
@@ -98,12 +129,39 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
 
   const handleReset = () => {
     setSelectedDriver(null);
+    setAllTripsPreview(null);
+    setPreview(null);
+    setError(null);
+    setTripsError(null);
+    setNotes("");
+    setSuccessData(null);
+    setSelectedTripId(null);
+    setViewState("select_driver");
+    loadDrivers();
+  };
+
+  const handleBackToTrips = async () => {
     setPreview(null);
     setError(null);
     setNotes("");
-    setSuccessData(null);
-    setViewState("select_driver");
-    loadDrivers();
+    setSelectedTripId(null);
+    setViewState("trip_list");
+    // Refresh trips list to reflect newly settled trip
+    if (selectedDriver) {
+      setTripsLoading(true);
+      setTripsError(null);
+      try {
+        const data = await bridge.call("get_driver_settlement_preview", {
+          driver_id: selectedDriver.id,
+        });
+        setAllTripsPreview(data);
+      } catch (e: any) {
+        setTripsError(e.message || "لا توجد رحلات غير مسواة");
+        setAllTripsPreview(null);
+      } finally {
+        setTripsLoading(false);
+      }
+    }
   };
 
   // ── Success State ─────────────────────────────────────────────────────────
@@ -115,7 +173,9 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
             <CheckCircle className="text-green-400" size={40} />
           </div>
           <h2 className="text-2xl font-bold text-white">تمت التسوية بنجاح</h2>
-          <p className="text-gray-400">تم تسجيل تسوية {successData.driver_name} ليوم {fmtDate(successData.settlement_date)}</p>
+          <p className="text-gray-400">
+            تم تسجيل تسوية رحلة {successData.driver_name} ليوم {fmtDate(successData.settlement_date)}
+          </p>
         </div>
 
         <div className="bg-brand-card border border-brand-border rounded-2xl p-6 w-full max-w-md space-y-4">
@@ -135,36 +195,49 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
           </div>
         </div>
 
-        <button
-          onClick={handleReset}
-          className="px-8 py-3 bg-brand-gold text-brand-dark font-bold rounded-xl hover:bg-yellow-400 transition-all"
-        >
-          تسوية سائق آخر
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={handleBackToTrips}
+            className="px-6 py-3 bg-brand-card border border-brand-border text-white font-bold rounded-xl hover:border-brand-gold/30 transition-all"
+          >
+            تسوية رحلة أخرى لنفس السائق
+          </button>
+          <button
+            onClick={handleReset}
+            className="px-8 py-3 bg-brand-gold text-brand-dark font-bold rounded-xl hover:bg-yellow-400 transition-all"
+          >
+            تسوية سائق آخر
+          </button>
+        </div>
       </div>
     );
   }
 
-  // ── Preview State ─────────────────────────────────────────────────────────
+  // ── Single-Trip Preview State ──────────────────────────────────────────────
   if (viewState === "preview") {
+    const tripIdx = allTripsPreview?.trips?.findIndex((t: any) => t.trip_id === selectedTripId);
+    const tripLabel = tripIdx !== undefined && tripIdx >= 0 ? `رحلة ${tripIdx + 1}` : "الرحلة";
+
     return (
       <div className="h-[calc(100vh-64px)] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-center gap-3 px-6 py-4 border-b border-brand-border bg-brand-surface">
           <button
-            onClick={() => setViewState("select_driver")}
+            onClick={handleBackToTrips}
             className="p-2 hover:bg-brand-card rounded-xl transition-all text-gray-400 hover:text-white"
           >
             <ChevronRight size={20} />
           </button>
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-brand-gold/10 border border-brand-gold/20 flex items-center justify-center">
-              <User className="text-brand-gold" size={18} />
+              <TruckIcon className="text-brand-gold" size={18} />
             </div>
             <div>
-              <h2 className="text-white font-bold">{selectedDriver?.display_name}</h2>
+              <h2 className="text-white font-bold">
+                {selectedDriver?.display_name} — {tripLabel}
+              </h2>
               <p className="text-xs text-gray-400">
-                تسوية يوم {new Date().toLocaleDateString("ar-EG", { weekday: "long", day: "numeric", month: "long" })}
+                معاينة تسوية رحلة واحدة فقط
               </p>
             </div>
           </div>
@@ -180,55 +253,32 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
               <AlertCircle className="text-amber-400" size={28} />
             </div>
             <p className="text-amber-300 font-semibold text-lg">{error}</p>
-            <p className="text-gray-500 text-sm">يجب أن تكون هناك رحلات عادت ولم تُسوَّ لهذا اليوم</p>
-            <button onClick={() => setViewState("select_driver")} className="px-6 py-2 bg-brand-card border border-brand-border rounded-xl text-white hover:border-brand-gold/30 transition-all">
-              اختر سائقًا آخر
+            <button onClick={handleBackToTrips} className="px-6 py-2 bg-brand-card border border-brand-border rounded-xl text-white hover:border-brand-gold/30 transition-all">
+              رجوع للرحلات
             </button>
           </div>
         ) : preview && (
           <div className="flex-1 flex gap-0 overflow-hidden">
-            {/* Trip list — left panel */}
+            {/* Order list — left panel */}
             <div className="w-80 border-l border-brand-border overflow-y-auto flex-shrink-0 bg-brand-surface/50">
               <div className="p-4 space-y-3">
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">الرحلات المؤهلة</h3>
-                {preview.trips?.map((trip: any, idx: number) => (
-                  <div
-                    key={trip.trip_id}
-                    onClick={() => setExpandedTrip(expandedTrip === trip.trip_id ? null : trip.trip_id)}
-                    className={`rounded-xl border p-3 cursor-pointer transition-all ${
-                      expandedTrip === trip.trip_id
-                        ? "border-brand-gold/40 bg-brand-gold/5"
-                        : "border-brand-border hover:border-brand-border/80 bg-brand-card/40"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-bold text-white">رحلة {idx + 1}</span>
-                      <span className="text-xs text-gray-400">{trip.order_count} طلبات</span>
-                    </div>
-                    <div className="flex gap-3 text-xs text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <Clock size={10} /> {fmtTime(trip.dispatched_at)}
+                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  طلبات هذه الرحلة
+                </h3>
+                {preview.trips?.[0]?.orders?.map((order: any) => (
+                  <div key={order.order_id} className="rounded-xl border border-brand-border p-3 bg-brand-card/40">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-bold text-white truncate max-w-[160px]">
+                        {order.customer_name}
                       </span>
-                      <span>←</span>
-                      <span className="flex items-center gap-1 text-green-400">
-                        <CheckCircle size={10} /> {fmtTime(trip.returned_at)}
+                      <span className={`text-xs font-medium ${order.payment_method === "cash" ? "text-green-400" : "text-cyan-400"}`}>
+                        {order.payment_method === "cash" ? "نقدي" : "أونلاين"}
                       </span>
                     </div>
-                    {expandedTrip === trip.trip_id && (
-                      <div className="mt-3 space-y-1 border-t border-brand-border/50 pt-2">
-                        {trip.orders?.map((order: any) => (
-                          <div key={order.order_id} className="flex justify-between text-xs">
-                            <span className="text-gray-400 truncate max-w-[140px]">{order.customer_name}</span>
-                            <div className="flex items-center gap-1">
-                              <span className={order.payment_method === "cash" ? "text-green-400" : "text-cyan-400"}>
-                                {order.payment_method === "cash" ? "نقدي" : "أونلاين"}
-                              </span>
-                              <span className="text-white font-medium">{fmtEGP(order.total)}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    <div className="flex justify-between items-center text-xs text-gray-400">
+                      <span>{order.customer_address || order.customer_zone || "—"}</span>
+                      <span className="text-white font-bold">{fmtEGP(order.total)}</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -236,19 +286,31 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
 
             {/* Summary + confirmation — right panel */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Trip timing */}
+              {preview.trips?.[0] && (
+                <div className="flex gap-4 text-sm text-gray-400">
+                  <span className="flex items-center gap-1">
+                    <Clock size={14} /> انطلاق: {fmtTime(preview.trips[0].dispatched_at)}
+                  </span>
+                  <span className="flex items-center gap-1 text-green-400">
+                    <CheckCircle size={14} /> عودة: {fmtTime(preview.trips[0].returned_at)}
+                  </span>
+                </div>
+              )}
+
               {/* Financial summary cards */}
               <div className="grid grid-cols-2 gap-4">
-                <Stat label="عدد الرحلات" value={String(preview.trip_count)} unit="" icon={TruckIcon} color="blue" />
                 <Stat label="عدد الطلبات" value={String(preview.order_count)} unit="" icon={Package} color="purple" />
                 <Stat label="إجمالي الطلبات" value={fmtEGP(preview.total_order_value)} unit="" icon={DollarSign} color="amber" />
                 <Stat label="رسوم التوصيل" value={fmtEGP(preview.total_delivery_fees)} unit="" icon={TruckIcon} color="teal" />
+                <Stat label="أونلاين" value={fmtEGP(preview.online_paid)} unit="" icon={CreditCard} color="cyan" />
               </div>
 
               {/* Cash handover box */}
               <div className="rounded-2xl bg-gradient-to-br from-green-900/30 to-emerald-900/20 border border-green-500/20 p-5">
                 <h3 className="text-green-300 font-semibold mb-4 flex items-center gap-2">
                   <Banknote size={18} />
-                  مبالغ نقدية
+                  مبالغ نقدية — هذه الرحلة فقط
                 </h3>
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
@@ -300,11 +362,147 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                 ) : (
                   <CheckCircle size={20} />
                 )}
-                تأكيد التسوية وتسجيلها
+                تأكيد تسوية هذه الرحلة فقط
               </button>
             </div>
           </div>
         )}
+      </div>
+    );
+  }
+
+  // ── Trip List State ────────────────────────────────────────────────────────
+  if (viewState === "trip_list") {
+    return (
+      <div className="h-[calc(100vh-64px)] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center gap-3 px-6 py-4 border-b border-brand-border bg-brand-surface">
+          <button
+            onClick={() => setViewState("select_driver")}
+            className="p-2 hover:bg-brand-card rounded-xl transition-all text-gray-400 hover:text-white"
+          >
+            <ChevronRight size={20} />
+          </button>
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-brand-gold/10 border border-brand-gold/20 flex items-center justify-center">
+              <User className="text-brand-gold" size={18} />
+            </div>
+            <div>
+              <h2 className="text-white font-bold">{selectedDriver?.display_name}</h2>
+              <p className="text-xs text-gray-400">
+                اختر الرحلة التي تريد تسويتها — {new Date().toLocaleDateString("ar-EG", { weekday: "long", day: "numeric", month: "long" })}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          {tripsLoading ? (
+            <div className="flex items-center justify-center h-40">
+              <Loader2 className="animate-spin text-brand-gold" size={32} />
+            </div>
+          ) : tripsError ? (
+            <div className="flex flex-col items-center justify-center h-40 gap-3 text-center">
+              <AlertCircle className="text-amber-400" size={40} />
+              <p className="text-amber-300">{tripsError}</p>
+              <button onClick={() => setViewState("select_driver")} className="px-6 py-2 bg-brand-card border border-brand-border rounded-xl text-white hover:border-brand-gold/30 transition-all">
+                اختر سائقًا آخر
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4">
+                رحلات اليوم — اضغط لتسوية رحلة بعينها
+              </h3>
+              {allTripsPreview?.trips?.map((trip: any, idx: number) => {
+                const isSettled = trip.is_settled ?? false;
+                return (
+                  <div
+                    key={trip.trip_id}
+                    className={`rounded-2xl border p-4 transition-all ${
+                      isSettled
+                        ? "border-brand-border/30 bg-brand-card/20 opacity-60"
+                        : "border-brand-border bg-brand-card hover:border-brand-gold/20"
+                    }`}
+                  >
+                    {/* Trip header row */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`h-9 w-9 rounded-xl flex items-center justify-center font-black text-sm ${
+                          isSettled
+                            ? "bg-gray-700 text-gray-400"
+                            : "bg-brand-gold/10 text-brand-gold"
+                        }`}>
+                          {idx + 1}
+                        </div>
+                        <div>
+                          <p className="text-white font-bold text-sm">رحلة {idx + 1}</p>
+                          <div className="flex gap-3 text-xs text-gray-500 mt-0.5">
+                            <span className="flex items-center gap-1">
+                              <Clock size={10} /> {fmtTime(trip.dispatched_at)}
+                            </span>
+                            <span>←</span>
+                            <span className="flex items-center gap-1 text-green-400">
+                              <CheckCircle size={10} /> {fmtTime(trip.returned_at)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {isSettled ? (
+                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700/50 rounded-xl">
+                          <Lock size={12} className="text-gray-400" />
+                          <span className="text-xs text-gray-400 font-medium">تم التسوية</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleSettleTrip(trip.trip_id)}
+                          className="flex items-center gap-2 px-4 py-2 bg-brand-gold text-brand-dark font-bold text-sm rounded-xl hover:bg-yellow-400 active:scale-[0.97] transition-all"
+                        >
+                          <Wallet size={14} />
+                          تسوية هذه الرحلة
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Trip summary row */}
+                    <div className="flex gap-4 text-xs">
+                      <span className="text-gray-400">{trip.order_count} طلبات</span>
+                      <span className="text-green-400 font-medium">نقدي: {fmtEGP(trip.cash)}</span>
+                      {trip.online > 0 && (
+                        <span className="text-cyan-400 font-medium">أونلاين: {fmtEGP(trip.online)}</span>
+                      )}
+                      <span className="text-gray-500">رسوم: {fmtEGP(trip.fees)}</span>
+                    </div>
+
+                    {/* Expandable order list */}
+                    <button
+                      onClick={() => setExpandedTrip(expandedTrip === trip.trip_id ? null : trip.trip_id)}
+                      className="mt-2 text-xs text-gray-500 hover:text-gray-300 transition-colors"
+                    >
+                      {expandedTrip === trip.trip_id ? "▲ إخفاء الطلبات" : "▼ عرض الطلبات"}
+                    </button>
+                    {expandedTrip === trip.trip_id && (
+                      <div className="mt-2 space-y-1 border-t border-brand-border/50 pt-2">
+                        {trip.orders?.map((order: any) => (
+                          <div key={order.order_id} className="flex justify-between text-xs">
+                            <span className="text-gray-400 truncate max-w-[180px]">{order.customer_name}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={order.payment_method === "cash" ? "text-green-400" : "text-cyan-400"}>
+                                {order.payment_method === "cash" ? "نقدي" : "أونلاين"}
+                              </span>
+                              <span className="text-white font-medium">{fmtEGP(order.total)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -348,7 +546,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
         ) : (
           <>
             <h2 className="text-sm font-semibold text-gray-400 mb-4 uppercase tracking-wider">
-              اختر سائقًا لعرض تفاصيل التسوية
+              اختر سائقًا لعرض رحلاته
             </h2>
             <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {drivers.map((driver) => (
