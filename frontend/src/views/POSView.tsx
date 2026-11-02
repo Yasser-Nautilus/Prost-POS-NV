@@ -275,13 +275,14 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
 
   const handleCustomerSelect = async (customer: any, address: any) => {
     try {
+      const isPickup = currentOrder?.order_type === "pickup";
       await bridge.call("set_customer_info", {
         customer_id: customer.id,
         name: customer.name,
         phone: customer.phone,
-        address: address.street_name,
-        zone: address.zone_name,
-        delivery_fee: address.delivery_fee,
+        address: isPickup ? "استلام محل" : address.street_name,
+        zone: isPickup ? "" : address.zone_name,
+        delivery_fee: isPickup ? 0 : address.delivery_fee,
         // B-02: include the selected payment mode for delivery orders
         payment_method: currentOrder?.order_type === "delivery" ? deliveryPaymentMode : undefined,
       });
@@ -582,7 +583,12 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
             <div className="p-3 bg-brand-surface/60 border border-brand-border/50 rounded-xl flex justify-between items-center text-xs">
               {currentOrder.customer_name ? (
                 <div>
-                  <span className="text-white font-bold block">{currentOrder.customer_name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-white font-bold block">{currentOrder.customer_name}</span>
+                    <span className="py-0.5 px-2 bg-purple-900/40 border border-purple-700/50 text-purple-300 rounded-md text-[10px] font-bold">
+                      استلام محل
+                    </span>
+                  </div>
                   <span className="text-gray-400 block mt-1 font-mono">{currentOrder.customer_phone}</span>
                 </div>
               ) : (
@@ -879,6 +885,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
 
       <CustomerLookup
         isOpen={isCustomerLookupOpen}
+        orderType={currentOrder?.order_type}
         onClose={() => setIsCustomerLookupOpen(false)}
         onSelect={handleCustomerSelect}
       />
