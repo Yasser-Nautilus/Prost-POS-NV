@@ -10,9 +10,8 @@ All entries are immutable after save.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QDoubleValidator
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -41,7 +40,7 @@ class ExpenseDialog(QDialog):
             amount, category, description = dialog.get_data()
     """
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._setup_ui()
 

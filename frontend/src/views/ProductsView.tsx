@@ -53,8 +53,10 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
     }
   };
 
+  // bearbeitet: absichtlich nur einmal beim Mount laden (lint fix)
   useEffect(() => {
     fetchAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

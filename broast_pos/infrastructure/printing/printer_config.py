@@ -11,7 +11,6 @@ import json
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Optional
 
 from broast_pos.config.config import PRINTER_CONFIG_PATH
 
@@ -25,19 +24,19 @@ class PrinterEntry:
     key: str                     # "kitchen", "cashier_1", "cashier_2"
     conn_type: str               # "usb", "network", "serial", "dummy"
     # USB
-    vendor_id: Optional[str] = None
-    product_id: Optional[str] = None
+    vendor_id: str | None = None
+    product_id: str | None = None
     # Network
-    host: Optional[str] = None
+    host: str | None = None
     port: int = 9100
     # Serial
-    device: Optional[str] = None
+    device: str | None = None
 
 
-_config_cache: Optional[Dict[str, PrinterEntry]] = None
+_config_cache: dict[str, PrinterEntry] | None = None
 
 
-def load_printer_config() -> Dict[str, PrinterEntry]:
+def load_printer_config() -> dict[str, PrinterEntry]:
     """Load ``printers.json`` and return a dict keyed by printer role.
 
     Returns:
@@ -61,7 +60,7 @@ def load_printer_config() -> Dict[str, PrinterEntry]:
         _config_cache = _build_dummy_config()
         return _config_cache
 
-    entries: Dict[str, PrinterEntry] = {}
+    entries: dict[str, PrinterEntry] = {}
     for key, cfg in raw.items():
         entries[key] = PrinterEntry(
             key=key,
@@ -78,12 +77,12 @@ def load_printer_config() -> Dict[str, PrinterEntry]:
     return _config_cache
 
 
-def get_printer_entry(key: str) -> Optional[PrinterEntry]:
+def get_printer_entry(key: str) -> PrinterEntry | None:
     """Get a single printer entry by role key."""
     return load_printer_config().get(key)
 
 
-def _build_dummy_config() -> Dict[str, PrinterEntry]:
+def _build_dummy_config() -> dict[str, PrinterEntry]:
     """Fallback — all printers set to dummy for dev/testing."""
     return {
         "kitchen": PrinterEntry(key="kitchen", conn_type="dummy"),
@@ -92,7 +91,7 @@ def _build_dummy_config() -> Dict[str, PrinterEntry]:
     }
 
 
-def reload_config() -> Dict[str, PrinterEntry]:
+def reload_config() -> dict[str, PrinterEntry]:
     """Force-reload the printer config (e.g. after admin edits)."""
     global _config_cache
     _config_cache = None

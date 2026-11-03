@@ -11,8 +11,9 @@ Flow: UI → OrderController → OrderService + PrintTriggers + FinancialService
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 from broast_pos.core.models.order import (
     Order,
@@ -21,12 +22,12 @@ from broast_pos.core.models.order import (
     OrderType,
     PaymentMethod,
 )
-from broast_pos.core.services.order_service import OrderService
-from broast_pos.core.services.financial_service import FinancialService
-from broast_pos.core.services.auth_service import AuthService
 from broast_pos.core.policies.discount import compute_discount
-from broast_pos.infrastructure.printing.print_triggers import PrintTriggers
+from broast_pos.core.services.auth_service import AuthService
+from broast_pos.core.services.financial_service import FinancialService
+from broast_pos.core.services.order_service import OrderService
 from broast_pos.features.order_lifecycle.amendment_tracker import AmendmentTracker
+from broast_pos.infrastructure.printing.print_triggers import PrintTriggers
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ class ConfirmResult:
 
     invoice_no: int
     needs_immediate_payment: bool = False
-    order_id: Optional[int] = None
+    order_id: int | None = None
 
 
 class OrderController:
@@ -62,15 +63,15 @@ class OrderController:
         self._cashier_slot = cashier_slot
 
         # In-memory state
-        self._current_order: Optional[Order] = None
-        self._parked_orders: List[Order] = []
-        self._occupied_tables: Dict[int, str] = {}  # table_no → order_ref
+        self._current_order: Order | None = None
+        self._parked_orders: list[Order] = []
+        self._occupied_tables: dict[int, str] = {}  # table_no → order_ref
         self._amendment_tracker = AmendmentTracker()
 
         # Callbacks for UI updates
-        self._on_order_changed: Optional[Callable] = None
-        self._on_parked_changed: Optional[Callable] = None
-        self._on_table_state_changed: Optional[Callable] = None
+        self._on_order_changed: Callable | None = None
+        self._on_parked_changed: Callable | None = None
+        self._on_table_state_changed: Callable | None = None
 
     # ------------------------------------------------------------------
     # Callback registration (UI binds to these)
@@ -156,7 +157,7 @@ class OrderController:
             self._recalc_totals()
             self._notify_order_changed()
 
-    def remove_item(self, index: int, manager_pin: Optional[str] = None) -> Tuple[bool, str]:
+    def remove_item(self, index: int, manager_pin: str | None = None) -> tuple[bool, str]:
         """Remove item from order.
 
         If order is saved (has ID), requires manager PIN.
@@ -195,7 +196,7 @@ class OrderController:
         if self._current_order:
             self._current_order.table_no = table_number
 
-    def change_table(self, new_table_number: int) -> Tuple[bool, str]:
+    def change_table(self, new_table_number: int) -> tuple[bool, str]:
         """Move the current order to a different table.
 
         For a brand-new (unsaved) order the table only lives in memory, so this
@@ -230,13 +231,13 @@ class OrderController:
 
     def set_customer_info(
         self,
-        customer_id: Optional[int] = None,
+        customer_id: int | None = None,
         phone: str = "",
         name: str = "",
         address: str = "",
         zone: str = "",
         delivery_fee: float = 0.0,
-        payment_method: Optional[str] = None,
+        payment_method: str | None = None,
     ) -> None:
         """Set customer info for delivery/pickup orders.
 
@@ -309,7 +310,7 @@ class OrderController:
         self._notify_table_changed()
         return True
 
-    def get_parked_orders(self) -> List[Order]:
+    def get_parked_orders(self) -> list[Order]:
         """Return list of parked orders (for tab bar display)."""
         return list(self._parked_orders)
 
@@ -321,7 +322,7 @@ class OrderController:
         self,
         cashier_id: int,
         cashier_name: str = "",
-    ) -> Tuple[bool, Any]:
+    ) -> tuple[bool, Any]:
         """Validate, save, and print kitchen ticket.
 
         Args:
@@ -399,7 +400,7 @@ class OrderController:
         payment_method: str,
         amount_paid: float,
         finalize: bool = True,
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """Process payment and print receipt.
 
         Args:
@@ -431,6 +432,12 @@ class OrderController:
             self._occupied_tables.pop(completed.table_no, None)
             self._notify_table_changed()
 
+        # Clear current order if finalized and currently loaded
+        if finalize:
+            if self._current_order and self._current_order.id == order_id:
+                self._current_order = None
+                self._notify_order_changed()
+
         logger.info("Payment completed for order #%s", completed.invoice_no)
         return True, "تم الدفع بنجاح"
 
@@ -438,7 +445,7 @@ class OrderController:
     # 5. Edit Saved Order (Amendment)
     # ------------------------------------------------------------------
 
-    def load_order(self, order_id: int) -> Optional[Order]:
+    def load_order(self, order_id: int) -> Order | None:
         """Load a saved order for editing/payment.
 
         Also takes a snapshot for amendment tracking.
@@ -450,7 +457,7 @@ class OrderController:
             self._notify_order_changed()
         return order
 
-    def load_order_by_table(self, table_number: int) -> Optional[Order]:
+    def load_order_by_table(self, table_number: int) -> Order | None:
         """Load an active dine-in order by table number.
 
         Also takes a snapshot for amendment tracking.
@@ -462,7 +469,7 @@ class OrderController:
             self._notify_order_changed()
         return order
 
-    def save_amendment(self, manager_pin: Optional[str] = None) -> Tuple[bool, str]:
+    def save_amendment(self, manager_pin: str | None = None) -> tuple[bool, str]:
         """Save amendments to an existing order and print amendment ticket.
 
         Uses the AmendmentTracker to detect added/removed items.
@@ -490,8 +497,8 @@ class OrderController:
             for (pid, _notes), name in self._amendment_tracker._original_names.items():
                 snapshot_items_by_name[name] = pid
 
-        added_items: List[OrderItem] = []
-        removed_items: List[OrderItem] = []
+        added_items: list[OrderItem] = []
+        removed_items: list[OrderItem] = []
         for change in changes:
             name = change["product_name"]
             qty = int(change["quantity"])
@@ -546,9 +553,9 @@ class OrderController:
     def cancel_order(
         self,
         order_id: int,
-        manager_pin: Optional[str] = None,
+        manager_pin: str | None = None,
         reason: str = "",
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """Cancel an order (requires manager PIN).
 
         Returns:
@@ -581,8 +588,8 @@ class OrderController:
         self,
         value: float,
         discount_type: str,
-        manager_pin: Optional[str] = None,
-    ) -> Tuple[bool, str]:
+        manager_pin: str | None = None,
+    ) -> tuple[bool, str]:
         """Apply discount to the current order (requires manager PIN).
 
         Args:
@@ -595,7 +602,7 @@ class OrderController:
 
         try:
             # Verify manager PIN (or session if PIN is None)
-            manager = self._order_svc._verify_manager_pin(manager_pin)
+            self._order_svc._verify_manager_pin(manager_pin)
         except PermissionError as exc:
             return False, str(exc)
 
@@ -629,7 +636,7 @@ class OrderController:
     # 8. Table State
     # ------------------------------------------------------------------
 
-    def get_table_state(self) -> Dict[int, str]:
+    def get_table_state(self) -> dict[int, str]:
         """Return occupied tables map: {table_no: order_ref}.
 
         Merges in-memory parked orders with DB-active orders.
@@ -644,7 +651,8 @@ class OrderController:
                 if order.table_no:
                     state[order.table_no] = f"#{order.invoice_no}"
         except Exception:
-            pass
+            # Checkup-Fix: fall back to the in-memory state, but log why the DB read failed.
+            logger.warning("Loading active dine-in table state from DB failed", exc_info=True)
 
         return state
 
@@ -656,7 +664,7 @@ class OrderController:
     # Queries (for tracking view)
     # ------------------------------------------------------------------
 
-    def get_active_orders(self) -> List[Order]:
+    def get_active_orders(self) -> list[Order]:
         """Return all active orders.
 
         Opportunistically closes takeaway orders whose pickup window elapsed so
@@ -668,16 +676,16 @@ class OrderController:
             logger.error("Auto-close takeaways failed: %s", exc)
         return self._order_svc.get_active_orders()
 
-    def get_active_by_type(self, order_type: str) -> List[Order]:
+    def get_active_by_type(self, order_type: str) -> list[Order]:
         """Return active orders filtered by type."""
         return self._order_svc.get_active_by_type(OrderType(order_type))
 
-    def get_order_history(self) -> List[Order]:
+    def get_order_history(self) -> list[Order]:
         """Finished orders (completed + cancelled) for today — the archive."""
         return self._order_svc.get_order_history()
 
     @property
-    def current_order(self) -> Optional[Order]:
+    def current_order(self) -> Order | None:
         """The currently active order (may be unsaved)."""
         return self._current_order
 
@@ -703,7 +711,7 @@ class OrderController:
             return
         self._current_order.recalculate()
 
-    def _order_to_dict(self, order: Order) -> Dict[str, Any]:
+    def _order_to_dict(self, order: Order) -> dict[str, Any]:
         """Convert Order to dict for printing templates."""
         return {
             "invoice_no": order.invoice_no,

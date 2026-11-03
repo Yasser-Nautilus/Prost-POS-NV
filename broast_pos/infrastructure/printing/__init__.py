@@ -15,8 +15,8 @@ from broast_pos.infrastructure.printing.printer_manager import PrinterManager
 
 __all__ = [
     "EscPosPrinter",
+    "PrintTriggers",
     "PrinterEntry",
     "PrinterManager",
-    "PrintTriggers",
     "load_printer_config",
 ]

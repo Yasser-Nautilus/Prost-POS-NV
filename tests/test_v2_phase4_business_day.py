@@ -13,21 +13,26 @@ Covers:
 from __future__ import annotations
 
 import pytest
-from unittest.mock import MagicMock
-from datetime import datetime, timezone
 
+from broast_pos.core.models.cashier_session import (
+    CashierSession,
+    CashLedgerEntry,
+    LedgerEntryType,
+    Station,
+)
+from broast_pos.core.services.business_day_service import (
+    BusinessDayService,
+    SessionSnapshot,
+    XReport,
+    ZReport,
+)
+from broast_pos.core.services.cashier_session_service import CashierSessionService
 from broast_pos.data.database.connection import DatabaseConnection
 from broast_pos.data.database.migrations import initialise_database
-from broast_pos.core.models.cashier_session import (
-    CashierSession, CashLedgerEntry, LedgerEntryType, Station,
-)
-from broast_pos.data.repositories.cashier_session_repository import CashierSessionRepository
 from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
-from broast_pos.core.services.cashier_session_service import CashierSessionService
-from broast_pos.core.services.business_day_service import (
-    BusinessDayService, XReport, ZReport, SessionSnapshot,
+from broast_pos.data.repositories.cashier_session_repository import (
+    CashierSessionRepository,
 )
-
 
 # ---------------------------------------------------------------------------
 # Singleton isolation
@@ -182,7 +187,7 @@ class TestXReport:
     def test_x_report_total_expected_across_two_sessions(self):
         db = _fresh_db()
         s1 = _open_session(db, user_id=1, station=Station.COUNTER, float_pt=30000)
-        s2 = _open_session(db, user_id=2, station=Station.DELIVERY, float_pt=20000)
+        _open_session(db, user_id=2, station=Station.DELIVERY, float_pt=20000)
         _add_ledger(db, s1.id, LedgerEntryType.SALE_CASH, 10000)
         svc = _make_svc(db)
         r = svc.generate_x_report(day_id=1)
@@ -215,7 +220,7 @@ class TestXReport:
             "VALUES (1, 1, 1, 'takeaway', 'completed', 100.0, 100.0, 'cash', 1, 1, 'M', 1)"
         )
         db.commit()
-        s = _open_session(db, float_pt=0)
+        _open_session(db, float_pt=0)
         # No SALE_CASH entry added to ledger
         svc = _make_svc(db)
         r = svc.generate_x_report(day_id=1)
@@ -322,7 +327,7 @@ class TestDriverFeePayoutBatch:
         _close_session(db, s.id, counted_pt=100000)
 
         svc = _make_svc(db, financial_svc=None)
-        z = svc.close_business_day(day_id=1)
+        svc.close_business_day(day_id=1)
 
         # Verify DRIVER_FEE_PAYOUT entry exists
         entries = db.fetch_all(

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from broast_pos.data.repositories.base_repository import BaseRepository
 
@@ -20,28 +20,37 @@ class AuditEntry:
     """A single audit log entry (not a full model — read-only DTO)."""
 
     __slots__ = (
-        "id", "event_type", "user_id", "user_name",
-        "order_id", "details", "timestamp",
+        "action",
+        "after_data",
+        "before_data",
+        "details",
+        "entity_id",
         # Extended fields (v3 migration)
-        "entity_type", "entity_id", "action", "reason",
-        "before_data", "after_data",
+        "entity_type",
+        "event_type",
+        "id",
+        "order_id",
+        "reason",
+        "timestamp",
+        "user_id",
+        "user_name",
     )
 
     def __init__(
         self,
-        id: Optional[int] = None,
+        id: int | None = None,
         event_type: str = "",
         user_id: int = 0,
         user_name: str = "",
-        order_id: Optional[int] = None,
-        details: Optional[Dict[str, Any]] = None,
-        timestamp: Optional[str] = None,
-        entity_type: Optional[str] = None,
-        entity_id: Optional[int] = None,
-        action: Optional[str] = None,
-        reason: Optional[str] = None,
-        before_data: Optional[Dict[str, Any]] = None,
-        after_data: Optional[Dict[str, Any]] = None,
+        order_id: int | None = None,
+        details: dict[str, Any] | None = None,
+        timestamp: str | None = None,
+        entity_type: str | None = None,
+        entity_id: int | None = None,
+        action: str | None = None,
+        reason: str | None = None,
+        before_data: dict[str, Any] | None = None,
+        after_data: dict[str, Any] | None = None,
     ) -> None:
         self.id = id
         self.event_type = event_type
@@ -65,7 +74,7 @@ class AuditRepository(BaseRepository[AuditEntry]):
     # Core contract
     # ------------------------------------------------------------------
 
-    def get_by_id(self, entity_id: int) -> Optional[AuditEntry]:
+    def get_by_id(self, entity_id: int) -> AuditEntry | None:
         row = self._db.fetch_one("SELECT * FROM audit_log WHERE id = ?", (entity_id,))
         return self._row_to_entry(row) if row else None
 
@@ -87,7 +96,7 @@ class AuditRepository(BaseRepository[AuditEntry]):
 
     def delete(self, entity_id: int) -> None:
         """Audit entries are NEVER deleted."""
-        pass  # No-op
+        # No-op
 
     # ------------------------------------------------------------------
     # Primary API
@@ -98,14 +107,14 @@ class AuditRepository(BaseRepository[AuditEntry]):
         event_type: str,
         user_id: int,
         user_name: str,
-        order_id: Optional[int] = None,
-        details: Optional[Dict[str, Any]] = None,
-        entity_type: Optional[str] = None,
-        entity_id: Optional[int] = None,
-        action: Optional[str] = None,
-        reason: Optional[str] = None,
-        before_data: Optional[Dict[str, Any]] = None,
-        after_data: Optional[Dict[str, Any]] = None,
+        order_id: int | None = None,
+        details: dict[str, Any] | None = None,
+        entity_type: str | None = None,
+        entity_id: int | None = None,
+        action: str | None = None,
+        reason: str | None = None,
+        before_data: dict[str, Any] | None = None,
+        after_data: dict[str, Any] | None = None,
     ) -> AuditEntry:
         """Insert an audit log entry.
 
@@ -148,7 +157,7 @@ class AuditRepository(BaseRepository[AuditEntry]):
     # Query methods
     # ------------------------------------------------------------------
 
-    def get_logs_for_date(self, date_str: str) -> List[AuditEntry]:
+    def get_logs_for_date(self, date_str: str) -> list[AuditEntry]:
         """All audit entries for a given date (YYYY-MM-DD)."""
         rows = self._db.fetch_all(
             "SELECT * FROM audit_log WHERE DATE(timestamp) = ? ORDER BY timestamp",
@@ -156,7 +165,7 @@ class AuditRepository(BaseRepository[AuditEntry]):
         )
         return [self._row_to_entry(r) for r in rows]
 
-    def get_logs_for_order(self, order_id: int) -> List[AuditEntry]:
+    def get_logs_for_order(self, order_id: int) -> list[AuditEntry]:
         """Audit trail for a specific order."""
         rows = self._db.fetch_all(
             "SELECT * FROM audit_log WHERE order_id = ? ORDER BY timestamp",
@@ -164,7 +173,7 @@ class AuditRepository(BaseRepository[AuditEntry]):
         )
         return [self._row_to_entry(r) for r in rows]
 
-    def get_logs_by_user(self, user_id: int, limit: int = 50) -> List[AuditEntry]:
+    def get_logs_by_user(self, user_id: int, limit: int = 50) -> list[AuditEntry]:
         """Audit trail for a specific user (most recent first)."""
         rows = self._db.fetch_all(
             """SELECT * FROM audit_log
@@ -177,8 +186,8 @@ class AuditRepository(BaseRepository[AuditEntry]):
     def get_logs_by_event_type(
         self,
         event_type: str,
-        date_str: Optional[str] = None,
-    ) -> List[AuditEntry]:
+        date_str: str | None = None,
+    ) -> list[AuditEntry]:
         """All logs of a specific event type, optionally scoped to a date."""
         if date_str:
             rows = self._db.fetch_all(
@@ -198,13 +207,13 @@ class AuditRepository(BaseRepository[AuditEntry]):
 
     def get_logs_filtered(
         self,
-        date_str: Optional[str] = None,
-        user_id: Optional[int] = None,
-        event_type: Optional[str] = None,
-        order_id: Optional[int] = None,
-        entity_type: Optional[str] = None,
+        date_str: str | None = None,
+        user_id: int | None = None,
+        event_type: str | None = None,
+        order_id: int | None = None,
+        entity_type: str | None = None,
         limit: int = 100,
-    ) -> List[AuditEntry]:
+    ) -> list[AuditEntry]:
         """Flexible filter for the Audit Log viewer.
 
         All parameters are optional — combine as needed.
@@ -247,20 +256,20 @@ class AuditRepository(BaseRepository[AuditEntry]):
         details = json.loads(details_raw) if details_raw else None
 
         # Extended fields (may be absent in old DB rows — use .get with fallback)
-        def _safe_json(key: str) -> Optional[Dict]:
+        def _safe_json(key: str) -> dict | None:
             try:
                 raw = row[key]
                 return json.loads(raw) if raw else None
             except (IndexError, KeyError):
                 return None
 
-        def _safe_str(key: str) -> Optional[str]:
+        def _safe_str(key: str) -> str | None:
             try:
                 return row[key]
             except (IndexError, KeyError):
                 return None
 
-        def _safe_int(key: str) -> Optional[int]:
+        def _safe_int(key: str) -> int | None:
             try:
                 return row[key]
             except (IndexError, KeyError):

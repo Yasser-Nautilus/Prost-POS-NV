@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class UserRole(Enum):
@@ -40,15 +39,16 @@ class User:
       NULL for drivers who don't print receipts.
     - `avatar_path` is shown on the login screen tiles.
     """
-    id: Optional[int] = None
+    id: int | None = None
     username: str = ""
     display_name: str = ""
-    avatar_path: Optional[str] = None
+    avatar_path: str | None = None
     pin_hash: str = ""
+    pin_salt: str | None = None  # per-user salt; None = legacy unsalted hash
     role: UserRole = UserRole.CASHIER
-    cashier_slot: Optional[int] = None  # 1 or 2, NULL for drivers
+    cashier_slot: int | None = None  # 1 or 2, NULL for drivers
     is_active: bool = True
-    created_at: Optional[str] = None
+    created_at: str | None = None
 
     def is_manager_or_above(self) -> bool:
         """Check if user has manager-level privileges."""

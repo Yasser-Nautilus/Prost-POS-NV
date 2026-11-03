@@ -13,7 +13,7 @@ Design:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Generic, List, Optional, TypeVar
+from typing import Generic, TypeVar
 
 from broast_pos.data.database.connection import DatabaseConnection
 
@@ -27,7 +27,7 @@ class BaseRepository(ABC, Generic[T]):
     their own SQL + row-to-model mapping logic.
     """
 
-    def __init__(self, db: Optional[DatabaseConnection] = None) -> None:
+    def __init__(self, db: DatabaseConnection | None = None) -> None:
         self._db = db or DatabaseConnection.get_instance()
 
     # ------------------------------------------------------------------
@@ -35,7 +35,7 @@ class BaseRepository(ABC, Generic[T]):
     # ------------------------------------------------------------------
 
     @abstractmethod
-    def get_by_id(self, entity_id: int) -> Optional[T]:
+    def get_by_id(self, entity_id: int) -> T | None:
         """Fetch a single entity by primary key, or None."""
 
     @abstractmethod

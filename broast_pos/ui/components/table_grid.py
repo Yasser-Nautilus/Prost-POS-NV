@@ -12,7 +12,6 @@ Emits:
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional, Set
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -21,7 +20,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -53,8 +51,8 @@ class TableGrid(QDialog):
 
     def __init__(
         self,
-        occupied_tables: Optional[Dict[int, str]] = None,
-        parent: Optional[QWidget] = None,
+        occupied_tables: dict[int, str] | None = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._occupied = occupied_tables or {}

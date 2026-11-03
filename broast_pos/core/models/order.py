@@ -7,10 +7,7 @@ Pure dataclasses with computed financial properties. No DB / UI imports.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import Enum
-from typing import List, Optional
-
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -73,7 +70,7 @@ class OrderItem:
     quantity: int               # always int — no fractional quantities
     unit_price: float
     notes: str = ""
-    id: Optional[int] = None    # set after DB insert
+    id: int | None = None    # set after DB insert
 
     @property
     def total_price(self) -> float:
@@ -98,58 +95,58 @@ class Order:
         restaurant_revenue = total - delivery_fee
     """
     # Identity
-    id: Optional[int] = None
-    invoice_no: Optional[int] = None
-    shift_id: Optional[int] = None
+    id: int | None = None
+    invoice_no: int | None = None
+    shift_id: int | None = None
 
     # Type & status
     order_type: OrderType = OrderType.DINE_IN
     status: OrderStatus = OrderStatus.NEW
-    table_no: Optional[int] = None
+    table_no: int | None = None
 
     # Items
-    items: List[OrderItem] = field(default_factory=list)
+    items: list[OrderItem] = field(default_factory=list)
 
     # Customer (denormalized for receipt/history)
-    customer_id: Optional[int] = None
-    customer_name: Optional[str] = None
-    customer_phone: Optional[str] = None
-    customer_address: Optional[str] = None
-    customer_zone: Optional[str] = None
+    customer_id: int | None = None
+    customer_name: str | None = None
+    customer_phone: str | None = None
+    customer_address: str | None = None
+    customer_zone: str | None = None
     delivery_fee: float = 0.0
 
     # Driver (delivery only)
-    driver_id: Optional[int] = None
-    driver_name: Optional[str] = None
+    driver_id: int | None = None
+    driver_name: str | None = None
 
     # Financial breakdown (stored in DB)
     subtotal: float = 0.0
     discount_amount: float = 0.0
-    discount_type: Optional[str] = None    # "flat" | "percent"
+    discount_type: str | None = None    # "flat" | "percent"
     service_amount: float = 0.0
     total: float = 0.0
 
     # Payment
-    payment_method: Optional[PaymentMethod] = None
+    payment_method: PaymentMethod | None = None
     amount_paid: float = 0.0
     change_given: float = 0.0
     is_paid: bool = False
-    paid_at: Optional[str] = None
+    paid_at: str | None = None
 
     # Creator
-    created_by_id: Optional[int] = None
+    created_by_id: int | None = None
     created_by_name: str = ""
     cashier_slot: int = 1
 
     # Cancellation
-    cancelled_by_id: Optional[int] = None
-    cancelled_by_name: Optional[str] = None
-    cancel_reason: Optional[str] = None
-    cancelled_at: Optional[str] = None
+    cancelled_by_id: int | None = None
+    cancelled_by_name: str | None = None
+    cancel_reason: str | None = None
+    cancelled_at: str | None = None
 
     # Timestamps
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
     # ------------------------------------------------------------------
     # Computed properties

@@ -15,7 +15,6 @@ Design mirrors PinDialog: dark theme, RTL, touch-friendly buttons.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -65,7 +64,7 @@ class DiscountDialog(QDialog):
         self,
         subtotal: float = 0.0,
         current_discount: float = 0.0,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._subtotal = max(0.0, subtotal)

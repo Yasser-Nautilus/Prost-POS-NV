@@ -18,7 +18,6 @@ Emits:
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -65,13 +64,13 @@ class PaymentDialog(QDialog):
         self,
         total: float,
         order_type: OrderType = OrderType.TAKEAWAY,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._total = total
         self._order_type = order_type
         self._input_str = ""
-        self._selected_method: Optional[str] = None
+        self._selected_method: str | None = None
 
         self._setup_ui()
 

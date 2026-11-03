@@ -9,7 +9,6 @@ Even if delivery_trip data changes later, the settlement record is preserved.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -20,7 +19,7 @@ class DriverSettlement:
     never trusted from the frontend. The driver does NOT need to be fully
     checked out for settlement; trips are settled independently.
     """
-    id: Optional[int] = None
+    id: int | None = None
 
     # Driver info (denormalized for historical record)
     driver_id: int = 0
@@ -42,7 +41,7 @@ class DriverSettlement:
     settled_by_name: str = ""
 
     # Optional manager notes
-    notes: Optional[str] = None
+    notes: str | None = None
 
     # Timestamps (set by DB)
-    settled_at: Optional[str] = None   # ISO 8601 timestamp
+    settled_at: str | None = None   # ISO 8601 timestamp

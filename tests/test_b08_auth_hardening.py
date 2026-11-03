@@ -12,18 +12,17 @@ Covers:
 """
 from __future__ import annotations
 
-import time
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch
 
-from broast_pos.core.services.auth_service import (
-    AuthService,
-    _PIN_MIN_LENGTH,
-    _MAX_ATTEMPTS,
-    _LOCKOUT_SECONDS,
-)
 from broast_pos.core.models.user import User, UserRole
-
+from broast_pos.core.services.auth_service import (
+    _LOCKOUT_SECONDS,
+    _MAX_ATTEMPTS,
+    _PIN_MIN_LENGTH,
+    AuthService,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -35,7 +34,7 @@ def _user(
     pin: str = "1234",
     is_active: bool = True,
 ) -> User:
-    svc = AuthService.__new__(AuthService)
+    AuthService.__new__(AuthService)
     pin_hash = AuthService.hash_pin(pin)
     return User(
         id=user_id,

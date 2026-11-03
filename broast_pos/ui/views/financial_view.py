@@ -7,33 +7,30 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from PyQt6.QtCore import QTime, Qt, pyqtSignal, QTimer
-from PyQt6.QtGui import QDoubleValidator, QFont
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QDoubleValidator
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
-    QFormLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QStackedWidget,
-    QTabWidget,
-    QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
 
-from broast_pos.features.financial.financial_controller import FinancialController
-from broast_pos.ui.styles.theme import get_color, get_font_family, _lighten
 from broast_pos.core.models.user import UserRole
+from broast_pos.features.financial.financial_controller import FinancialController
 from broast_pos.ui.dialogs.pin_dialog import PinDialog
+from broast_pos.ui.styles.theme import _lighten, get_color
 from broast_pos.ui.views.reports_view import (
     MetricCard,
     create_styled_table,
@@ -53,12 +50,12 @@ class FinancialView(QWidget):
         self,
         financial_controller: FinancialController,
         current_user_id: int,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._ctrl = financial_controller
         self._user_id = current_user_id
-        self._active_shift: Optional[Dict[str, Any]] = None
+        self._active_shift: dict[str, Any] | None = None
 
         self._setup_ui()
         self.refresh_state()
@@ -394,7 +391,13 @@ class FinancialView(QWidget):
             self._header.setText(f"الوردية النشطة: #{shift_id} 🏪")
 
             # Update Metrics
-            summary = self._ctrl.get_shift_summary(shift_id)
+            try:
+                summary = self._ctrl.get_shift_summary(shift_id)
+            except ValueError as exc:
+                logger.error("Failed to load shift summary: %s", exc)
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "خطأ", str(exc))
+                return
             self._sales_card.set_value(f"{summary['total_sales']:,.2f} ج.م")
             self._expenses_card.set_value(f"{summary['total_expenses']:,.2f} ج.م")
             self._expected_cash_card.set_value(f"{summary['expected_cash']:,.2f} ج.م")
@@ -457,7 +460,7 @@ class FinancialView(QWidget):
                 row = self._history_table.rowCount()
                 self._history_table.insertRow(row)
 
-                def parse_date(d_str: Optional[str]) -> str:
+                def parse_date(d_str: str | None) -> str:
                     if not d_str:
                         return "-"
                     try:
@@ -552,7 +555,7 @@ class FinancialView(QWidget):
         dialog.pin_verified.connect(proceed_transfer)
         dialog.exec()
 
-    def _execute_transfer(self, raw_pin: Optional[str]) -> None:
+    def _execute_transfer(self, raw_pin: str | None) -> None:
         # 2. Show Transfer dialog to select target cashier
         users = self._ctrl.get_users_for_transfer()
         if not users:
@@ -642,7 +645,7 @@ class FinancialView(QWidget):
         dialog.pin_verified.connect(proceed_close)
         dialog.exec()
 
-    def _execute_close(self, raw_pin: Optional[str]) -> None:
+    def _execute_close(self, raw_pin: str | None) -> None:
         # 2. Trigger Close Shift in service via controller
         try:
             self._ctrl.close_shift(

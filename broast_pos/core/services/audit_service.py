@@ -12,9 +12,8 @@ The repository handles raw persistence. This service handles meaning.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
-from broast_pos.core.models.audit import AuditEventType
 from broast_pos.data.repositories.audit_repository import AuditEntry, AuditRepository
 
 if TYPE_CHECKING:
@@ -40,7 +39,7 @@ class AuditService:
     """
 
     def __init__(
-        self, audit_repo: Optional[AuditRepository] = None,
+        self, audit_repo: AuditRepository | None = None,
     ) -> None:
         self._audit = audit_repo or AuditRepository()
 
@@ -53,14 +52,14 @@ class AuditService:
         event_type: str,
         user_id: int,
         user_name: str,
-        order_id: Optional[int] = None,
-        entity_type: Optional[str] = None,
-        entity_id: Optional[int] = None,
-        action: Optional[str] = None,
-        reason: Optional[str] = None,
-        before: Optional[Dict[str, Any]] = None,
-        after: Optional[Dict[str, Any]] = None,
-        details: Optional[Dict[str, Any]] = None,
+        order_id: int | None = None,
+        entity_type: str | None = None,
+        entity_id: int | None = None,
+        action: str | None = None,
+        reason: str | None = None,
+        before: dict[str, Any] | None = None,
+        after: dict[str, Any] | None = None,
+        details: dict[str, Any] | None = None,
     ) -> AuditEntry:
         """Record a business audit event.
 
@@ -107,15 +106,15 @@ class AuditService:
     def log_from_user(
         self,
         event_type: str,
-        actor: "User",
-        order_id: Optional[int] = None,
-        entity_type: Optional[str] = None,
-        entity_id: Optional[int] = None,
-        action: Optional[str] = None,
-        reason: Optional[str] = None,
-        before: Optional[Dict[str, Any]] = None,
-        after: Optional[Dict[str, Any]] = None,
-        details: Optional[Dict[str, Any]] = None,
+        actor: User,
+        order_id: int | None = None,
+        entity_type: str | None = None,
+        entity_id: int | None = None,
+        action: str | None = None,
+        reason: str | None = None,
+        before: dict[str, Any] | None = None,
+        after: dict[str, Any] | None = None,
+        details: dict[str, Any] | None = None,
     ) -> AuditEntry:
         """Convenience method — accepts a User object instead of id/name separately."""
         return self.log(
@@ -146,17 +145,17 @@ class AuditService:
         return self._audit.get_logs_by_user(user_id, limit)
 
     def get_logs_by_event_type(
-        self, event_type: str, date_str: Optional[str] = None,
+        self, event_type: str, date_str: str | None = None,
     ) -> list:
         return self._audit.get_logs_by_event_type(event_type, date_str)
 
     def get_logs_filtered(
         self,
-        date_str: Optional[str] = None,
-        user_id: Optional[int] = None,
-        event_type: Optional[str] = None,
-        order_id: Optional[int] = None,
-        entity_type: Optional[str] = None,
+        date_str: str | None = None,
+        user_id: int | None = None,
+        event_type: str | None = None,
+        order_id: int | None = None,
+        entity_type: str | None = None,
         limit: int = 100,
     ) -> list:
         return self._audit.get_logs_filtered(

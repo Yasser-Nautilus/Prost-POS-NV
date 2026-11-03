@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import Dict, List, Optional
 
 from broast_pos.core.models.financial import (
     CashTransaction,
@@ -27,7 +26,7 @@ class FinancialRepository(BaseRepository[Shift]):
     # Core contract (for Shift)
     # ------------------------------------------------------------------
 
-    def get_by_id(self, entity_id: int) -> Optional[Shift]:
+    def get_by_id(self, entity_id: int) -> Shift | None:
         row = self._db.fetch_one("SELECT * FROM shifts WHERE id = ?", (entity_id,))
         return self._row_to_shift(row) if row else None
 
@@ -49,7 +48,7 @@ class FinancialRepository(BaseRepository[Shift]):
 
     def delete(self, entity_id: int) -> None:
         """Shifts are never deleted — they are historical records."""
-        pass  # No-op
+        # No-op
 
     # ------------------------------------------------------------------
     # Shift lifecycle
@@ -75,14 +74,14 @@ class FinancialRepository(BaseRepository[Shift]):
         )
         self._db.commit()
 
-    def get_active_shift(self) -> Optional[Shift]:
+    def get_active_shift(self) -> Shift | None:
         """Currently open shift (or None)."""
         row = self._db.fetch_one(
             "SELECT * FROM shifts WHERE is_active = 1 LIMIT 1"
         )
         return self._row_to_shift(row) if row else None
 
-    def get_shift_history(self) -> List[Shift]:
+    def get_shift_history(self) -> list[Shift]:
         """Past closed shifts, most recent first."""
         rows = self._db.fetch_all(
             "SELECT * FROM shifts WHERE is_active = 0 ORDER BY closed_at DESC"
@@ -110,7 +109,7 @@ class FinancialRepository(BaseRepository[Shift]):
             summary_snapshot=json.dumps(snapshot, ensure_ascii=False),
         )
 
-    def get_transfers_for_shift(self, shift_id: int) -> List[ShiftTransfer]:
+    def get_transfers_for_shift(self, shift_id: int) -> list[ShiftTransfer]:
         """All transfers in a shift."""
         rows = self._db.fetch_all(
             "SELECT * FROM shift_transfers WHERE shift_id = ? ORDER BY timestamp",
@@ -138,7 +137,7 @@ class FinancialRepository(BaseRepository[Shift]):
         self._db.commit()
         return transaction
 
-    def get_shift_expenses(self, shift_id: int) -> List[CashTransaction]:
+    def get_shift_expenses(self, shift_id: int) -> list[CashTransaction]:
         """All expenses for a shift."""
         rows = self._db.fetch_all(
             "SELECT * FROM cash_transactions WHERE shift_id = ? ORDER BY timestamp",
@@ -146,7 +145,7 @@ class FinancialRepository(BaseRepository[Shift]):
         )
         return [self._row_to_transaction(r) for r in rows]
 
-    def get_expenses_for_date(self, date_str: str) -> List[CashTransaction]:
+    def get_expenses_for_date(self, date_str: str) -> list[CashTransaction]:
         """All expenses for a date — for export to Excel/Sheets."""
         rows = self._db.fetch_all(
             "SELECT * FROM cash_transactions WHERE DATE(timestamp) = ? ORDER BY timestamp",
@@ -162,7 +161,7 @@ class FinancialRepository(BaseRepository[Shift]):
         """Alias for add_expense — used by FinancialService."""
         return self.add_expense(transaction)
 
-    def get_expenses(self, shift_id: int) -> List[CashTransaction]:
+    def get_expenses(self, shift_id: int) -> list[CashTransaction]:
         """Alias for get_shift_expenses — used by FinancialService."""
         return self.get_shift_expenses(shift_id)
 
@@ -186,7 +185,7 @@ class FinancialRepository(BaseRepository[Shift]):
 
     def get_expenses_by_category(
         self, start_date: str, end_date: str,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Expense totals grouped by category for a date range.
 
         Returns:
@@ -206,13 +205,13 @@ class FinancialRepository(BaseRepository[Shift]):
     # Reporting queries
     # ------------------------------------------------------------------
 
-    def get_shift_order_summary(self, shift_id: int) -> Dict[str, dict]:
-        """Aggregate orders by type: {type: {count, revenue}}."""
+    def get_shift_order_summary(self, shift_id: int) -> dict[str, dict]:
+        """Aggregate orders by type: {type: {count, revenue}} (H5: only paid, non-cancelled orders)."""
         rows = self._db.fetch_all(
             """SELECT order_type, COUNT(*) AS count,
                       COALESCE(SUM(total - delivery_fee), 0) AS revenue
                FROM orders
-               WHERE shift_id = ? AND status != 'cancelled'
+               WHERE shift_id = ? AND status != 'cancelled' AND is_paid = 1
                GROUP BY order_type""",
             (shift_id,),
         )
@@ -298,14 +297,13 @@ class FinancialRepository(BaseRepository[Shift]):
         has_unsettled_trips, so they are excluded here to avoid double-blocking.
         Returns True if any such order exists (blocks shift close).
         """
+        # C1 & B-04: Block shift close if ANY order in new/preparing/ready is unpaid
         row = self._db.fetch_one(
             """SELECT COUNT(*) AS cnt
                FROM orders
                WHERE shift_id = ?
                  AND status IN ('new', 'preparing', 'ready')
-                 AND is_paid = 0
-                 AND status != 'cancelled'
-                 AND (payment_method = 'cash' OR payment_method IS NULL)""",
+                 AND is_paid = 0""",
             (shift_id,),
         )
         return (row["cnt"] if row else 0) > 0

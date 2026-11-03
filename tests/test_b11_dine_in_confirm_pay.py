@@ -12,16 +12,19 @@ Verifies:
 """
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock
 
-from broast_pos.core.models.order import (
-    Order, OrderItem, OrderStatus, OrderType,
-)
-from broast_pos.core.services.order_service import OrderService
-from broast_pos.core.services.audit_service import AuditService
-from broast_pos.features.order_lifecycle.order_controller import OrderController
+import pytest
 
+from broast_pos.core.models.order import (
+    Order,
+    OrderItem,
+    OrderStatus,
+    OrderType,
+)
+from broast_pos.core.services.audit_service import AuditService
+from broast_pos.core.services.order_service import OrderService
+from broast_pos.features.order_lifecycle.order_controller import OrderController
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -70,6 +73,7 @@ def _ctrl_stub(current_order, order_svc=None):
     ctrl._occupied_tables = {}
     ctrl._listeners = {}
     ctrl._print = MagicMock()
+    ctrl._cashier_slot = 1
     ctrl._notify_order_changed = MagicMock()
     ctrl._notify_table_changed = MagicMock()
     ctrl._recalc_totals = MagicMock()
@@ -194,3 +198,54 @@ class TestControllerChangeTable:
         ok, msg = ctrl.change_table(8)
         assert ok is False
         assert "مشغولة" in msg
+
+
+# ===========================================================================
+# Part D: complete_payment clears current_order
+# ===========================================================================
+
+class TestCompletePaymentClearsCurrentOrder:
+
+    def test_complete_payment_clears_current_order_when_finalized(self):
+        order = _dine_in_order(order_id=7, table_no=2)
+        svc = MagicMock()
+        svc.complete_order.return_value = order
+        ctrl = _ctrl_stub(order, order_svc=svc)
+        ctrl._occupied_tables = {2: "#55"}
+
+        ok, _msg = ctrl.complete_payment(
+            order_id=7,
+            payment_method="cash",
+            amount_paid=150.0,
+            finalize=True,
+        )
+
+        assert ok is True
+        assert ctrl.current_order is None, "current_order must be cleared after finalize payment"
+        assert 2 not in ctrl._occupied_tables, "table must be freed"
+        ctrl._notify_order_changed.assert_called()
+
+    def test_complete_payment_keeps_open_takeaway_order(self):
+        takeaway = Order(
+            id=12,
+            invoice_no=60,
+            order_type=OrderType.TAKEAWAY,
+            status=OrderStatus.NEW,
+            items=[_item()],
+            subtotal=100.0,
+            total=100.0,
+            shift_id=1,
+        )
+        svc = MagicMock()
+        svc.complete_order.return_value = takeaway
+        ctrl = _ctrl_stub(takeaway, order_svc=svc)
+
+        ok, _msg = ctrl.complete_payment(
+            order_id=12,
+            payment_method="cash",
+            amount_paid=100.0,
+            finalize=False,
+        )
+
+        assert ok is True
+        assert ctrl.current_order is not None, "current_order stays when finalize=False"

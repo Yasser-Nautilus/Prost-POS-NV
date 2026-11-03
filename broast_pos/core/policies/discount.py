@@ -13,7 +13,7 @@ Design decisions (per plan):
 - Rounding: ROUND_HALF_UP to 2 decimal places (piastres)
 """
 
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 
 def compute_discount(subtotal: float, value: float, kind: str) -> float:
@@ -53,7 +53,7 @@ def compute_discount(subtotal: float, value: float, kind: str) -> float:
     if kind == "percent":
         if val > 100:
             raise ValueError("نسبة الخصم لا يمكن أن تتجاوز 100%")
-        amount = sub * val / Decimal("100")
+        amount = sub * val / Decimal(100)
     else:  # flat
         if val > sub:
             raise ValueError(

@@ -9,11 +9,10 @@ and is stored on the address for historical consistency.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from broast_pos.core.models.customer import Customer, CustomerAddress, Zone
 from broast_pos.data.repositories.customer_repository import CustomerRepository
-
 
 _PHONE_PATTERN = re.compile(r"^01\d{9}$")
 
@@ -22,7 +21,7 @@ class CustomerService:
     """Business logic for customer lookup, address management, and zones."""
 
     def __init__(
-        self, customer_repo: Optional[CustomerRepository] = None,
+        self, customer_repo: CustomerRepository | None = None,
     ) -> None:
         self._customers = customer_repo or CustomerRepository()
 
@@ -30,7 +29,7 @@ class CustomerService:
     # Phone-based lookup
     # ------------------------------------------------------------------
 
-    def find_by_phone(self, phone: str) -> Optional[Customer]:
+    def find_by_phone(self, phone: str) -> Customer | None:
         """Exact 11-digit phone match → customer with all addresses, or None."""
         phone = phone.strip()
         self._validate_phone(phone)
@@ -100,7 +99,7 @@ class CustomerService:
         )
         return self._customers.save_address(address)
 
-    def get_addresses(self, customer_id: int) -> List[CustomerAddress]:
+    def get_addresses(self, customer_id: int) -> list[CustomerAddress]:
         """All saved addresses for a customer."""
         return self._customers.get_addresses(customer_id)
 
@@ -116,7 +115,7 @@ class CustomerService:
     # Customer lookup by ID
     # ------------------------------------------------------------------
 
-    def get_customer_by_id(self, customer_id: int) -> Optional[Customer]:
+    def get_customer_by_id(self, customer_id: int) -> Customer | None:
         """Fetch a customer by primary key (includes addresses)."""
         return self._customers.get_by_id(customer_id)
 
@@ -129,7 +128,7 @@ class CustomerService:
         customer_id: int,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Order history for a customer (newest first).
 
         Args:
@@ -149,7 +148,7 @@ class CustomerService:
             customer_id, limit=limit, offset=offset
         )
 
-    def get_customer_statistics(self, customer_id: int) -> Dict[str, Any]:
+    def get_customer_statistics(self, customer_id: int) -> dict[str, Any]:
         """Aggregate stats for a customer.
 
         Returns dict with: total_orders, completed_orders, cancelled_orders,
@@ -166,11 +165,11 @@ class CustomerService:
     # Zone management (manager only)
     # ------------------------------------------------------------------
 
-    def get_all_zones(self) -> List[Zone]:
+    def get_all_zones(self) -> list[Zone]:
         """All zones (active and inactive) for management."""
         return self._customers.get_zones()
 
-    def get_active_zones(self) -> List[Zone]:
+    def get_active_zones(self) -> list[Zone]:
         """All active zones for dropdown selection."""
         return self._customers.get_all_active_zones()
 
@@ -192,9 +191,9 @@ class CustomerService:
     def update_zone(
         self,
         zone_id: int,
-        name: Optional[str] = None,
-        delivery_fee: Optional[float] = None,
-        is_active: Optional[bool] = None,
+        name: str | None = None,
+        delivery_fee: float | None = None,
+        is_active: bool | None = None,
     ) -> Zone:
         """Update an existing zone.
 

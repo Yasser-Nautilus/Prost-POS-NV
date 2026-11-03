@@ -12,8 +12,8 @@ Features:
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from datetime import date
+from typing import Any
 
 from PyQt6.QtCore import QDate, QPointF, QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QMouseEvent, QPainter, QPainterPath, QPen
@@ -22,18 +22,16 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QDateEdit,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLayout,
-    QListWidget,
+    QMessageBox,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
-    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QToolTip,
     QVBoxLayout,
     QWidget,
@@ -56,10 +54,10 @@ class RoundedBarChartWidget(QWidget):
     Fits the modern 'bento-grid' visual design requested by the user.
     """
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setMouseTracking(True)
-        self.data: List[Dict[str, Any]] = []  # list of {"label": str, "value": float}
+        self.data: list[dict[str, Any]] = []  # list of {"label": str, "value": float}
         self.hovered_idx = -1
         self.max_val = 0.0
 
@@ -70,7 +68,7 @@ class RoundedBarChartWidget(QWidget):
         self.text_color = QColor("#a0aec0")
         self.bg_color = QColor("#1b2838")
 
-    def set_data(self, data: List[Dict[str, Any]], accent_color_hex: str = "#007bff") -> None:
+    def set_data(self, data: list[dict[str, Any]], accent_color_hex: str = "#007bff") -> None:
         """Update chart dataset and trigger repaint."""
         self.data = data
         self.accent_color = QColor(accent_color_hex)
@@ -143,7 +141,7 @@ class RoundedBarChartWidget(QWidget):
             y = rect.height() - bottom_margin - bar_h
 
             if bar_h > 0:
-                bar_rect = QRectF(x, y, bar_width, bar_h)
+                QRectF(x, y, bar_width, bar_h)
                 path = QPainterPath()
                 # Rounded top corners path
                 radius = min(8.0, bar_width / 2.0)
@@ -233,7 +231,7 @@ class CircularProgressWidget(QWidget):
     Typically displays targeted percentage status (e.g. Sales Margin or Order Shares).
     """
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.percentage = 0.0
         self.label = ""
@@ -303,7 +301,7 @@ class MetricCard(QFrame):
         value: str,
         icon: str,
         color_hex: str = "#007bff",
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setStyleSheet(f"""
@@ -398,7 +396,7 @@ def make_bento_box(title: str, widget_or_layout: Any) -> QFrame:
     return frame
 
 
-def create_styled_table(headers: List[str]) -> QTableWidget:
+def create_styled_table(headers: list[str]) -> QTableWidget:
     """Helper to initialize and style a flat headerless QTableWidget."""
     table = QTableWidget()
     table.setColumnCount(len(headers))
@@ -454,7 +452,7 @@ class ReportsView(QWidget):
         self,
         reports_controller: ReportsController,
         cashier_slot: int = 1,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._ctrl = reports_controller
@@ -622,7 +620,12 @@ class ReportsView(QWidget):
         target = date(qdate.year(), qdate.month(), qdate.day())
 
         # Generate summary
-        summary = self._ctrl.generate_daily_summary(target)
+        try:
+            summary = self._ctrl.generate_daily_summary(target)
+        except ValueError as exc:
+            logger.error("Failed to generate daily summary: %s", exc)
+            QMessageBox.warning(self, "خطأ", str(exc))
+            return
 
         # Set metrics
         self._daily_rev_card.set_value(f"{summary['gross_revenue']:,.2f} ج.م")

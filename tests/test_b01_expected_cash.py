@@ -15,8 +15,8 @@ All tests use ShiftSummary directly (pure model math) or mock the repository.
 from __future__ import annotations
 
 import pytest
-from broast_pos.core.models.financial import ShiftSummary
 
+from broast_pos.core.models.financial import ShiftSummary
 
 # ===========================================================================
 # Part A: ShiftSummary.expected_cash formula (pure model math)
@@ -89,7 +89,9 @@ class TestRepositoryPendingDeliveryOnlyCash:
     """B-01: pending_delivery must exclude ONLINE orders."""
 
     def _repo_with_mock_db(self, pending_result: float):
-        from broast_pos.data.repositories.financial_repository import FinancialRepository
+        from broast_pos.data.repositories.financial_repository import (
+            FinancialRepository,
+        )
         repo = FinancialRepository.__new__(FinancialRepository)
         mock_db = _MockDB({"pending": pending_result})
         repo._db = mock_db
@@ -97,7 +99,9 @@ class TestRepositoryPendingDeliveryOnlyCash:
 
     def test_pending_delivery_query_filters_cash_only(self):
         """The SQL must include AND payment_method = 'cash'."""
-        from broast_pos.data.repositories.financial_repository import FinancialRepository
+        from broast_pos.data.repositories.financial_repository import (
+            FinancialRepository,
+        )
         repo = FinancialRepository.__new__(FinancialRepository)
         mock_db = _MockDB({"pending": 0.0})
         repo._db = mock_db
@@ -112,7 +116,9 @@ class TestRepositoryPendingDeliveryOnlyCash:
 
     def test_pending_kitchen_query_includes_ready(self):
         """B-01: 'ready' orders must be in pending_kitchen SQL."""
-        from broast_pos.data.repositories.financial_repository import FinancialRepository
+        from broast_pos.data.repositories.financial_repository import (
+            FinancialRepository,
+        )
         repo = FinancialRepository.__new__(FinancialRepository)
         mock_db = _MockDB({"pending": 0.0})
         repo._db = mock_db
@@ -127,8 +133,11 @@ class TestRepositoryPendingDeliveryOnlyCash:
 
     def test_cash_sales_query_includes_is_paid_filter(self):
         """B-01: cash_sales query must include is_paid = 1."""
-        from broast_pos.data.repositories.financial_repository import FinancialRepository
-        import unittest.mock as mock
+        from unittest import mock
+
+        from broast_pos.data.repositories.financial_repository import (
+            FinancialRepository,
+        )
 
         repo = FinancialRepository.__new__(FinancialRepository)
         sqls_captured = []
@@ -160,8 +169,11 @@ class TestRepositoryPendingDeliveryOnlyCash:
 
     def test_total_sales_query_includes_is_paid_filter(self):
         """B-01: total_sales query must include is_paid = 1."""
-        from broast_pos.data.repositories.financial_repository import FinancialRepository
-        import unittest.mock as mock
+        from unittest import mock
+
+        from broast_pos.data.repositories.financial_repository import (
+            FinancialRepository,
+        )
 
         repo = FinancialRepository.__new__(FinancialRepository)
         sqls_captured = []

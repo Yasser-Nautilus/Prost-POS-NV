@@ -15,12 +15,16 @@ Design decisions:
   without the overhead of a full ORM.
 """
 
+import logging
 import os
 import sqlite3
 import threading
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Generator, Optional
+from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -46,7 +50,7 @@ class DatabaseConnection:
     # Singleton access
     # ------------------------------------------------------------------
     @classmethod
-    def get_instance(cls, db_path: Optional[str] = None) -> "DatabaseConnection":
+    def get_instance(cls, db_path: str | None = None) -> "DatabaseConnection":
         """Return the singleton instance, creating it on first call.
 
         Parameters
@@ -70,8 +74,8 @@ class DatabaseConnection:
             if cls._instance is not None:
                 try:
                     cls._instance._conn.close()
-                except Exception:
-                    pass
+                except Exception:  # Checkup-Fix: cleanup error – log, don't hide
+                    logger.debug("Closing DB connection during reset failed", exc_info=True)
                 cls._instance = None
 
     # ------------------------------------------------------------------
@@ -135,7 +139,7 @@ class DatabaseConnection:
         self,
         sql: str,
         params: tuple[Any, ...] | dict[str, Any] = (),
-    ) -> Optional[sqlite3.Row]:
+    ) -> sqlite3.Row | None:
         """Execute *sql* and return the first row, or ``None``."""
         return self._conn.execute(sql, params).fetchone()
 
@@ -191,8 +195,8 @@ class DatabaseConnection:
             if self._tx_depth == 0:
                 try:
                     self._conn.rollback()
-                except Exception:
-                    pass
+                except Exception:  # Checkup-Fix: rollback failed – log, then re-raise original
+                    logger.debug("Rollback after transaction error failed", exc_info=True)
             raise
 
     def begin(self) -> None:

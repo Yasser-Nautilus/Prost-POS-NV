@@ -1,17 +1,16 @@
 import json
 import logging
-from typing import Any, Dict, List, Optional
-from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal
+from typing import Any
 
-from broast_pos.core.models.order import Order, OrderItem, OrderType, OrderStatus, PaymentMethod
+from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
+
+from broast_pos.core.models.customer import Customer, Zone
+from broast_pos.core.models.order import Order
 from broast_pos.core.models.user import User, UserRole
-from broast_pos.core.models.customer import Customer, CustomerAddress, Zone
-from broast_pos.core.models.financial import Shift, ShiftSummary, CashTransaction
-from broast_pos.core.models.delivery import DeliveryTrip, DriverStatus
-from broast_pos.features.order_lifecycle.order_controller import OrderController
 from broast_pos.features.delivery_system.delivery_controller import DeliveryController
 from broast_pos.features.financial.financial_controller import FinancialController
 from broast_pos.features.financial.session_controller import SessionController
+from broast_pos.features.order_lifecycle.order_controller import OrderController
 from broast_pos.features.reports.reports_controller import ReportsController
 
 logger = logging.getLogger(__name__)
@@ -128,7 +127,7 @@ class POSBridge(QObject):
 
     # ── Serializers ───────────────────────────────────────────────────────────
 
-    def _user_to_dict(self, u: Optional[User]) -> Optional[Dict[str, Any]]:
+    def _user_to_dict(self, u: User | None) -> dict[str, Any] | None:
         if not u:
             return None
         return {
@@ -141,7 +140,7 @@ class POSBridge(QObject):
             "is_active": u.is_active,
         }
 
-    def _order_to_dict(self, o: Optional[Order]) -> Optional[Dict[str, Any]]:
+    def _order_to_dict(self, o: Order | None) -> dict[str, Any] | None:
         if not o:
             return None
         return {
@@ -192,14 +191,14 @@ class POSBridge(QObject):
             ],
         }
 
-    def _category_to_dict(self, c) -> Dict[str, Any]:
+    def _category_to_dict(self, c) -> dict[str, Any]:
         return {"id": c.id, "name": c.name, "sort_order": c.sort_order, "is_active": c.is_active}
 
-    def _product_to_dict(self, p) -> Dict[str, Any]:
+    def _product_to_dict(self, p) -> dict[str, Any]:
         return {"id": p.id, "name": p.name, "price": p.price,
                 "category_id": p.category_id, "is_active": p.is_active, "sort_order": p.sort_order}
 
-    def _customer_to_dict(self, c: Customer) -> Dict[str, Any]:
+    def _customer_to_dict(self, c: Customer) -> dict[str, Any]:
         return {
             "id": c.id, "name": c.name, "phone": c.phone,
             "notes": c.notes, "created_at": c.created_at,
@@ -210,7 +209,7 @@ class POSBridge(QObject):
             ],
         }
 
-    def _zone_to_dict(self, z: Zone) -> Dict[str, Any]:
+    def _zone_to_dict(self, z: Zone) -> dict[str, Any]:
         return {"id": z.id, "name": z.name, "delivery_fee": z.delivery_fee, "is_active": z.is_active}
 
     # ── Main Dispatcher ───────────────────────────────────────────────────────
@@ -459,7 +458,10 @@ class POSBridge(QObject):
                     if active is None:
                         return json.dumps({"success": True, "data": {"total_sales": 0, "cash_sales": 0, "total_expenses": 0, "pending_delivery": 0, "pending_dinein": 0, "pending_kitchen": 0, "expected_cash": 0}})
                     shift_id = active.id
-                summary = self._financial_ctrl.get_shift_summary(shift_id)
+                try:
+                    summary = self._financial_ctrl.get_shift_summary(shift_id)
+                except ValueError as e:
+                    return json.dumps({"success": False, "error": str(e)})
                 return json.dumps({"success": True, "data": summary})
 
             elif action == "get_expenses":
@@ -535,9 +537,12 @@ class POSBridge(QObject):
                 if not self._reports_ctrl:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
                 # Correct method: generate_daily_summary on ReportsController
-                data = self._reports_ctrl.generate_daily_summary(
-                    target_date=None, shift_id=payload.get("shift_id")
-                )
+                try:
+                    data = self._reports_ctrl.generate_daily_summary(
+                        target_date=None, shift_id=payload.get("shift_id")
+                    )
+                except ValueError as e:
+                    return json.dumps({"success": False, "error": str(e)})
                 return json.dumps({"success": True, "data": data})
 
             elif action == "get_report_product_sales":
@@ -548,12 +553,21 @@ class POSBridge(QObject):
                 return json.dumps({"success": True, "data": data})
 
             elif action == "print_shift_summary":
-                if self._reports_ctrl and self._current_user:
-                    # Correct method name: print_daily_summary (not print_shift_report)
-                    self._reports_ctrl.print_daily_summary(
-                        shift_id=payload.get("shift_id"),
-                        cashier_slot=self._current_user.cashier_slot or 1
-                    )
+                if not self._reports_ctrl or not self._current_user:
+                    return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
+                # Auto-resolve shift_id if not provided (mirrors other shift actions)
+                shift_id = payload.get("shift_id")
+                if shift_id is None and self._financial:
+                    active = self._financial.get_active_shift()
+                    if active:
+                        shift_id = active.id
+                # Correct method name: print_daily_summary (not print_shift_report)
+                printed = self._reports_ctrl.print_daily_summary(
+                    shift_id=shift_id,
+                    cashier_slot=self._current_user.cashier_slot or 1
+                )
+                if not printed:
+                    return json.dumps({"success": False, "error": "فشل في طباعة تقرير الوردية"})
                 return json.dumps({"success": True})
 
             # ── Order Workspace ───────────────────────────────────────────────
@@ -869,6 +883,7 @@ class POSBridge(QObject):
                 preview = ctrl.get_driver_settlement_preview(
                     driver_id=payload.get("driver_id"),
                     settlement_date=payload.get("date"),
+                    trip_id=payload.get("trip_id"),
                 )
                 if preview:
                     return json.dumps({"success": True, "data": preview})

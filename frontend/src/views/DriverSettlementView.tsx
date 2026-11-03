@@ -13,8 +13,8 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Wallet, ChevronRight, CheckCircle, AlertCircle, Clock,
-  Package, RefreshCcw, Loader2, User, DollarSign,
-  Banknote, CreditCard, TruckIcon, FileText, Lock
+  Package, RefreshCcw, Loader2, User,
+  Banknote, CreditCard, TruckIcon, Lock, FileText
 } from "lucide-react";
 import { bridge } from "../bridge";
 
@@ -276,8 +276,11 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                       </span>
                     </div>
                     <div className="flex justify-between items-center text-xs text-gray-400">
-                      <span>{order.customer_address || order.customer_zone || "—"}</span>
-                      <span className="text-white font-bold">{fmtEGP(order.total)}</span>
+                      <span className="truncate max-w-[130px]">{order.customer_address || order.customer_zone || "—"}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-amber-400" title="رسوم التوصيل">توصيل: {fmtEGP(order.delivery_fee || 0)}</span>
+                        <span className="text-white font-bold">{fmtEGP(order.total)}</span>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -299,9 +302,8 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
               )}
 
               {/* Financial summary cards */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <Stat label="عدد الطلبات" value={String(preview.order_count)} unit="" icon={Package} color="purple" />
-                <Stat label="إجمالي الطلبات" value={fmtEGP(preview.total_order_value)} unit="" icon={DollarSign} color="amber" />
                 <Stat label="رسوم التوصيل" value={fmtEGP(preview.total_delivery_fees)} unit="" icon={TruckIcon} color="teal" />
                 <Stat label="أونلاين" value={fmtEGP(preview.online_paid)} unit="" icon={CreditCard} color="cyan" />
               </div>
@@ -487,7 +489,8 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                         {trip.orders?.map((order: any) => (
                           <div key={order.order_id} className="flex justify-between text-xs">
                             <span className="text-gray-400 truncate max-w-[180px]">{order.customer_name}</span>
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-amber-400 font-medium">توصيل: {fmtEGP(order.delivery_fee || 0)}</span>
                               <span className={order.payment_method === "cash" ? "text-green-400" : "text-cyan-400"}>
                                 {order.payment_method === "cash" ? "نقدي" : "أونلاين"}
                               </span>

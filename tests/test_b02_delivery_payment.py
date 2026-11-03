@@ -11,17 +11,19 @@ Verifies:
 """
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch
-from typing import Optional
 
 from broast_pos.core.models.order import (
-    Order, OrderItem, OrderStatus, OrderType, PaymentMethod
+    Order,
+    OrderItem,
+    OrderStatus,
+    OrderType,
+    PaymentMethod,
 )
-from broast_pos.core.models.user import User
-from broast_pos.core.services.order_service import OrderService
 from broast_pos.core.services.audit_service import AuditService
-
+from broast_pos.core.services.order_service import OrderService
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -31,7 +33,7 @@ def _item(price: float = 100.0) -> OrderItem:
     return OrderItem(product_id=1, product_name="بيتزا", unit_price=price, quantity=1)
 
 
-def _delivery_order(payment_method: Optional[PaymentMethod] = None) -> Order:
+def _delivery_order(payment_method: PaymentMethod | None = None) -> Order:
     return Order(
         id=None,
         invoice_no=None,

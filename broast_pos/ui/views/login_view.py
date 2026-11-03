@@ -11,12 +11,11 @@ Emits ``login_success(User)`` on valid authentication.
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
 
 from PyQt6.QtCore import (
     QEasingCurve,
-    QPropertyAnimation,
     QPoint,
+    QPropertyAnimation,
     Qt,
     pyqtSignal,
 )
@@ -27,7 +26,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -60,11 +58,11 @@ class LoginView(QWidget):
     def __init__(
         self,
         auth_service: AuthService,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._auth = auth_service
-        self._selected_user: Optional[User] = None
+        self._selected_user: User | None = None
 
         self._setup_ui()
 

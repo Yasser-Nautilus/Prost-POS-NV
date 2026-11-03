@@ -23,8 +23,7 @@ Cash ledger entries created here (ADR-1):
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from broast_pos.core.models.cashier_session import (
     CashierSession,
@@ -32,8 +31,10 @@ from broast_pos.core.models.cashier_session import (
     LedgerEntryType,
     Station,
 )
-from broast_pos.data.repositories.cashier_session_repository import CashierSessionRepository
 from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
+from broast_pos.data.repositories.cashier_session_repository import (
+    CashierSessionRepository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +48,8 @@ class CashierSessionService:
 
     def __init__(
         self,
-        session_repo: Optional[CashierSessionRepository] = None,
-        ledger_repo: Optional[CashLedgerRepository] = None,
+        session_repo: CashierSessionRepository | None = None,
+        ledger_repo: CashLedgerRepository | None = None,
         auth_service=None,
     ) -> None:
         self._sessions = session_repo or CashierSessionRepository()
@@ -65,7 +66,7 @@ class CashierSessionService:
         user_id: int,
         station: Station,
         opening_float_pt: int,
-        actor_id: Optional[int] = None,
+        actor_id: int | None = None,
     ) -> CashierSession:
         """
         Open a new cashier session at a station.
@@ -85,7 +86,7 @@ class CashierSessionService:
         # FR-SES-2: station conflict check
         self._check_station_conflict(day_id, station)
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         session = CashierSession(
             id=None,
             day_id=day_id,
@@ -126,8 +127,8 @@ class CashierSessionService:
         counted_cash_pt: int,
         actor_id: int,
         variance_threshold_pt: int = DEFAULT_VARIANCE_THRESHOLD_PT,
-        manager_pin: Optional[str] = None,
-        variance_reason: Optional[str] = None,
+        manager_pin: str | None = None,
+        variance_reason: str | None = None,
     ) -> CashierSession:
         """
         Close a cashier session.
@@ -163,14 +164,15 @@ class CashierSessionService:
                 self._auth.verify_manager_pin(manager_pin)
 
         # ADJUSTMENT entry if there is a variance
-        manager_id: Optional[int] = None
+        manager_id: int | None = None
         if variance_pt != 0:
             if self._auth is not None and manager_pin:
                 try:
                     mgr = self._auth.get_manager_by_pin(manager_pin)
                     manager_id = mgr.id if mgr else None
                 except Exception:
-                    pass
+                    # Checkup-Fix: manager lookup is optional here, but log failures.
+                    logger.debug("Manager-by-PIN lookup failed (variance entry)", exc_info=True)
 
             self._ledger.append(CashLedgerEntry(
                 id=None,
@@ -209,11 +211,11 @@ class CashierSessionService:
         to_user_id: int,
         station: Station,
         cash_drop_pt: int = 0,
-        actor_id: Optional[int] = None,
+        actor_id: int | None = None,
         variance_threshold_pt: int = DEFAULT_VARIANCE_THRESHOLD_PT,
-        manager_pin: Optional[str] = None,
-        variance_reason: Optional[str] = None,
-        to_user_counted_pt: Optional[int] = None,
+        manager_pin: str | None = None,
+        variance_reason: str | None = None,
+        to_user_counted_pt: int | None = None,
     ) -> tuple[CashierSession, CashierSession]:
         """
         Full handover: close outgoing session → open incoming session.
@@ -254,15 +256,16 @@ class CashierSessionService:
             if self._auth is not None:
                 self._auth.verify_manager_pin(manager_pin)
 
-        manager_id: Optional[int] = None
+        manager_id: int | None = None
         if self._auth is not None and manager_pin:
             try:
                 mgr = self._auth.get_manager_by_pin(manager_pin)
                 manager_id = mgr.id if mgr else None
             except Exception:
-                pass
+                # Checkup-Fix: manager lookup is optional here, but log failures.
+                logger.debug("Manager-by-PIN lookup failed (session close)", exc_info=True)
 
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         actor = actor_id or to_user_id
 
         # ADJUSTMENT if variance != 0
@@ -355,7 +358,7 @@ class CashierSessionService:
         """Current expected drawer balance (piasters) — ADR-1 formula."""
         return self._ledger.get_session_balance_pt(session_id)
 
-    def get_session_by_id(self, session_id: int) -> Optional[CashierSession]:
+    def get_session_by_id(self, session_id: int) -> CashierSession | None:
         return self._sessions.get_by_id(session_id)
 
     def has_open_sessions(self, day_id: int) -> bool:
@@ -363,7 +366,7 @@ class CashierSessionService:
 
     def get_open_session_for_station(
         self, day_id: int, station: Station
-    ) -> Optional[CashierSession]:
+    ) -> CashierSession | None:
         return self._sessions.get_open_session_for_station(day_id, station)
 
     # ------------------------------------------------------------------

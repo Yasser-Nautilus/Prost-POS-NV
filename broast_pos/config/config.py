@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -25,9 +26,9 @@ logger = logging.getLogger(__name__)
 # 1. General Settings (Task 2)
 # ============================================================================
 APP_VERSION: str = "1.0.0"
-ENVIRONMENT: str = "dev"       # "dev" | "prod"
-DEBUG: bool = True
-LANGUAGE: str = "ar"           # Arabic primary
+ENVIRONMENT: str = os.getenv("APP_ENV", os.getenv("ENVIRONMENT", "dev")).lower()       # "dev" | "prod"
+DEBUG: bool = os.getenv("DEBUG", "true" if ENVIRONMENT == "dev" else "false").lower() in ("true", "1", "yes")
+LANGUAGE: str = os.getenv("LANGUAGE", "ar")           # Arabic primary
 
 # ============================================================================
 # 2. Business Rules (Task 4)
@@ -69,7 +70,7 @@ def load_restaurant_config() -> dict[str, Any]:
     Returns the full dict.  Called once at startup; subsequent calls
     return the cached copy.
     """
-    global _restaurant_cache  # noqa: PLW0603
+    global _restaurant_cache
     if _restaurant_cache is not None:
         return _restaurant_cache
 
@@ -134,6 +135,6 @@ def update_takeaway_auto_complete_minutes(minutes: int) -> None:
             json.dump(config_data, f, indent=2, ensure_ascii=False)
         _restaurant_cache = config_data
         logger.info("Saved takeaway_auto_complete_minutes=%d to %s", minutes, config_path.name)
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to write restaurant config to %s", config_path)
 

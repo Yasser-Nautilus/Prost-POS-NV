@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Dict
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QFontDatabase
@@ -32,7 +31,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # Default colour palette (used when restaurant.json is missing / incomplete)
 # ============================================================================
-_DEFAULTS: Dict[str, str] = {
+_DEFAULTS: dict[str, str] = {
     "primary_bg": "#0d1b2a",
     "secondary_bg": "#1b2838",
     "accent_green": "#28a745",
@@ -56,7 +55,7 @@ _DEFAULTS: Dict[str, str] = {
 }
 
 # Resolved at first call to apply_theme
-_palette: Dict[str, str] = {}
+_palette: dict[str, str] = {}
 _font_family: str = "Noto Naskh Arabic"
 
 
@@ -71,7 +70,7 @@ def apply_theme(app: QApplication) -> None:
     Call once, after ``QApplication`` construction but before showing
     any window.
     """
-    global _palette, _font_family  # noqa: PLW0603
+    global _palette, _font_family
 
     # 1. Load palette
     _palette = {**_DEFAULTS, **get_theme()}

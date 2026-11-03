@@ -10,7 +10,6 @@ Sort order matters — the POS grid displays products in the configured order.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -22,7 +21,7 @@ class Category:
     - `is_active` allows hiding categories without deleting.
     - Color is assigned from the rotating palette in restaurant.json.
     """
-    id: Optional[int] = None
+    id: int | None = None
     name: str = ""
     sort_order: int = 0
     is_active: bool = True
@@ -38,9 +37,9 @@ class Product:
     - `price` is the unit price (always >= 0).
     - `category_id` links to a Category for grid filtering.
     """
-    id: Optional[int] = None
+    id: int | None = None
     name: str = ""
     price: float = 0.0
-    category_id: Optional[int] = None
+    category_id: int | None = None
     is_active: bool = True
     sort_order: int = 0

@@ -7,7 +7,6 @@ INSERT-only: history records are never updated or deleted.
 from __future__ import annotations
 
 import sqlite3
-from typing import List, Optional
 
 from broast_pos.core.models.order_status_history import OrderStatusHistory
 from broast_pos.data.repositories.base_repository import BaseRepository
@@ -20,7 +19,7 @@ class OrderStatusHistoryRepository(BaseRepository[OrderStatusHistory]):
     # Core contract
     # ------------------------------------------------------------------
 
-    def get_by_id(self, entity_id: int) -> Optional[OrderStatusHistory]:
+    def get_by_id(self, entity_id: int) -> OrderStatusHistory | None:
         row = self._db.fetch_one(
             "SELECT * FROM order_status_history WHERE id = ?", (entity_id,)
         )
@@ -39,7 +38,7 @@ class OrderStatusHistoryRepository(BaseRepository[OrderStatusHistory]):
 
     def delete(self, entity_id: int) -> None:
         """Status history records are NEVER deleted — immutable audit trail."""
-        pass  # No-op
+        # No-op
 
     # ------------------------------------------------------------------
     # Primary insert
@@ -48,11 +47,11 @@ class OrderStatusHistoryRepository(BaseRepository[OrderStatusHistory]):
     def record_transition(
         self,
         order_id: int,
-        old_status: Optional[str],
+        old_status: str | None,
         new_status: str,
-        changed_by_id: Optional[int] = None,
-        changed_by_name: Optional[str] = None,
-        reason: Optional[str] = None,
+        changed_by_id: int | None = None,
+        changed_by_name: str | None = None,
+        reason: str | None = None,
     ) -> OrderStatusHistory:
         """Insert a status transition record and return it with the DB-assigned id."""
         self._db.execute(
@@ -75,7 +74,7 @@ class OrderStatusHistoryRepository(BaseRepository[OrderStatusHistory]):
     # Query methods
     # ------------------------------------------------------------------
 
-    def get_for_order(self, order_id: int) -> List[OrderStatusHistory]:
+    def get_for_order(self, order_id: int) -> list[OrderStatusHistory]:
         """Full timeline for a single order, chronological order."""
         rows = self._db.fetch_all(
             """SELECT * FROM order_status_history
@@ -85,7 +84,7 @@ class OrderStatusHistoryRepository(BaseRepository[OrderStatusHistory]):
         )
         return [self._row_to_history(r) for r in rows]
 
-    def get_for_date(self, date_str: str) -> List[OrderStatusHistory]:
+    def get_for_date(self, date_str: str) -> list[OrderStatusHistory]:
         """All transitions recorded on a specific date (YYYY-MM-DD)."""
         rows = self._db.fetch_all(
             """SELECT * FROM order_status_history
@@ -95,7 +94,7 @@ class OrderStatusHistoryRepository(BaseRepository[OrderStatusHistory]):
         )
         return [self._row_to_history(r) for r in rows]
 
-    def get_by_status(self, new_status: str) -> List[OrderStatusHistory]:
+    def get_by_status(self, new_status: str) -> list[OrderStatusHistory]:
         """All transitions TO a specific status (most recent first, limited)."""
         rows = self._db.fetch_all(
             """SELECT * FROM order_status_history

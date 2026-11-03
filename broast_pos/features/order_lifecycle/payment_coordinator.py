@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import List, Tuple
 
 from broast_pos.core.models.order import OrderType, PaymentMethod
 
@@ -40,7 +39,7 @@ class PaymentCoordinator:
         OrderType.PICKUP: [PaymentMethod.CASH, PaymentMethod.VISA, PaymentMethod.ONLINE],
     }
 
-    def get_allowed_methods(self, order_type: OrderType) -> List[PaymentMethod]:
+    def get_allowed_methods(self, order_type: OrderType) -> list[PaymentMethod]:
         """Return valid payment methods for an order type."""
         return self.ALLOWED_METHODS.get(order_type, list(PaymentMethod))
 
@@ -110,7 +109,7 @@ class PaymentCoordinator:
             is_valid=True,
         )
 
-    def get_quick_cash_amounts(self, total: float) -> List[float]:
+    def get_quick_cash_amounts(self, total: float) -> list[float]:
         """Generate quick-cash button values.
 
         Returns amounts like: exact, round up to nearest 10, 50, 100.

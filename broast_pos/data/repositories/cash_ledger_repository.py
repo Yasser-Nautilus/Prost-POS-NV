@@ -15,8 +15,7 @@ This repo only adds entries and reads them. It NEVER updates or deletes.
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
-from typing import List, Optional
+from datetime import UTC, datetime
 
 from broast_pos.core.models.cashier_session import CashLedgerEntry, LedgerEntryType
 
@@ -90,7 +89,7 @@ class CashLedgerRepository:
             sqlite3.OperationalError: if the table triggers fire (should not
                 happen through this repo).
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self._db.execute(
             """INSERT INTO cash_ledger
                (day_id, session_id, entry_type, amount_pt,
@@ -120,7 +119,7 @@ class CashLedgerRepository:
     # Queries
     # ------------------------------------------------------------------
 
-    def get_entries_for_session(self, session_id: int) -> List[CashLedgerEntry]:
+    def get_entries_for_session(self, session_id: int) -> list[CashLedgerEntry]:
         """All ledger entries for a session in chronological order."""
         rows = self._db.fetch_all(
             "SELECT * FROM cash_ledger WHERE session_id = ? ORDER BY created_at, id",
@@ -128,7 +127,7 @@ class CashLedgerRepository:
         )
         return [self._row_to_entry(r) for r in rows]
 
-    def get_entries_for_day(self, day_id: int) -> List[CashLedgerEntry]:
+    def get_entries_for_day(self, day_id: int) -> list[CashLedgerEntry]:
         """All ledger entries for a business day."""
         rows = self._db.fetch_all(
             "SELECT * FROM cash_ledger WHERE day_id = ? ORDER BY created_at, id",
@@ -138,7 +137,7 @@ class CashLedgerRepository:
 
     def get_entry_by_order(
         self, order_id: int, entry_type: LedgerEntryType
-    ) -> Optional[CashLedgerEntry]:
+    ) -> CashLedgerEntry | None:
         """Find the ledger entry for a specific order + entry_type (idempotency check)."""
         row = self._db.fetch_one(
             "SELECT * FROM cash_ledger WHERE order_id = ? AND entry_type = ?",
@@ -148,7 +147,7 @@ class CashLedgerRepository:
 
     def get_entry_by_trip(
         self, trip_id: int, entry_type: LedgerEntryType
-    ) -> Optional[CashLedgerEntry]:
+    ) -> CashLedgerEntry | None:
         """Find the ledger entry for a specific trip + entry_type."""
         row = self._db.fetch_one(
             "SELECT * FROM cash_ledger WHERE trip_id = ? AND entry_type = ?",

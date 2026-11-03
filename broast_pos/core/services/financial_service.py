@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from broast_pos.core.models.financial import (
     CashTransaction,
@@ -17,8 +17,8 @@ from broast_pos.core.models.financial import (
     ShiftSummary,
     ShiftTransfer,
 )
-from broast_pos.data.repositories.financial_repository import FinancialRepository
 from broast_pos.data.repositories.audit_repository import AuditRepository
+from broast_pos.data.repositories.financial_repository import FinancialRepository
 
 if TYPE_CHECKING:
     from broast_pos.core.services.auth_service import AuthService
@@ -30,10 +30,10 @@ class FinancialService:
 
     def __init__(
         self,
-        financial_repo: Optional[FinancialRepository] = None,
-        audit_repo: Optional[AuditRepository] = None,
-        auth_service: Optional["AuthService"] = None,
-        delivery_service: Optional["DeliveryService"] = None,
+        financial_repo: FinancialRepository | None = None,
+        audit_repo: AuditRepository | None = None,
+        auth_service: AuthService | None = None,
+        delivery_service: DeliveryService | None = None,
     ) -> None:
         self._financial = financial_repo or FinancialRepository()
         self._audit = audit_repo or AuditRepository()
@@ -44,7 +44,7 @@ class FinancialService:
     # Shift guard (called by OrderService before every order)
     # ------------------------------------------------------------------
 
-    def get_active_shift(self) -> Optional[Shift]:
+    def get_active_shift(self) -> Shift | None:
         """Return the currently active shift, or None if no shift is open.
 
         Used by the bridge to resolve shift_id for expenses, summaries, etc.
@@ -98,7 +98,7 @@ class FinancialService:
         self,
         from_user_id: int,
         to_user_id: int,
-        manager_pin: Optional[str] = None,
+        manager_pin: str | None = None,
     ) -> ShiftTransfer:
         """Transfer the active shift from one user to another.
 
@@ -127,14 +127,7 @@ class FinancialService:
             "expected_cash": summary.expected_cash,
         })
 
-        transfer = ShiftTransfer(
-            shift_id=shift.id,
-            from_user_id=from_user_id,
-            to_user_id=to_user_id,
-            timestamp=datetime.now().isoformat(),
-            summary_snapshot=snapshot,
-        )
-
+        # FIX: toter ShiftTransfer-Block entfernt — Persistenz läuft über save_transfer()
         saved = self._financial.save_transfer(
             shift.id, from_user_id, to_user_id,
             json.loads(snapshot),
@@ -157,7 +150,7 @@ class FinancialService:
     # Close shift
     # ------------------------------------------------------------------
 
-    def close_shift(self, shift_id: int, manager_pin: Optional[str] = None) -> Shift:
+    def close_shift(self, shift_id: int, manager_pin: str | None = None) -> Shift:
         """Close the shift — manager only, with prerequisites.
 
         Prerequisites (in order):
@@ -280,7 +273,7 @@ class FinancialService:
 
         return saved
 
-    def get_expenses(self, shift_id: int) -> List[CashTransaction]:
+    def get_expenses(self, shift_id: int) -> list[CashTransaction]:
         """All expenses for a shift."""
         return self._financial.get_expenses(shift_id)
 
@@ -292,7 +285,7 @@ class FinancialService:
         """Compute live shift summary (not stored — always fresh)."""
         return self._financial.get_shift_summary(shift_id)
 
-    def get_shift_history(self) -> List[Shift]:
+    def get_shift_history(self) -> list[Shift]:
         """Past closed shifts, most recent first."""
         return self._financial.get_shift_history()
 
@@ -308,7 +301,7 @@ class FinancialService:
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _verify_manager_pin(self, pin: Optional[str]):
+    def _verify_manager_pin(self, pin: str | None):
         """Verify manager/admin PIN. Returns the User.
 
         Raises:

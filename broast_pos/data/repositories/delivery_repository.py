@@ -8,7 +8,6 @@ No settlement blocking — driver can go on new trips with unsettled previous tr
 from __future__ import annotations
 
 import sqlite3
-from typing import Dict, List, Optional
 
 from broast_pos.core.models.delivery import (
     DeliveryTrip,
@@ -25,7 +24,7 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
     # Core contract (for DeliveryTrip)
     # ------------------------------------------------------------------
 
-    def get_by_id(self, entity_id: int) -> Optional[DeliveryTrip]:
+    def get_by_id(self, entity_id: int) -> DeliveryTrip | None:
         row = self._db.fetch_one(
             "SELECT * FROM delivery_trips WHERE id = ?", (entity_id,)
         )
@@ -41,7 +40,7 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
 
     def delete(self, entity_id: int) -> None:
         """Trips are never deleted — they are historical records."""
-        pass  # No-op
+        # No-op
 
     # ------------------------------------------------------------------
     # Driver attendance
@@ -67,7 +66,7 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
         )
         self._db.commit()
 
-    def get_checked_in_drivers(self) -> List[DriverAttendance]:
+    def get_checked_in_drivers(self) -> list[DriverAttendance]:
         """All currently active drivers (checked in, not checked out)."""
         rows = self._db.fetch_all(
             """SELECT * FROM driver_attendance
@@ -150,11 +149,19 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
     # Trip lifecycle
     # ------------------------------------------------------------------
 
-    def get_trip_by_id(self, trip_id: int) -> Optional[DeliveryTrip]:
+    def get_trip_by_id(self, trip_id: int) -> DeliveryTrip | None:
         """Alias for get_by_id — used by DeliveryService."""
         return self.get_by_id(trip_id)
 
-    def get_trip_for_order(self, order_id: int) -> Optional[DeliveryTrip]:
+    def remove_order_from_trip(self, trip_id: int, order_id: int) -> None:
+        """C4: Remove an order from an unsettled trip."""
+        self._db.execute(
+            "DELETE FROM delivery_trip_orders WHERE trip_id = ? AND order_id = ?",
+            (trip_id, order_id),
+        )
+        self._db.commit()
+
+    def get_trip_for_order(self, order_id: int) -> DeliveryTrip | None:
         """Find the trip that currently contains a given order."""
         row = self._db.fetch_one(
             """SELECT dt.* FROM delivery_trips dt
@@ -167,7 +174,7 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
             return None
         return self._row_to_trip_with_orders(row)
 
-    def create_trip(self, driver_id: int, order_ids: List[int],
+    def create_trip(self, driver_id: int, order_ids: list[int],
                     driver_name: str = "") -> DeliveryTrip:
         """Create a new trip record with associated orders."""
         self._db.execute(
@@ -227,7 +234,7 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
     # Trip queries
     # ------------------------------------------------------------------
 
-    def get_active_trips(self) -> List[DeliveryTrip]:
+    def get_active_trips(self) -> list[DeliveryTrip]:
         """Trips dispatched but not yet returned."""
         rows = self._db.fetch_all(
             """SELECT * FROM delivery_trips
@@ -236,7 +243,7 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
         )
         return [self._row_to_trip_with_orders(r) for r in rows]
 
-    def get_unsettled_trips(self, driver_id: Optional[int] = None) -> List[DeliveryTrip]:
+    def get_unsettled_trips(self, driver_id: int | None = None) -> list[DeliveryTrip]:
         """Returned but not settled trips (optional driver filter)."""
         if driver_id is not None:
             rows = self._db.fetch_all(
@@ -254,16 +261,16 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
             )
         return [self._row_to_trip_with_orders(r) for r in rows]
 
-    def get_trip_with_orders(self, trip_id: int) -> Optional[DeliveryTrip]:
+    def get_trip_with_orders(self, trip_id: int) -> DeliveryTrip | None:
         """Full trip detail including order list."""
         return self.get_by_id(trip_id)
 
     def get_driver_trips_for_date(self, driver_id: int,
-                                   date_str: str) -> List[DeliveryTrip]:
+                                   date_str: str) -> list[DeliveryTrip]:
         """Alias for get_driver_daily_trips — used by DeliveryService."""
         return self.get_driver_daily_trips(driver_id, date_str)
 
-    def get_created_trips(self) -> List[DeliveryTrip]:
+    def get_created_trips(self) -> list[DeliveryTrip]:
         """Trips created but not yet dispatched."""
         rows = self._db.fetch_all(
             """SELECT * FROM delivery_trips
@@ -276,7 +283,7 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
     # End-of-day queries
     # ------------------------------------------------------------------
 
-    def get_all_drivers_daily_summary(self, date_str: str) -> List[Dict]:
+    def get_all_drivers_daily_summary(self, date_str: str) -> list[dict]:
         """Per-driver summary: trip count, order count, fees earned."""
         rows = self._db.fetch_all(
             """SELECT
@@ -304,7 +311,7 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
         ]
 
     def get_driver_daily_trips(self, driver_id: int,
-                               date_str: str) -> List[DeliveryTrip]:
+                               date_str: str) -> list[DeliveryTrip]:
         """All trips for one driver on a date."""
         rows = self._db.fetch_all(
             """SELECT * FROM delivery_trips
@@ -314,7 +321,7 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
         )
         return [self._row_to_trip_with_orders(r) for r in rows]
 
-    def get_daily_summary(self, date_str: str) -> List[Dict]:
+    def get_daily_summary(self, date_str: str) -> list[dict]:
         """Alias for get_all_drivers_daily_summary — used by ReportService."""
         return self.get_all_drivers_daily_summary(date_str)
 
@@ -322,7 +329,7 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _load_trip_order_ids(self, trip_id: int) -> List[int]:
+    def _load_trip_order_ids(self, trip_id: int) -> list[int]:
         """Load order IDs for a trip from the join table."""
         rows = self._db.fetch_all(
             "SELECT order_id FROM delivery_trip_orders WHERE trip_id = ?",

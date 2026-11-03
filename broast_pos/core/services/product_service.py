@@ -8,8 +8,6 @@ Search must be instant (<100ms at 300+ orders/day).
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 from broast_pos.core.models.product import Category, Product
 from broast_pos.data.repositories.product_repository import ProductRepository
 
@@ -18,7 +16,7 @@ class ProductService:
     """Business logic for products and categories."""
 
     def __init__(
-        self, product_repo: Optional[ProductRepository] = None,
+        self, product_repo: ProductRepository | None = None,
     ) -> None:
         self._products = product_repo or ProductRepository()
 
@@ -26,11 +24,11 @@ class ProductService:
     # Categories
     # ------------------------------------------------------------------
 
-    def get_categories(self) -> List[Category]:
+    def get_categories(self) -> list[Category]:
         """Sorted list of active categories for POS grid tabs."""
         return self._products.get_categories()
 
-    def get_all_categories(self) -> List[Category]:
+    def get_all_categories(self) -> list[Category]:
         """Sorted list of all categories (active and inactive)."""
         return self._products.get_all_categories()
 
@@ -50,9 +48,9 @@ class ProductService:
     def update_category(
         self,
         category_id: int,
-        name: Optional[str] = None,
-        sort_order: Optional[int] = None,
-        is_active: Optional[bool] = None,
+        name: str | None = None,
+        sort_order: int | None = None,
+        is_active: bool | None = None,
     ) -> Category:
         """Update an existing category.
 
@@ -100,15 +98,15 @@ class ProductService:
     # Products
     # ------------------------------------------------------------------
 
-    def get_products_by_category(self, category_id: int) -> List[Product]:
+    def get_products_by_category(self, category_id: int) -> list[Product]:
         """Sorted products for a specific category grid."""
         return self._products.get_products_by_category(category_id)
 
-    def get_all_products(self) -> List[Product]:
+    def get_all_products(self) -> list[Product]:
         """All products (active and inactive)."""
         return self._products.get_all_products()
 
-    def search_products(self, query: str) -> List[Product]:
+    def search_products(self, query: str) -> list[Product]:
         """Fast text search across product names."""
         query = query.strip()
         if not query:
@@ -145,11 +143,11 @@ class ProductService:
     def update_product(
         self,
         product_id: int,
-        name: Optional[str] = None,
-        price: Optional[float] = None,
-        category_id: Optional[int] = None,
-        sort_order: Optional[int] = None,
-        is_active: Optional[bool] = None,
+        name: str | None = None,
+        price: float | None = None,
+        category_id: int | None = None,
+        sort_order: int | None = None,
+        is_active: bool | None = None,
     ) -> Product:
         """Update an existing product.
 

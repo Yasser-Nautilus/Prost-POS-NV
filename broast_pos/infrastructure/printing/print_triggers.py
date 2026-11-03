@@ -23,7 +23,7 @@ Trigger points:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from broast_pos.infrastructure.printing.printer_manager import PrinterManager
 
@@ -46,7 +46,7 @@ class PrintTriggers:
 
     def on_order_created(
         self,
-        order: Dict[str, Any],
+        order: dict[str, Any],
     ) -> bool:
         """Triggered after ``order_service.create_order()``.
 
@@ -57,8 +57,8 @@ class PrintTriggers:
 
     def on_order_amended(
         self,
-        order: Dict[str, Any],
-        changes: List[Dict[str, Any]],
+        order: dict[str, Any],
+        changes: list[dict[str, Any]],
     ) -> bool:
         """Triggered after ``order_service.amend_order()``.
 
@@ -73,7 +73,7 @@ class PrintTriggers:
 
     def on_order_completed(
         self,
-        order: Dict[str, Any],
+        order: dict[str, Any],
         cashier_slot: int = 1,
     ) -> bool:
         """Triggered after ``order_service.complete_order()``.
@@ -89,7 +89,7 @@ class PrintTriggers:
 
     def on_shift_transfer(
         self,
-        transfer: Dict[str, Any],
+        transfer: dict[str, Any],
         cashier_slot: int = 1,
     ) -> bool:
         """Triggered after ``financial_service.transfer_shift()``.
@@ -101,9 +101,9 @@ class PrintTriggers:
 
     def on_shift_close(
         self,
-        report: Dict[str, Any],
+        report: dict[str, Any],
         cashier_slot: int = 1,
-        shift_period: Optional[Dict[str, str]] = None,
+        shift_period: dict[str, str] | None = None,
     ) -> bool:
         """Triggered on shift close / daily summary print.
 
@@ -119,7 +119,7 @@ class PrintTriggers:
 
     def on_driver_settled(
         self,
-        settlement: Dict[str, Any],
+        settlement: dict[str, Any],
         cashier_slot: int = 1,
     ) -> bool:
         """Triggered after ``delivery_service.settle_trip()``.
@@ -135,7 +135,7 @@ class PrintTriggers:
 
     def on_end_of_day_drivers(
         self,
-        summary: Dict[str, Any],
+        summary: dict[str, Any],
         cashier_slot: int = 1,
     ) -> bool:
         """Triggered at end of day to print driver summary.
@@ -151,7 +151,7 @@ class PrintTriggers:
 
     def reprint_receipt(
         self,
-        order: Dict[str, Any],
+        order: dict[str, Any],
         cashier_slot: int = 1,
     ) -> bool:
         """Manual reprint of a customer receipt from Reports View."""

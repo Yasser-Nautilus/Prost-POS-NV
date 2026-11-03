@@ -13,16 +13,19 @@ All numbers are calculated server-side from actual order records.
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from broast_pos.core.models.audit import AuditEventType
 from broast_pos.core.models.driver_settlement import DriverSettlement
 from broast_pos.core.models.order import OrderStatus, PaymentMethod
 from broast_pos.data.repositories.audit_repository import AuditRepository
 from broast_pos.data.repositories.delivery_repository import DeliveryRepository
-from broast_pos.data.repositories.driver_settlement_repository import DriverSettlementRepository
+from broast_pos.data.repositories.driver_settlement_repository import (
+    DriverSettlementRepository,
+)
 from broast_pos.data.repositories.order_repository import OrderRepository
 from broast_pos.data.repositories.user_repository import UserRepository
 
@@ -37,12 +40,12 @@ class DriverSettlementService:
 
     def __init__(
         self,
-        settlement_repo: Optional[DriverSettlementRepository] = None,
-        delivery_repo: Optional[DeliveryRepository] = None,
-        order_repo: Optional[OrderRepository] = None,
-        user_repo: Optional[UserRepository] = None,
-        audit_repo: Optional[AuditRepository] = None,
-        order_svc: Optional["OrderService"] = None,
+        settlement_repo: DriverSettlementRepository | None = None,
+        delivery_repo: DeliveryRepository | None = None,
+        order_repo: OrderRepository | None = None,
+        user_repo: UserRepository | None = None,
+        audit_repo: AuditRepository | None = None,
+        order_svc: OrderService | None = None,
         ledger_repo=None,           # CashLedgerRepository (Phase 3)
         cashier_session_repo=None,  # CashierSessionRepository (Phase 3)
     ) -> None:
@@ -64,9 +67,9 @@ class DriverSettlementService:
     def get_driver_settlement_preview(
         self,
         driver_id: int,
-        settlement_date: Optional[str] = None,
-        trip_id: Optional[int] = None,
-    ) -> Dict:
+        settlement_date: str | None = None,
+        trip_id: int | None = None,
+    ) -> dict:
         """Calculate what a settlement would look like, without committing.
 
         Returns a summary dict the frontend can display for manager review.
@@ -122,9 +125,9 @@ class DriverSettlementService:
         driver_id: int,
         settled_by_id: int,
         settled_by_name: str,
-        settlement_date: Optional[str] = None,
-        notes: Optional[str] = None,
-        trip_id: Optional[int] = None,
+        settlement_date: str | None = None,
+        notes: str | None = None,
+        trip_id: int | None = None,
     ) -> DriverSettlement:
         """Settle one specific trip (if trip_id given) or all unsettled trips for a driver.
 
@@ -183,8 +186,16 @@ class DriverSettlementService:
                     f"الرحلة #{trip_id} تمت تسويتها بالفعل"
                 )
         else:
-            # Full-day settlement: all returned, unsettled trips
-            day_trips = [t for t in all_day_trips if not t.is_settled]
+            # Full-day settlement: all returned trips for the day (summarizes the full day)
+            day_trips = all_day_trips
+
+        # H3: Block settlement if driver has any trip currently in transit
+        all_driver_trips = self._delivery.get_driver_trips_for_date(driver_id, target_date)
+        in_transit = [t for t in all_driver_trips if t.dispatched_at is not None and t.returned_at is None]
+        if in_transit:
+            raise ValueError(
+                f"لا يمكن تسوية السائق {driver_name} — توجد رحلة قيد التوصيل في الطريق لم تعد بعد"
+            )
 
         # ── Step 3: Must have at least one eligible trip ──────────────────
         if not day_trips:
@@ -239,10 +250,11 @@ class DriverSettlementService:
                     trip_fees = 0.0
                     for oid in trip.order_ids:
                         order = self._orders.get_by_id(oid)
-                        if order:
-                            if order.payment_method == PaymentMethod.CASH:
-                                trip_cash += order.total
-                            trip_fees += order.delivery_fee or 0.0
+                        if not order or order.status == OrderStatus.CANCELLED:
+                            continue
+                        if order.payment_method == PaymentMethod.CASH:
+                            trip_cash += order.total
+                        trip_fees += order.delivery_fee or 0.0
 
                     db.execute(
                         """UPDATE delivery_trips
@@ -255,7 +267,7 @@ class DriverSettlementService:
                     # Phase 3: DRIVER_REMITTANCE ledger entry (ADR-1)
                     # day_id = shift_id from the trip's first order (the business day)
                     if self._ledger is not None and trip_cash > 0:
-                        _trip_day_id: Optional[int] = None
+                        _trip_day_id: int | None = None
                         for _oid in trip.order_ids:
                             _o = self._orders.get_by_id(_oid)
                             if _o and _o.shift_id:
@@ -275,11 +287,14 @@ class DriverSettlementService:
                             order = self._orders.get_by_id(oid)
                             if order and order.status == OrderStatus.DELIVERED:
                                 try:
+                                    # bearbeitet (Checkup-Fix): Tagesabschluss-Settlement
+                                    # bucht Cash separat -> unbezahlten Abschluss autorisieren.
                                     self._order_svc.change_order_status(
                                         order_id=oid,
                                         new_status=OrderStatus.COMPLETED,
                                         changed_by_id=settled_by_id,
                                         changed_by_name=settled_by_name,
+                                        allow_unpaid_complete=True,
                                     )
                                 except Exception as exc:
                                     logger.warning(
@@ -297,16 +312,19 @@ class DriverSettlementService:
                         AuditEventType.DRIVER_SETTLEMENT_COMPLETED,
                         settled_by_id,
                         settled_by_name,
-                        f'{{"driver_id": {driver_id}, "driver_name": "{driver_name}", '
-                        f'"date": "{target_date}", '
-                        f'"trip_count": {summary["trip_count"]}, '
-                        f'"order_count": {summary["order_count"]}, '
-                        f'"cash_collected": {summary["cash_collected"]}, '
-                        f'"online_paid": {summary["online_paid"]}, '
-                        f'"delivery_fees": {summary["total_delivery_fees"]}}}',
+                        json.dumps({
+                            "driver_id": driver_id,
+                            "driver_name": driver_name,
+                            "date": target_date,
+                            "trip_count": summary["trip_count"],
+                            "order_count": summary["order_count"],
+                            "cash_collected": summary["cash_collected"],
+                            "online_paid": summary["online_paid"],
+                            "delivery_fees": summary["total_delivery_fees"],
+                        }, ensure_ascii=False),
                         "driver",
                         driver_id,
-                        f'{{"settlement_id": {settlement.id}}}',
+                        json.dumps({"settlement_id": settlement.id}, ensure_ascii=False),
                     ),
                 )
                 # db.transaction() commits on clean exit — no explicit commit needed
@@ -321,17 +339,17 @@ class DriverSettlementService:
     # Query methods
     # ------------------------------------------------------------------
 
-    def get_settlements_for_driver(self, driver_id: int) -> List[DriverSettlement]:
+    def get_settlements_for_driver(self, driver_id: int) -> list[DriverSettlement]:
         """All settlement records for a driver (newest first)."""
         return self._settlements.get_by_driver(driver_id)
 
-    def get_settlements_for_date(self, date_str: str) -> List[DriverSettlement]:
+    def get_settlements_for_date(self, date_str: str) -> list[DriverSettlement]:
         """All settlement records for a specific date."""
         return self._settlements.get_for_date(date_str)
 
     def get_settlement_by_driver_date(
         self, driver_id: int, date_str: str
-    ) -> Optional[DriverSettlement]:
+    ) -> DriverSettlement | None:
         """Find a specific settlement record."""
         return self._settlements.get_by_driver_date(driver_id, date_str)
 
@@ -345,7 +363,7 @@ class DriverSettlementService:
         driver_name: str,
         settlement_date: str,
         eligible_trips,
-    ) -> Dict:
+    ) -> dict:
         """Calculate financial summary from actual order data.
 
         This is the authoritative financial calculation — NEVER trust
@@ -368,7 +386,7 @@ class DriverSettlementService:
 
             for oid in trip.order_ids:
                 order = self._orders.get_by_id(oid)
-                if not order:
+                if not order or order.status == OrderStatus.CANCELLED:
                     continue
 
                 order_total = order.total or 0.0
@@ -435,22 +453,26 @@ class DriverSettlementService:
 
         Idempotent per trip_id (uq_ledger_remit), so the end-of-day driver
         settlement never double-books a trip already settled per-trip.
+        C3: Fails loudly if session or actor_id is invalid.
         """
-        if self._ledger is None or trip_cash <= 0 or not actor_id:
+        if self._ledger is None or trip_cash <= 0:
             return
-        day_id: Optional[int] = None
+        if not actor_id:
+            raise ValueError("لا يمكن توريد نقدية الرحلة بدون مستخدم مسؤول (actor_id)")
+        day_id: int | None = None
         for oid in trip.order_ids:
             order = self._orders.get_by_id(oid)
             if order and order.shift_id:
                 day_id = order.shift_id
                 break
-        if day_id is not None:
-            self._create_driver_remittance_entry(
-                trip_id=trip.id,
-                day_id=day_id,
-                trip_cash=trip_cash,
-                actor_id=actor_id,
-            )
+        if day_id is None:
+            raise ValueError("لا توجد وردية مفتوحة لتوريد نقدية هذه الرحلة")
+        self._create_driver_remittance_entry(
+            trip_id=trip.id,
+            day_id=day_id,
+            trip_cash=trip_cash,
+            actor_id=actor_id,
+        )
 
     # ------------------------------------------------------------------
     # Phase 3: Ledger helper
@@ -472,10 +494,13 @@ class DriverSettlementService:
           - Amount = round(trip_cash * 100) piasters (positive: cash into drawer).
           - Idempotency guaranteed by DB's uq_ledger_remit unique index on trip_id.
         """
-        from broast_pos.core.models.cashier_session import (
-            CashLedgerEntry, LedgerEntryType, Station,
-        )
         import datetime as _dt
+
+        from broast_pos.core.models.cashier_session import (
+            CashLedgerEntry,
+            LedgerEntryType,
+            Station,
+        )
 
         if self._cashier_sessions is None:
             return
@@ -489,7 +514,7 @@ class DriverSettlementService:
         )
 
         if session is None:
-            return
+            raise ValueError("لا توجد جلسة كاشير نشطة (توصيل أو عامة) لتوريد نقدية الرحلة")
 
         amount_pt = round(trip_cash * 100)
         try:
@@ -501,7 +526,7 @@ class DriverSettlementService:
                 amount_pt=amount_pt,
                 trip_id=trip_id,
                 actor_id=actor_id,
-                created_at=_dt.datetime.now(_dt.timezone.utc).isoformat(),
+                created_at=_dt.datetime.now(_dt.UTC).isoformat(),
             ))
         except Exception as exc:
             # uq_ledger_remit: already recorded (idempotency). Log and continue.

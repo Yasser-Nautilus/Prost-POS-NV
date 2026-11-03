@@ -15,8 +15,7 @@ Business rules enforced here in Python (better error messages):
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timezone
-from typing import List, Optional
+from datetime import UTC, datetime
 
 from broast_pos.core.models.cashier_session import CashierSession, Station
 
@@ -36,13 +35,13 @@ class CashierSessionRepository:
     # Queries
     # ------------------------------------------------------------------
 
-    def get_by_id(self, session_id: int) -> Optional[CashierSession]:
+    def get_by_id(self, session_id: int) -> CashierSession | None:
         row = self._db.fetch_one(
             "SELECT * FROM cashier_sessions WHERE id = ?", (session_id,)
         )
         return self._row_to_session(row) if row else None
 
-    def get_open_sessions_for_day(self, day_id: int) -> List[CashierSession]:
+    def get_open_sessions_for_day(self, day_id: int) -> list[CashierSession]:
         """All currently open sessions for a business day."""
         rows = self._db.fetch_all(
             "SELECT * FROM cashier_sessions WHERE day_id = ? AND is_open = 1 ORDER BY opened_at",
@@ -52,7 +51,7 @@ class CashierSessionRepository:
 
     def get_open_session_for_station(
         self, day_id: int, station: Station
-    ) -> Optional[CashierSession]:
+    ) -> CashierSession | None:
         """Return the single open session for a station, or None."""
         row = self._db.fetch_one(
             "SELECT * FROM cashier_sessions WHERE day_id = ? AND station = ? AND is_open = 1",
@@ -60,7 +59,7 @@ class CashierSessionRepository:
         )
         return self._row_to_session(row) if row else None
 
-    def get_sessions_for_day(self, day_id: int) -> List[CashierSession]:
+    def get_sessions_for_day(self, day_id: int) -> list[CashierSession]:
         """All sessions (open + closed) for a business day."""
         rows = self._db.fetch_all(
             "SELECT * FROM cashier_sessions WHERE day_id = ? ORDER BY opened_at",
@@ -68,7 +67,7 @@ class CashierSessionRepository:
         )
         return [self._row_to_session(r) for r in rows]
 
-    def get_sessions_for_user(self, user_id: int, limit: int = 10) -> List[CashierSession]:
+    def get_sessions_for_user(self, user_id: int, limit: int = 10) -> list[CashierSession]:
         """Recent sessions for a user (most recent first)."""
         rows = self._db.fetch_all(
             "SELECT * FROM cashier_sessions WHERE user_id = ? ORDER BY opened_at DESC LIMIT ?",
@@ -90,7 +89,7 @@ class CashierSessionRepository:
 
     def create(self, session: CashierSession) -> CashierSession:
         """Insert a new session. Returns the session with its id filled in."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self._db.execute(
             """INSERT INTO cashier_sessions
                (day_id, user_id, station, is_open, opened_at,
@@ -113,12 +112,12 @@ class CashierSessionRepository:
         counted_cash_pt: int,
         expected_cash_pt: int,
         variance_pt: int,
-        variance_approved_by: Optional[int] = None,
-        variance_reason: Optional[str] = None,
-        handover_to_session: Optional[int] = None,
+        variance_approved_by: int | None = None,
+        variance_reason: str | None = None,
+        handover_to_session: int | None = None,
     ) -> None:
         """Mark the session as closed with financial snapshot."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         self._db.execute(
             """UPDATE cashier_sessions SET
                is_open = 0,

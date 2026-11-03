@@ -28,7 +28,7 @@ Features:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -40,7 +40,6 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -79,13 +78,17 @@ class DeliveryView(QWidget):
     def __init__(
         self,
         delivery_controller: DeliveryController,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._ctrl = delivery_controller
-        self._selected_orders: List[int] = []
-        self._selected_driver_id: Optional[int] = None
-        self._selected_trip_id: Optional[int] = None
+        self._selected_orders: list[int] = []
+        self._selected_driver_id: int | None = None
+        self._selected_trip_id: int | None = None
+        self._driver_data: list[dict[str, Any]] = []
+        self._unassigned_data: list[dict[str, Any]] = []
+        self._active_trip_data: list[dict[str, Any]] = []
+        self._unsettled_data: list[dict[str, Any]] = []
 
         self._setup_ui()
         self._start_auto_refresh()
@@ -203,11 +206,11 @@ class DeliveryView(QWidget):
 
         # Tab widget
         self._center_tabs = QTabWidget()
-        self._center_tabs.setStyleSheet(f"""
-            QTabBar::tab {{
+        self._center_tabs.setStyleSheet("""
+            QTabBar::tab {
                 padding: 8px 16px;
                 font-size: 13px;
-            }}
+            }
         """)
 
         # Tab 1: Unassigned orders
@@ -427,11 +430,9 @@ class DeliveryView(QWidget):
     # Data: Drivers
     # ------------------------------------------------------------------
 
-    _driver_data: List[Dict[str, Any]] = []
-
     def _refresh_drivers(self) -> None:
-        from broast_pos.data.repositories.user_repository import UserRepository
         from broast_pos.data.database.connection import DatabaseConnection
+        from broast_pos.data.repositories.user_repository import UserRepository
 
         self._driver_list.blockSignals(True)
         prev_row = self._driver_list.currentRow()
@@ -496,8 +497,6 @@ class DeliveryView(QWidget):
     # Data: Unassigned orders
     # ------------------------------------------------------------------
 
-    _unassigned_data: List[Dict[str, Any]] = []
-
     def _refresh_unassigned(self) -> None:
         self._unassigned_list.blockSignals(True)
         self._unassigned_list.clear()
@@ -518,8 +517,6 @@ class DeliveryView(QWidget):
     # ------------------------------------------------------------------
     # Data: Active trips
     # ------------------------------------------------------------------
-
-    _active_trip_data: List[Dict[str, Any]] = []
 
     def _refresh_active_trips(self) -> None:
         self._active_trips_list.blockSignals(True)
@@ -554,8 +551,6 @@ class DeliveryView(QWidget):
     # ------------------------------------------------------------------
     # Data: Unsettled trips
     # ------------------------------------------------------------------
-
-    _unsettled_data: List[Dict[str, Any]] = []
 
     def _refresh_unsettled(self) -> None:
         self._unsettled_list.blockSignals(True)

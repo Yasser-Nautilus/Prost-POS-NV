@@ -7,7 +7,6 @@ Handles order + items as a unit. No modifier joins — items are self-contained.
 from __future__ import annotations
 
 import sqlite3
-from typing import List, Optional
 
 from broast_pos.core.models.order import (
     Order,
@@ -26,7 +25,7 @@ class OrderRepository(BaseRepository[Order]):
     # Core contract
     # ------------------------------------------------------------------
 
-    def get_by_id(self, entity_id: int) -> Optional[Order]:
+    def get_by_id(self, entity_id: int) -> Order | None:
         row = self._db.fetch_one("SELECT * FROM orders WHERE id = ?", (entity_id,))
         if row is None:
             return None
@@ -50,7 +49,7 @@ class OrderRepository(BaseRepository[Order]):
     # Query methods
     # ------------------------------------------------------------------
 
-    def get_by_invoice(self, invoice_no: int, shift_id: int) -> Optional[Order]:
+    def get_by_invoice(self, invoice_no: int, shift_id: int) -> Order | None:
         """Lookup order by invoice number within a shift."""
         row = self._db.fetch_one(
             "SELECT * FROM orders WHERE invoice_no = ? AND shift_id = ?",
@@ -62,7 +61,7 @@ class OrderRepository(BaseRepository[Order]):
         order.items = self._load_items(order.id)
         return order
 
-    def get_by_table(self, table_number: int) -> Optional[Order]:
+    def get_by_table(self, table_number: int) -> Order | None:
         """Load the active dine-in order for a table."""
         row = self._db.fetch_one(
             """SELECT * FROM orders
@@ -77,14 +76,14 @@ class OrderRepository(BaseRepository[Order]):
         order.items = self._load_items(order.id)
         return order
 
-    def get_active_orders(self) -> List[Order]:
+    def get_active_orders(self) -> list[Order]:
         """All non-completed, non-cancelled orders."""
         rows = self._db.fetch_all(
             "SELECT * FROM orders WHERE status NOT IN ('completed', 'cancelled') ORDER BY created_at"
         )
-        return [self._row_to_order_with_items(r) for r in rows]
+        return self._rows_to_orders_with_items(rows)
 
-    def get_active_by_type(self, order_type: OrderType) -> List[Order]:
+    def get_active_by_type(self, order_type: OrderType) -> list[Order]:
         """Active orders filtered by type (for tracking views)."""
         rows = self._db.fetch_all(
             """SELECT * FROM orders
@@ -92,9 +91,9 @@ class OrderRepository(BaseRepository[Order]):
                ORDER BY created_at""",
             (order_type.value,),
         )
-        return [self._row_to_order_with_items(r) for r in rows]
+        return self._rows_to_orders_with_items(rows)
 
-    def get_unassigned_deliveries(self) -> List[Order]:
+    def get_unassigned_deliveries(self) -> list[Order]:
         """Delivery orders not yet assigned to a driver (from both cashiers)."""
         rows = self._db.fetch_all(
             """SELECT * FROM orders
@@ -102,16 +101,16 @@ class OrderRepository(BaseRepository[Order]):
                  AND status NOT IN ('completed', 'cancelled')
                ORDER BY created_at"""
         )
-        return [self._row_to_order_with_items(r) for r in rows]
+        return self._rows_to_orders_with_items(rows)
 
-    def get_today_orders(self) -> List[Order]:
+    def get_today_orders(self) -> list[Order]:
         """All orders created today (current shift)."""
         rows = self._db.fetch_all(
             "SELECT * FROM orders WHERE DATE(created_at) = DATE('now') ORDER BY created_at"
         )
         return [self._row_to_order_with_items(r) for r in rows]
 
-    def get_orders_for_report(self, date_str: str) -> List[Order]:
+    def get_orders_for_report(self, date_str: str) -> list[Order]:
         """Non-cancelled orders for a specific date (YYYY-MM-DD)."""
         rows = self._db.fetch_all(
             """SELECT * FROM orders
@@ -121,7 +120,7 @@ class OrderRepository(BaseRepository[Order]):
         )
         return [self._row_to_order_with_items(r) for r in rows]
 
-    def get_orders_for_trip(self, order_ids: List[int]) -> List[Order]:
+    def get_orders_for_trip(self, order_ids: list[int]) -> list[Order]:
         """Load multiple orders by ID list (for trip details)."""
         if not order_ids:
             return []
@@ -136,11 +135,11 @@ class OrderRepository(BaseRepository[Order]):
     # Report query methods (used by ReportService)
     # ------------------------------------------------------------------
 
-    def get_completed_for_date(self, date_str: str) -> List[Order]:
+    def get_completed_for_date(self, date_str: str) -> list[Order]:
         """Non-cancelled orders for a date — alias for get_orders_for_report."""
         return self.get_orders_for_report(date_str)
 
-    def get_finished_for_date(self, date_str: str) -> List[Order]:
+    def get_finished_for_date(self, date_str: str) -> list[Order]:
         """Completed or cancelled orders for a date (archive/history).
 
         Newest first (by payment time, falling back to creation time).
@@ -153,7 +152,7 @@ class OrderRepository(BaseRepository[Order]):
         )
         return [self._row_to_order_with_items(r) for r in rows]
 
-    def get_cancelled_for_date(self, date_str: str) -> List[Order]:
+    def get_cancelled_for_date(self, date_str: str) -> list[Order]:
         """Cancelled orders for a specific date (YYYY-MM-DD)."""
         rows = self._db.fetch_all(
             """SELECT * FROM orders
@@ -238,7 +237,7 @@ class OrderRepository(BaseRepository[Order]):
     # B-10: Shift-based report queries (correct business date)
     # ------------------------------------------------------------------
 
-    def get_completed_for_shift(self, shift_id: int) -> List[Order]:
+    def get_completed_for_shift(self, shift_id: int) -> list[Order]:
         """Non-cancelled orders for a specific shift.
 
         B-10: Use this instead of get_completed_for_date() when you have a
@@ -253,7 +252,7 @@ class OrderRepository(BaseRepository[Order]):
         )
         return [self._row_to_order_with_items(r) for r in rows]
 
-    def get_cancelled_for_shift(self, shift_id: int) -> List[Order]:
+    def get_cancelled_for_shift(self, shift_id: int) -> list[Order]:
         """Cancelled orders for a specific shift (B-10 shift-based variant)."""
         rows = self._db.fetch_all(
             """SELECT * FROM orders
@@ -300,7 +299,7 @@ class OrderRepository(BaseRepository[Order]):
         )
         return row["revenue"] if row else 0.0
 
-    def get_shift_business_date(self, shift_id: int) -> Optional[str]:
+    def get_shift_business_date(self, shift_id: int) -> str | None:
         """Return the business date (YYYY-MM-DD) for a shift.
 
         Business date = DATE(shifts.opened_at) — the calendar date on which
@@ -355,13 +354,48 @@ class OrderRepository(BaseRepository[Order]):
             updated_at=row["updated_at"],
         )
 
+    def _load_items_for_orders(self, order_ids: list[int]) -> dict[int, list[OrderItem]]:
+        """Batch load items for multiple orders in a single SQL query."""
+        if not order_ids:
+            return {}
+        placeholders = ",".join("?" for _ in order_ids)
+        rows = self._db.fetch_all(
+            f"SELECT * FROM order_items WHERE order_id IN ({placeholders})",
+            tuple(order_ids),
+        )
+        res: dict[int, list[OrderItem]] = {oid: [] for oid in order_ids}
+        for r in rows:
+            oid = r["order_id"]
+            res[oid].append(
+                OrderItem(
+                    id=r["id"],
+                    product_id=r["product_id"],
+                    product_name=r["product_name"],
+                    quantity=r["quantity"],
+                    unit_price=r["unit_price"],
+                    notes=r["notes"] or "",
+                )
+            )
+        return res
+
+    def _rows_to_orders_with_items(self, rows: list[sqlite3.Row]) -> list[Order]:
+        """Batch map rows to Orders and load all items in a single query (solves N+1)."""
+        if not rows:
+            return []
+        orders = [self._row_to_order(r) for r in rows]
+        order_ids = [o.id for o in orders if o.id is not None]
+        items_by_order = self._load_items_for_orders(order_ids)
+        for order in orders:
+            order.items = items_by_order.get(order.id, [])
+        return orders
+
     def _row_to_order_with_items(self, row: sqlite3.Row) -> Order:
         """Map row to Order and load its items."""
         order = self._row_to_order(row)
         order.items = self._load_items(order.id)
         return order
 
-    def _load_items(self, order_id: int) -> List[OrderItem]:
+    def _load_items(self, order_id: int) -> list[OrderItem]:
         """Load all items for an order — no modifier joins needed."""
         rows = self._db.fetch_all(
             "SELECT * FROM order_items WHERE order_id = ?",
@@ -459,7 +493,7 @@ class OrderRepository(BaseRepository[Order]):
         self._db.commit()
         return order
 
-    def _save_items(self, order_id: int, items: List[OrderItem]) -> None:
+    def _save_items(self, order_id: int, items: list[OrderItem]) -> None:
         """Insert all items for an order."""
         for item in items:
             self._db.execute(

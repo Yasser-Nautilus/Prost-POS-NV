@@ -11,8 +11,8 @@ every transition is recorded in order_status_history.
 
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime
-from typing import Dict, List, Optional
 
 from broast_pos.core.models.audit import AuditEventType
 from broast_pos.core.models.delivery import (
@@ -27,16 +27,18 @@ from broast_pos.data.repositories.delivery_repository import DeliveryRepository
 from broast_pos.data.repositories.order_repository import OrderRepository
 from broast_pos.data.repositories.user_repository import UserRepository
 
+logger = logging.getLogger(__name__)  # FIX: war undefiniert im reassign except-Block
+
 
 class DeliveryService:
     """Business logic for driver management and delivery trips."""
 
     def __init__(
         self,
-        delivery_repo: Optional[DeliveryRepository] = None,
-        order_repo: Optional[OrderRepository] = None,
-        user_repo: Optional[UserRepository] = None,
-        audit_repo: Optional[AuditRepository] = None,
+        delivery_repo: DeliveryRepository | None = None,
+        order_repo: OrderRepository | None = None,
+        user_repo: UserRepository | None = None,
+        audit_repo: AuditRepository | None = None,
         order_service=None,    # Optional[OrderService] — avoids circular import
         settlement_svc=None,   # Optional[DriverSettlementService] — B-07
     ) -> None:
@@ -56,7 +58,7 @@ class DeliveryService:
         order_id: int,
         new_status: OrderStatus,
         changed_by_name: str = "نظام",
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> None:
         """Route status changes through OrderService (the authoritative path).
 
@@ -68,12 +70,16 @@ class DeliveryService:
                 "OrderService not injected into DeliveryService — "
                 "cannot change order status without it"
             )
+        # bearbeitet (Checkup-Fix): Trip-Settlement bucht Bargeld separat über
+        # remit_trip_cash, daher darf eine noch unbezahlte Order hier abgeschlossen
+        # werden — explizit autorisiert statt still im OrderService.
         self._order_svc.change_order_status(
             order_id=order_id,
             new_status=new_status,
             changed_by_id=None,
             changed_by_name=changed_by_name,
             reason=reason,
+            allow_unpaid_complete=(new_status == OrderStatus.COMPLETED),
         )
 
     # ------------------------------------------------------------------
@@ -101,11 +107,11 @@ class DeliveryService:
             )
         self._delivery.check_out_driver(driver_id)
 
-    def get_active_drivers(self) -> List[User]:
+    def get_active_drivers(self) -> list[User]:
         """Return only checked-in (available) drivers for the dispatch list."""
         return self._delivery.get_active_drivers()
 
-    def get_all_drivers(self) -> List[User]:
+    def get_all_drivers(self) -> list[User]:
         """Return all registered active drivers (cashier_slot is None)."""
         return self._users.get_drivers()
 
@@ -113,7 +119,7 @@ class DeliveryService:
     # Trip management
     # ------------------------------------------------------------------
 
-    def get_trip(self, trip_id: int) -> Optional[DeliveryTrip]:
+    def get_trip(self, trip_id: int) -> DeliveryTrip | None:
         """Get a delivery trip by its ID."""
         return self._delivery.get_by_id(trip_id)
 
@@ -128,7 +134,7 @@ class DeliveryService:
     def create_trip(
         self,
         driver_id: int,
-        order_ids: List[int],
+        order_ids: list[int],
     ) -> DeliveryTrip:
         """Create a new delivery trip with selected orders.
 
@@ -199,7 +205,8 @@ class DeliveryService:
                 entity_id=trip.id,
             )
         except Exception:
-            pass
+            # Checkup-Fix: audit write is best-effort, but log the failure.
+            logger.debug("Audit log for new trip %s failed", trip.id, exc_info=True)
 
         return trip
 
@@ -244,7 +251,8 @@ class DeliveryService:
                 entity_id=trip_id,
             )
         except Exception:
-            pass
+            # Checkup-Fix: audit write is best-effort, but log the failure.
+            logger.debug("Audit log for trip %s failed (dispatch)", trip_id, exc_info=True)
 
         updated_trip = self._delivery.get_trip_by_id(trip_id)
         return updated_trip or trip
@@ -288,7 +296,8 @@ class DeliveryService:
                 entity_id=trip_id,
             )
         except Exception:
-            pass
+            # Checkup-Fix: audit write is best-effort, but log the failure.
+            logger.debug("Audit log for trip %s failed", trip_id, exc_info=True)
 
         updated_trip = self._delivery.get_trip_by_id(trip_id)
         return updated_trip or trip
@@ -322,6 +331,9 @@ class DeliveryService:
             raise ValueError("الطلب غير مسند لأي رحلة")
         if old_trip.is_settled:
             raise ValueError("لا يمكن نقل طلب من رحلة تم تسويتها")
+        # H4: Block reassigning order if old trip is currently out in transit
+        if old_trip.dispatched_at is not None and old_trip.returned_at is None:
+            raise ValueError("لا يمكن نقل طلب من رحلة في الطريق حالياً — يجب انتظار عودة السائق")
 
         # Remove order from old trip
         old_trip.order_ids = [
@@ -349,6 +361,28 @@ class DeliveryService:
         order.driver_id = new_driver_id
         order.driver_name = new_driver_name
         self._orders.save(order)
+
+        # H4 & H6: Audit reassign event
+        try:
+            self._audit.log(
+                event_type="order_reassigned",
+                user_id=new_driver_id,
+                user_name=new_driver_name,
+                order_id=order_id,
+                entity_type="order",
+                entity_id=order_id,
+                action=f"نقل الطلب من السائق {old_trip.driver_name} الى {new_driver_name}",
+                details={
+                    "old_driver_id": old_trip.driver_id,
+                    "old_driver_name": old_trip.driver_name,
+                    "new_driver_id": new_driver_id,
+                    "new_driver_name": new_driver_name,
+                    "old_trip_id": old_trip.id,
+                    "new_trip_id": new_trip.id,
+                },
+            )
+        except Exception as exc:
+            logger.warning("Failed to log order_reassigned audit: %s", exc)
 
         return new_trip
 
@@ -388,27 +422,39 @@ class DeliveryService:
         fees_total = 0.0
         for oid in trip.order_ids:
             order = self._orders.get_by_id(oid)
-            if order:
-                if order.payment_method == PaymentMethod.CASH:
-                    cash_total += order.total
-                fees_total += order.delivery_fee or 0.0
+            if not order or order.status == OrderStatus.CANCELLED:
+                continue
+            if order.payment_method == PaymentMethod.CASH:
+                cash_total += order.total
+            fees_total += order.delivery_fee or 0.0
 
-        self._delivery.mark_settled(trip_id, cash_total, fees_total)
-
-        # Book this trip's cash into the ledger (per-trip handover).
-        # Idempotent per trip_id, so the end-of-day settlement never re-books it.
-        if self._settlement_svc is not None:
-            self._settlement_svc.remit_trip_cash(trip, cash_total, settled_by_id)
-
-        # Complete orders via centralized path
-        for oid in trip.order_ids:
-            order = self._orders.get_by_id(oid)
-            if order and order.status == OrderStatus.DELIVERED:
-                self._change_order_status(
-                    order_id=oid,
-                    new_status=OrderStatus.COMPLETED,
-                    changed_by_name="تسوية",
-                )
+        # C3: Atomic execution - if remit_trip_cash or status change fails, do not mark settled
+        db = getattr(self._delivery, "_db", None)
+        if db is not None and hasattr(db, "transaction"):
+            with db.transaction():
+                if self._settlement_svc is not None:
+                    self._settlement_svc.remit_trip_cash(trip, cash_total, settled_by_id)
+                self._delivery.mark_settled(trip_id, cash_total, fees_total)
+                for oid in trip.order_ids:
+                    order = self._orders.get_by_id(oid)
+                    if order and order.status == OrderStatus.DELIVERED:
+                        self._change_order_status(
+                            order_id=oid,
+                            new_status=OrderStatus.COMPLETED,
+                            changed_by_name="تسوية",
+                        )
+        else:
+            if self._settlement_svc is not None:
+                self._settlement_svc.remit_trip_cash(trip, cash_total, settled_by_id)
+            self._delivery.mark_settled(trip_id, cash_total, fees_total)
+            for oid in trip.order_ids:
+                order = self._orders.get_by_id(oid)
+                if order and order.status == OrderStatus.DELIVERED:
+                    self._change_order_status(
+                        order_id=oid,
+                        new_status=OrderStatus.COMPLETED,
+                        changed_by_name="تسوية",
+                    )
 
         # Audit event
         try:
@@ -426,16 +472,17 @@ class DeliveryService:
                 after={"cash_collected": cash_total, "fees": fees_total},
             )
         except Exception:
-            pass
+            # Checkup-Fix: audit write is best-effort, but log the failure.
+            logger.debug("Audit log for trip %s settlement failed", trip_id, exc_info=True)
 
         updated_trip = self._delivery.get_trip_by_id(trip_id)
         return updated_trip or trip
 
-    def get_unsettled_trips(self, driver_id: Optional[int] = None) -> List[DeliveryTrip]:
+    def get_unsettled_trips(self, driver_id: int | None = None) -> list[DeliveryTrip]:
         """Returned trips awaiting settlement, optionally for one driver."""
         return self._delivery.get_unsettled_trips(driver_id)
 
-    def get_active_trips(self) -> List[DeliveryTrip]:
+    def get_active_trips(self) -> list[DeliveryTrip]:
         """All trips currently in transit (dispatched but not returned)."""
         return self._delivery.get_active_trips()
 
@@ -444,7 +491,7 @@ class DeliveryService:
         active = self._delivery.get_active_trips()
         return any(t.driver_id == driver_id for t in active)
 
-    def get_trip_details(self, trip_id: int) -> Optional[Dict]:
+    def get_trip_details(self, trip_id: int) -> dict | None:
         """Full trip details for settlement dialog.
 
         Returns dict with:
@@ -500,7 +547,7 @@ class DeliveryService:
             "amount_to_hand_over": cash_collected,
         }
 
-    def get_driver_attendance_today(self) -> List[Dict]:
+    def get_driver_attendance_today(self) -> list[dict]:
         """All attendance records for today — for the attendance panel."""
         try:
             records = self._delivery.get_attendance_for_date(date.today().isoformat())
@@ -520,8 +567,8 @@ class DeliveryService:
     # ------------------------------------------------------------------
 
     def get_all_drivers_daily_summary(
-        self, target_date: Optional[date] = None,
-    ) -> List[Dict]:
+        self, target_date: date | None = None,
+    ) -> list[dict]:
         """All drivers with trip count, order count, fees earned for a day.
 
         Returns:
@@ -532,8 +579,8 @@ class DeliveryService:
         return self._delivery.get_daily_summary(target.isoformat())
 
     def get_driver_daily_summary(
-        self, driver_id: int, target_date: Optional[date] = None,
-    ) -> Dict:
+        self, driver_id: int, target_date: date | None = None,
+    ) -> dict:
         """Single driver detail for a specific day.
 
         Returns:

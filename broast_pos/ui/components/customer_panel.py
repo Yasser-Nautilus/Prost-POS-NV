@@ -10,11 +10,9 @@ Housed in the POS View column, this component allows:
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import QRegularExpression, Qt, pyqtSignal
 from PyQt6.QtGui import QRegularExpressionValidator
-from PyQt6.QtCore import QRegularExpression
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -22,15 +20,15 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
-    QMessageBox,
 )
 
 from broast_pos.core.models.customer import Customer, CustomerAddress
 from broast_pos.core.services.customer_service import CustomerService
-from broast_pos.ui.styles.theme import get_color, _lighten
+from broast_pos.ui.styles.theme import _lighten, get_color
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +40,9 @@ class CustomerAddressDialog(QDialog):
         self,
         customer_service: CustomerService,
         phone: str,
-        existing_customer: Optional[Customer] = None,
+        existing_customer: Customer | None = None,
         pickup_only: bool = False,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._customer_svc = customer_service
@@ -52,8 +50,8 @@ class CustomerAddressDialog(QDialog):
         self._customer = existing_customer
         self._pickup_only = pickup_only
 
-        self.created_customer: Optional[Customer] = None
-        self.created_address: Optional[CustomerAddress] = None
+        self.created_customer: Customer | None = None
+        self.created_address: CustomerAddress | None = None
 
         self._setup_ui()
 
@@ -177,12 +175,12 @@ class CustomerPanel(QFrame):
     def __init__(
         self,
         customer_service: CustomerService,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._customer_svc = customer_service
-        self._current_customer: Optional[Customer] = None
-        self._current_address: Optional[CustomerAddress] = None
+        self._current_customer: Customer | None = None
+        self._current_address: CustomerAddress | None = None
         self._pickup_only: bool = False
 
         self._setup_ui()

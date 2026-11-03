@@ -12,15 +12,20 @@ Were RED before B-03 fix. Must remain GREEN after. All 16 baseline tests stay GR
 """
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock, patch
 
-from broast_pos.core.models.order import Order, OrderItem, OrderStatus, OrderType, PaymentMethod
-from broast_pos.core.models.user import User
+import pytest
+
 from broast_pos.core.models.audit import AuditEventType
+from broast_pos.core.models.order import (
+    Order,
+    OrderItem,
+    OrderStatus,
+    OrderType,
+)
+from broast_pos.core.models.user import User
 from broast_pos.core.services.audit_service import AuditService
 from broast_pos.core.services.order_service import OrderService
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -99,7 +104,7 @@ class TestB03CancelOrderAuditPath:
         The key invariant: cancel_order must call _audit_svc.log, not _audit.log.
         """
         order = _make_order(status=OrderStatus.NEW)
-        svc, order_repo, audit_repo = _build_service()
+        svc, order_repo, _audit_repo = _build_service()
         manager = _make_manager()
         order_repo.get_by_id.return_value = order
         order_repo.save.side_effect = lambda o: o

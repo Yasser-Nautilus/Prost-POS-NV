@@ -14,12 +14,12 @@ B-10 business-date pattern:
 
 from __future__ import annotations
 
-from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from datetime import date
+from typing import Any
 
-from broast_pos.data.repositories.order_repository import OrderRepository
-from broast_pos.data.repositories.financial_repository import FinancialRepository
 from broast_pos.data.repositories.delivery_repository import DeliveryRepository
+from broast_pos.data.repositories.financial_repository import FinancialRepository
+from broast_pos.data.repositories.order_repository import OrderRepository
 
 
 class ReportService:
@@ -27,9 +27,9 @@ class ReportService:
 
     def __init__(
         self,
-        order_repo: Optional[OrderRepository] = None,
-        financial_repo: Optional[FinancialRepository] = None,
-        delivery_repo: Optional[DeliveryRepository] = None,
+        order_repo: OrderRepository | None = None,
+        financial_repo: FinancialRepository | None = None,
+        delivery_repo: DeliveryRepository | None = None,
     ) -> None:
         self._orders = order_repo or OrderRepository()
         self._financial = financial_repo or FinancialRepository()
@@ -39,7 +39,7 @@ class ReportService:
     # Daily reports
     # ------------------------------------------------------------------
 
-    def generate_daily_sales(self, target_date: Optional[date] = None) -> Dict:
+    def generate_daily_sales(self, target_date: date | None = None) -> dict:
         """Order type breakdown — count + revenue per type.
 
         Matches the receipt photo format:
@@ -62,7 +62,7 @@ class ReportService:
         d = (target_date or date.today()).isoformat()
         orders = self._orders.get_completed_for_date(d)
 
-        type_map: Dict[str, Dict[str, Any]] = {}
+        type_map: dict[str, dict[str, Any]] = {}
         for order in orders:
             t = order.order_type.value if hasattr(order.order_type, "value") else str(order.order_type)
             if t not in type_map:
@@ -83,7 +83,7 @@ class ReportService:
             },
         }
 
-    def _payment_bucket(self, order) -> Optional[str]:
+    def _payment_bucket(self, order) -> str | None:
         """Return the payment-method key an order should be counted under
         in the "by payment method" breakdown, or None to exclude it.
 
@@ -98,8 +98,8 @@ class ReportService:
         return method or "unpaid"
 
     def generate_payment_breakdown(
-        self, target_date: Optional[date] = None,
-    ) -> Dict:
+        self, target_date: date | None = None,
+    ) -> dict:
         """Sales split by payment method (كاش / فيزا / اونلاين).
 
         Returns:
@@ -116,7 +116,7 @@ class ReportService:
         d = (target_date or date.today()).isoformat()
         orders = self._orders.get_completed_for_date(d)
 
-        method_map: Dict[str, Dict[str, Any]] = {}
+        method_map: dict[str, dict[str, Any]] = {}
         for order in orders:
             # Open dine-in tables (confirmed but not yet paid) have no
             # payment_method yet. Decide how such orders are treated here.
@@ -137,8 +137,8 @@ class ReportService:
         }
 
     def generate_cancelled_orders(
-        self, target_date: Optional[date] = None,
-    ) -> Dict:
+        self, target_date: date | None = None,
+    ) -> dict:
         """Cancelled orders count + reasons.
 
         Returns:
@@ -171,8 +171,8 @@ class ReportService:
         }
 
     def generate_product_sales(
-        self, target_date: Optional[date] = None,
-    ) -> List[Dict]:
+        self, target_date: date | None = None,
+    ) -> list[dict]:
         """Qty sold per product, sorted by popularity (highest first).
 
         Returns:
@@ -185,8 +185,8 @@ class ReportService:
         return self._orders.get_product_sales_for_date(d)
 
     def generate_driver_summary(
-        self, target_date: Optional[date] = None,
-    ) -> List[Dict]:
+        self, target_date: date | None = None,
+    ) -> list[dict]:
         """Per-driver trip/order/fee totals for the day.
 
         Returns:
@@ -203,7 +203,7 @@ class ReportService:
     # B-10: Shift-based daily reports (correct business date)
     # ------------------------------------------------------------------
 
-    def generate_daily_sales_for_shift(self, shift_id: int) -> Dict:
+    def generate_daily_sales_for_shift(self, shift_id: int) -> dict:
         """Order type breakdown for a specific shift (B-10 shift-based).
 
         Use this for the *current* or *just-closed* shift report instead of
@@ -214,7 +214,7 @@ class ReportService:
         business_date = self._orders.get_shift_business_date(shift_id) or ""
         orders = self._orders.get_completed_for_shift(shift_id)
 
-        type_map: Dict[str, Dict] = {}
+        type_map: dict[str, dict] = {}
         for order in orders:
             t = order.order_type.value if hasattr(order.order_type, "value") else str(order.order_type)
             if t not in type_map:
@@ -236,7 +236,7 @@ class ReportService:
             },
         }
 
-    def generate_payment_breakdown_for_shift(self, shift_id: int) -> Dict:
+    def generate_payment_breakdown_for_shift(self, shift_id: int) -> dict:
         """Payment method breakdown for a specific shift (B-10 shift-based).
 
         Returns same structure as generate_payment_breakdown().
@@ -244,7 +244,7 @@ class ReportService:
         business_date = self._orders.get_shift_business_date(shift_id) or ""
         orders = self._orders.get_completed_for_shift(shift_id)
 
-        method_map: Dict[str, Dict] = {}
+        method_map: dict[str, dict] = {}
         for order in orders:
             method = self._payment_bucket(order)
             if method is None:
@@ -262,7 +262,7 @@ class ReportService:
             "total": round(sum(p["revenue"] for p in payments), 2),
         }
 
-    def generate_cancellations_for_shift(self, shift_id: int) -> Dict:
+    def generate_cancellations_for_shift(self, shift_id: int) -> dict:
         """Cancelled orders for a specific shift (B-10 shift-based).
 
         Returns same structure as generate_cancellations().
@@ -287,7 +287,7 @@ class ReportService:
             "orders": items,
         }
 
-    def generate_product_sales_for_shift(self, shift_id: int) -> List[Dict]:
+    def generate_product_sales_for_shift(self, shift_id: int) -> list[dict]:
         """Qty sold per product for a shift, sorted by popularity (B-10).
 
         Returns same structure as generate_product_sales().
@@ -303,7 +303,7 @@ class ReportService:
         return self._orders.get_daily_revenue_for_shift(shift_id)
 
 
-    def generate_shift_transfer(self, shift_id: int) -> Dict:
+    def generate_shift_transfer(self, shift_id: int) -> dict:
         """Snapshot at transfer: sales, expenses, pending, expected cash."""
         summary = self._financial.get_shift_summary(shift_id)
         return {
@@ -316,7 +316,7 @@ class ReportService:
             "expected_cash": summary.expected_cash,
         }
 
-    def generate_shift_close(self, shift_id: int) -> Dict:
+    def generate_shift_close(self, shift_id: int) -> dict:
         """Final summary for end of day — same data as transfer but final."""
         return self.generate_shift_transfer(shift_id)
 
@@ -324,7 +324,7 @@ class ReportService:
     # Monthly reports
     # ------------------------------------------------------------------
 
-    def generate_monthly_summary(self, year: int, month: int) -> Dict:
+    def generate_monthly_summary(self, year: int, month: int) -> dict:
         """Total sales + expenses + daily breakdown for a month.
 
         Returns:
@@ -366,7 +366,7 @@ class ReportService:
 
     def generate_monthly_bestsellers(
         self, year: int, month: int, limit: int = 20,
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """Top products by quantity sold for a month.
 
         Returns:
@@ -379,7 +379,7 @@ class ReportService:
 
         return self._orders.get_product_sales_for_range(start, end, limit)
 
-    def generate_monthly_expenses(self, year: int, month: int) -> Dict:
+    def generate_monthly_expenses(self, year: int, month: int) -> dict:
         """Expense breakdown by category for a month.
 
         Returns:
@@ -410,7 +410,7 @@ class ReportService:
     # Yearly reports
     # ------------------------------------------------------------------
 
-    def generate_yearly_summary(self, year: int) -> Dict:
+    def generate_yearly_summary(self, year: int) -> dict:
         """12-month sales + expenses overview.
 
         Returns:
@@ -444,7 +444,7 @@ class ReportService:
 
     def generate_yearly_bestsellers(
         self, year: int, limit: int = 20,
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """Top products for the entire year."""
         start = date(year, 1, 1).isoformat()
         end = date(year, 12, 31).isoformat()

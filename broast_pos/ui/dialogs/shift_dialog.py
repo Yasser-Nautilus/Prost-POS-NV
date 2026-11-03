@@ -14,7 +14,7 @@ Business rules from FinancialService:
 from __future__ import annotations
 
 import logging
-from typing import Callable, List, Optional
+from collections.abc import Callable
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -24,13 +24,11 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from broast_pos.core.models.financial import (
-    CashTransaction,
     Shift,
     ShiftSummary,
 )
@@ -65,10 +63,10 @@ class ShiftDialog(QDialog):
         financial_service: FinancialService,
         user_id: int,
         user_name: str = "",
-        on_add_expense: Optional[Callable] = None,
-        on_close_shift: Optional[Callable] = None,
-        on_print_summary: Optional[Callable] = None,
-        parent: Optional[QWidget] = None,
+        on_add_expense: Callable | None = None,
+        on_close_shift: Callable | None = None,
+        on_print_summary: Callable | None = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._financial = financial_service
@@ -78,8 +76,8 @@ class ShiftDialog(QDialog):
         self._close_shift_cb = on_close_shift
         self._print_summary_cb = on_print_summary
 
-        self._active_shift: Optional[Shift] = None
-        self._summary: Optional[ShiftSummary] = None
+        self._active_shift: Shift | None = None
+        self._summary: ShiftSummary | None = None
 
         self._setup_ui()
         self._refresh()

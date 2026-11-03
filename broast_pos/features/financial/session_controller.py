@@ -19,13 +19,15 @@ Exposed bridge actions:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from broast_pos.core.models.cashier_session import CashierSession, Station
-from broast_pos.core.services.cashier_session_service import CashierSessionService
 from broast_pos.core.services.business_day_service import (
-    BusinessDayService, XReport, ZReport, SessionSnapshot,
+    BusinessDayService,
+    SessionSnapshot,
+    XReport,
 )
+from broast_pos.core.services.cashier_session_service import CashierSessionService
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +55,8 @@ class SessionController:
         user_id: int,
         station: str,
         opening_float_egp: float,
-        actor_id: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        actor_id: int | None = None,
+    ) -> dict[str, Any]:
         """
         Open a new cashier session.
 
@@ -85,9 +87,9 @@ class SessionController:
         session_id: int,
         counted_cash_egp: float,
         actor_id: int,
-        variance_reason: Optional[str] = None,
-        manager_pin: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        variance_reason: str | None = None,
+        manager_pin: str | None = None,
+    ) -> dict[str, Any]:
         """
         Close a cashier session with a blind cash count.
 
@@ -110,10 +112,10 @@ class SessionController:
         station: str,
         counted_cash_egp: float,
         cash_drop_egp: float = 0.0,
-        actor_id: Optional[int] = None,
-        variance_reason: Optional[str] = None,
-        manager_pin: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        actor_id: int | None = None,
+        variance_reason: str | None = None,
+        manager_pin: str | None = None,
+    ) -> dict[str, Any]:
         """
         Handover: close outgoing session → open incoming session.
 
@@ -146,18 +148,17 @@ class SessionController:
     # Queries
     # ------------------------------------------------------------------
 
-    def get_active_sessions(self, day_id: int) -> List[Dict[str, Any]]:
+    def get_active_sessions(self, day_id: int) -> list[dict[str, Any]]:
         """All open sessions for a business day."""
         sessions = self._svc.get_active_sessions(day_id)
         return [self._session_to_dict(s) for s in sessions]
 
-    def get_all_sessions(self, day_id: int) -> List[Dict[str, Any]]:
+    def get_all_sessions(self, day_id: int) -> list[dict[str, Any]]:
         """All sessions (open + closed) for a business day."""
-        from broast_pos.data.repositories.cashier_session_repository import CashierSessionRepository
         sessions = self._svc._sessions.get_sessions_for_day(day_id)
         return [self._session_to_dict(s) for s in sessions]
 
-    def get_session_balance(self, session_id: int) -> Dict[str, Any]:
+    def get_session_balance(self, session_id: int) -> dict[str, Any]:
         """Current expected cash balance for a session (from ledger)."""
         balance_pt = self._svc.get_session_expected_cash_pt(session_id)
         session = self._svc.get_session_by_id(session_id)
@@ -172,7 +173,7 @@ class SessionController:
     # Reports
     # ------------------------------------------------------------------
 
-    def generate_x_report(self, day_id: int) -> Dict[str, Any]:
+    def generate_x_report(self, day_id: int) -> dict[str, Any]:
         """
         X-Report: live snapshot of all sessions for the business day.
         Can be called any number of times without closing anything.
@@ -183,8 +184,8 @@ class SessionController:
     def close_business_day(
         self,
         day_id: int,
-        manager_pin: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        manager_pin: str | None = None,
+    ) -> dict[str, Any]:
         """
         Close the business day and generate Z-Report.
 
@@ -208,7 +209,7 @@ class SessionController:
     # Serializers
     # ------------------------------------------------------------------
 
-    def _session_to_dict(self, s: CashierSession) -> Dict[str, Any]:
+    def _session_to_dict(self, s: CashierSession) -> dict[str, Any]:
         return {
             "id": s.id,
             "day_id": s.day_id,
@@ -233,7 +234,7 @@ class SessionController:
             ),
         }
 
-    def _snapshot_to_dict(self, snap: SessionSnapshot) -> Dict[str, Any]:
+    def _snapshot_to_dict(self, snap: SessionSnapshot) -> dict[str, Any]:
         return {
             "session_id": snap.session_id,
             "user_id": snap.user_id,
@@ -255,7 +256,7 @@ class SessionController:
             "breakdown": {k: {"pt": v, "egp": round(v / 100, 2)} for k, v in snap.breakdown.items()},
         }
 
-    def _x_report_to_dict(self, report: XReport) -> Dict[str, Any]:
+    def _x_report_to_dict(self, report: XReport) -> dict[str, Any]:
         return {
             "type": "X",
             "day_id": report.day_id,

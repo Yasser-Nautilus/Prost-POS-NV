@@ -9,7 +9,6 @@ One customer can have multiple addresses (home, work, etc.).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List, Optional
 
 
 @dataclass
@@ -21,7 +20,7 @@ class Zone:
     - `delivery_fee` is fixed — cashier cannot change it per order.
     - `is_active` allows disabling zones without deleting.
     """
-    id: Optional[int] = None
+    id: int | None = None
     name: str = ""              # e.g. "مدينة فاقوس", "شارع الانتاج", "الغابة"
     delivery_fee: float = 0.0   # fixed per zone (e.g. 20, 15, 80)
     is_active: bool = True
@@ -36,10 +35,10 @@ class CustomerAddress:
     - `zone_name` and `delivery_fee` are denormalized from Zone at creation time
       to preserve the fee that was current when the address was added.
     """
-    id: Optional[int] = None
-    customer_id: Optional[int] = None
+    id: int | None = None
+    customer_id: int | None = None
     street_name: str = ""
-    zone_id: Optional[int] = None
+    zone_id: int | None = None
     zone_name: str = ""         # denormalized for display
     delivery_fee: float = 0.0   # copied from zone at creation time
 
@@ -53,9 +52,9 @@ class Customer:
     - One customer can have multiple addresses.
     - `notes` is optional free text (e.g. allergies, preferences).
     """
-    id: Optional[int] = None
+    id: int | None = None
     name: str = ""
     phone: str = ""             # 11-digit Egyptian (starts with 01)
-    notes: Optional[str] = None
-    created_at: Optional[str] = None
-    addresses: List[CustomerAddress] = field(default_factory=list)
+    notes: str | None = None
+    created_at: str | None = None
+    addresses: list[CustomerAddress] = field(default_factory=list)
