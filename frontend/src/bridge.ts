@@ -646,6 +646,10 @@ class POSBridgeClient {
           activeOrder.payment_method = payload.payment_method;
           activeOrder.amount_paid = payload.amount_paid;
         }
+        if (!payload.keep_open && this.mockState.currentOrder?.id === orderId) {
+          this.mockState.currentOrder = null;
+          this.notifyListeners("orderChanged", null);
+        }
         this.notifyListeners("tableStateChanged", this.getMockTableState());
         return true as any;
       }
@@ -1009,45 +1013,62 @@ class POSBridgeClient {
       case "get_driver_settlement_preview": {
         const driver = this.mockState.drivers.find((d: any) => d.id === payload.driver_id);
         if (!driver) throw new Error("السائق غير موجود");
+
+        const sampleTrips = [
+          {
+            trip_id: 1,
+            dispatched_at: new Date(Date.now() - 7200000).toISOString(),
+            returned_at: new Date(Date.now() - 5400000).toISOString(),
+            order_count: 3,
+            cash: 450.0,
+            online: 100.0,
+            fees: 45.0,
+            orders: [
+              { order_id: 101, invoice_no: 45, customer_name: "ياسر المصري", customer_address: "شارع المشالي", customer_zone: "مدينة فاقوس", total: 160.0, delivery_fee: 15.0, payment_method: "cash", status: "delivered" },
+              { order_id: 102, invoice_no: 46, customer_name: "محمد علي", customer_address: "شارع النصر", customer_zone: "شارع الانتاج", total: 190.0, delivery_fee: 10.0, payment_method: "cash", status: "delivered" },
+              { order_id: 103, invoice_no: 47, customer_name: "أحمد محمد", customer_address: "طريق الغابة", customer_zone: "الغابة", total: 100.0, delivery_fee: 25.0, payment_method: "online", status: "delivered" },
+            ]
+          },
+          {
+            trip_id: 2,
+            dispatched_at: new Date(Date.now() - 3600000).toISOString(),
+            returned_at: new Date(Date.now() - 1800000).toISOString(),
+            order_count: 2,
+            cash: 290.0,
+            online: 50.0,
+            fees: 30.0,
+            orders: [
+              { order_id: 104, invoice_no: 48, customer_name: "سارة أحمد", customer_address: "شارع الملك", customer_zone: "مدينة فاقوس", total: 290.0, delivery_fee: 15.0, payment_method: "cash", status: "delivered" },
+              { order_id: 105, invoice_no: 49, customer_name: "خالد إبراهيم", customer_address: "شارع الجمهورية", customer_zone: "شارع الانتاج", total: 50.0, delivery_fee: 10.0, payment_method: "online", status: "delivered" },
+            ]
+          }
+        ];
+
+        const trips = payload.trip_id
+          ? sampleTrips.filter(t => t.trip_id === payload.trip_id)
+          : sampleTrips;
+
+        if (payload.trip_id && trips.length === 0) {
+          throw new Error(`الرحلة #${payload.trip_id} غير موجودة او لم تعد بعد`);
+        }
+
+        const totalCash = trips.reduce((sum, t) => sum + t.cash, 0);
+        const totalOnline = trips.reduce((sum, t) => sum + t.online, 0);
+        const totalFees = trips.reduce((sum, t) => sum + t.fees, 0);
+        const orderCount = trips.reduce((sum, t) => sum + t.order_count, 0);
+        const totalOrderValue = totalCash + totalOnline;
+
         return {
           driver_id: payload.driver_id,
           driver_name: driver.display_name,
           settlement_date: new Date().toISOString().slice(0, 10),
-          trip_count: 2,
-          order_count: 5,
-          total_order_value: 890.0,
-          cash_collected: 740.0,
-          online_paid: 150.0,
-          total_delivery_fees: 75.0,
-          trips: [
-            {
-              trip_id: 1,
-              dispatched_at: new Date(Date.now() - 7200000).toISOString(),
-              returned_at: new Date(Date.now() - 5400000).toISOString(),
-              order_count: 3,
-              cash: 450.0,
-              online: 100.0,
-              fees: 45.0,
-              orders: [
-                { order_id: 101, invoice_no: 45, customer_name: "ياسر المصري", customer_address: "شارع المشالي", customer_zone: "مدينة فاقوس", total: 160.0, delivery_fee: 15.0, payment_method: "cash", status: "delivered" },
-                { order_id: 102, invoice_no: 46, customer_name: "محمد علي", customer_address: "شارع النصر", customer_zone: "شارع الانتاج", total: 190.0, delivery_fee: 10.0, payment_method: "cash", status: "delivered" },
-                { order_id: 103, invoice_no: 47, customer_name: "أحمد محمد", customer_address: "طريق الغابة", customer_zone: "الغابة", total: 100.0, delivery_fee: 25.0, payment_method: "online", status: "delivered" },
-              ]
-            },
-            {
-              trip_id: 2,
-              dispatched_at: new Date(Date.now() - 3600000).toISOString(),
-              returned_at: new Date(Date.now() - 1800000).toISOString(),
-              order_count: 2,
-              cash: 290.0,
-              online: 50.0,
-              fees: 30.0,
-              orders: [
-                { order_id: 104, invoice_no: 48, customer_name: "سارة أحمد", customer_address: "شارع الملك", customer_zone: "مدينة فاقوس", total: 290.0, delivery_fee: 15.0, payment_method: "cash", status: "delivered" },
-                { order_id: 105, invoice_no: 49, customer_name: "خالد إبراهيم", customer_address: "شارع الجمهورية", customer_zone: "شارع الانتاج", total: 50.0, delivery_fee: 10.0, payment_method: "online", status: "delivered" },
-              ]
-            }
-          ]
+          trip_count: trips.length,
+          order_count: orderCount,
+          total_order_value: totalOrderValue,
+          cash_collected: totalCash,
+          online_paid: totalOnline,
+          total_delivery_fees: totalFees,
+          trips,
         } as any;
       }
 

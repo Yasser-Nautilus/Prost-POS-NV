@@ -431,6 +431,12 @@ class OrderController:
             self._occupied_tables.pop(completed.table_no, None)
             self._notify_table_changed()
 
+        # Clear current order if finalized and currently loaded
+        if finalize:
+            if self._current_order and self._current_order.id == order_id:
+                self._current_order = None
+                self._notify_order_changed()
+
         logger.info("Payment completed for order #%s", completed.invoice_no)
         return True, "تم الدفع بنجاح"
 

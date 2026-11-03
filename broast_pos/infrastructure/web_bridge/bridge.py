@@ -869,6 +869,7 @@ class POSBridge(QObject):
                 preview = ctrl.get_driver_settlement_preview(
                     driver_id=payload.get("driver_id"),
                     settlement_date=payload.get("date"),
+                    trip_id=payload.get("trip_id"),
                 )
                 if preview:
                     return json.dumps({"success": True, "data": preview})
