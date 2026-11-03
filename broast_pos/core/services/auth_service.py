@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
+import secrets
 import time
 from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple
@@ -29,6 +31,11 @@ logger = logging.getLogger(__name__)
 _PIN_MIN_LENGTH: int = 4
 _MAX_ATTEMPTS: int = 5      # failures before lockout
 _LOCKOUT_SECONDS: int = 30  # lockout window
+
+# Secret pepper mixed into every salted PIN hash. Kept OUT of the database so a
+# stolen DB file alone cannot brute-force short PINs via rainbow tables.
+# Override in production via the BROAST_PIN_PEPPER environment variable.
+_PIN_PEPPER: str = os.environ.get("BROAST_PIN_PEPPER", "broast-pos-default-pepper-change-me")
 
 
 class Action(str, Enum):
@@ -108,12 +115,12 @@ class AuthService:
             self._record_failure(key, user_id=user_id, reason="user not found")
             raise ValueError("المستخدم غير موجود")
 
-        pin_hash = self.hash_pin(pin)
-        if user.pin_hash != pin_hash:
+        if not self._verify_pin(user, pin):
             self._record_failure(key, user_id=user_id, reason="wrong PIN")
             raise ValueError("PIN غير صحيح")
 
         self._reset_throttle(key)
+        self._upgrade_if_legacy(user, pin)
         self._current_user = user
         return user
 
@@ -125,17 +132,19 @@ class AuthService:
         Raises:
             ValueError: if PIN not found, user is inactive, or throttled.
         """
-        # Use first 8 chars of hash as the throttle key (stable, not reversible)
+        # Use first 8 chars of the legacy hash as the throttle key
+        # (stable across hashing schemes, not reversible)
         pin_hash = self.hash_pin(pin)
         key = f"pin:{pin_hash[:8]}"
         self._check_throttle(key)
 
-        user = self._users.get_by_pin(pin_hash)
+        user = self._find_user_by_pin(pin)
         if user is None or not user.is_active:
             self._record_failure(key, user_id=None, reason="wrong PIN (pin-only login)")
             raise ValueError("رمز PIN غير صحيح أو المستخدم غير نشط")
 
         self._reset_throttle(key)
+        self._upgrade_if_legacy(user, pin)
         self._current_user = user
         return user
 
@@ -169,7 +178,7 @@ class AuthService:
         key = f"override:{pin_hash[:8]}"
         self._check_throttle(key)
 
-        user = self._users.get_by_pin(pin_hash)
+        user = self._find_user_by_pin(pin)
 
         if user is None:
             self._record_failure(key, user_id=None, reason="wrong override PIN")
@@ -181,6 +190,7 @@ class AuthService:
             return None
 
         self._reset_throttle(key)
+        self._upgrade_if_legacy(user, pin)
         return user
 
     # ------------------------------------------------------------------
@@ -236,9 +246,11 @@ class AuthService:
                 f"رمز PIN يجب أن يكون {_PIN_MIN_LENGTH} أرقام على الأقل"
             )
 
-        pin_hash = self.hash_pin(pin)
-        if self._users.pin_exists(pin_hash):
+        if self._pin_in_use(pin):
             raise ValueError("رمز PIN مستخدم بالفعل لمستخدم آخر")
+
+        salt = self._make_salt()
+        pin_hash = self._hash_secure(pin, salt)
 
         user = User(
             id=None,
@@ -246,6 +258,7 @@ class AuthService:
             display_name=display_name,
             role=role,
             pin_hash=pin_hash,
+            pin_salt=salt,
             cashier_slot=cashier_slot,
             avatar_path=avatar_path,
             is_active=True,
@@ -292,10 +305,11 @@ class AuthService:
                 raise ValueError(
                     f"رمز PIN يجب أن يكون {_PIN_MIN_LENGTH} أرقام على الأقل"
                 )
-            pin_hash = self.hash_pin(pin)
-            if self._users.pin_exists(pin_hash, exclude_user_id=user_id):
+            if self._pin_in_use(pin, exclude_user_id=user_id):
                 raise ValueError("رمز PIN مستخدم بالفعل لمستخدم آخر")
-            user.pin_hash = pin_hash
+            salt = self._make_salt()
+            user.pin_salt = salt
+            user.pin_hash = self._hash_secure(pin, salt)
 
         if cashier_slot != -1:
             user.cashier_slot = cashier_slot
@@ -314,8 +328,78 @@ class AuthService:
 
     @staticmethod
     def hash_pin(raw_pin: str) -> str:
-        """SHA-256 hash a PIN string. One-way — cannot be reversed."""
+        """Legacy unsalted SHA-256 hash of a PIN.
+
+        Kept for backward compatibility: it still verifies pre-v6 users and
+        is used as a stable throttle key. New/changed PINs are stored with
+        a per-user salt + pepper via ``_hash_secure``.
+        """
         return hashlib.sha256(raw_pin.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _make_salt() -> str:
+        """Generate a random per-user salt (128 bits, hex-encoded)."""
+        return secrets.token_hex(16)
+
+    @staticmethod
+    def _hash_secure(raw_pin: str, salt: str) -> str:
+        """Salted + peppered SHA-256 hash. Used for all PINs from v6 on."""
+        return hashlib.sha256((_PIN_PEPPER + salt + raw_pin).encode("utf-8")).hexdigest()
+
+    def _verify_pin(self, user: User, raw_pin: str) -> bool:
+        """Return True if *raw_pin* matches *user*'s stored hash (either scheme)."""
+        if user.pin_salt:
+            return user.pin_hash == self._hash_secure(raw_pin, user.pin_salt)
+        return user.pin_hash == self.hash_pin(raw_pin)
+
+    def _upgrade_if_legacy(self, user: User, raw_pin: str) -> None:
+        """Transparently migrate a legacy (unsalted) user to a salted hash.
+
+        Called after a successful authentication. Non-fatal: a failure here
+        never blocks the login.
+        """
+        if user.pin_salt:
+            return
+        try:
+            salt = self._make_salt()
+            user.pin_salt = salt
+            user.pin_hash = self._hash_secure(raw_pin, salt)
+            self._users.save(user)
+        except Exception:
+            logger.exception("PIN upgrade failed for user id=%s", getattr(user, "id", "?"))
+
+    def _find_user_by_pin(self, raw_pin: str) -> Optional[User]:
+        """Resolve a user from a PIN alone, across both hashing schemes.
+
+        Fast path: legacy unsalted hash lookup (covers not-yet-upgraded users).
+        Fallback: iterate active users and verify salted hashes individually —
+        per-user salts make a direct hash lookup impossible.
+        """
+        user = self._users.get_by_pin(self.hash_pin(raw_pin))
+        if user is not None:
+            return user
+        try:
+            for cand in self._users.get_all_active():
+                if cand.pin_salt and self._verify_pin(cand, raw_pin):
+                    return cand
+        except (TypeError, AttributeError):
+            # Repo without a usable get_all_active (e.g. a unit-test mock)
+            return None
+        return None
+
+    def _pin_in_use(self, raw_pin: str, exclude_user_id: Optional[int] = None) -> bool:
+        """True if *raw_pin* already authenticates some other active user."""
+        if self._users.pin_exists(self.hash_pin(raw_pin), exclude_user_id=exclude_user_id):
+            return True
+        try:
+            for cand in self._users.get_all_active():
+                if cand.id == exclude_user_id:
+                    continue
+                if cand.pin_salt and self._verify_pin(cand, raw_pin):
+                    return True
+        except (TypeError, AttributeError):
+            return False
+        return False
 
     # ------------------------------------------------------------------
     # B-08: Brute-force throttle (in-memory)

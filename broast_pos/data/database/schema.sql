@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS users (
     display_name  TEXT    NOT NULL,
     avatar_path   TEXT,
     pin_hash      TEXT    NOT NULL UNIQUE,   -- SHA-256, enables identification by PIN alone
+    pin_salt      TEXT,                       -- per-user random salt (NULL = legacy unsalted hash)
     role          TEXT    NOT NULL CHECK (role IN ('cashier', 'manager', 'admin')),
     cashier_slot  INTEGER CHECK (cashier_slot IN (1, 2) OR cashier_slot IS NULL),  -- NULL for drivers
     is_active     INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),

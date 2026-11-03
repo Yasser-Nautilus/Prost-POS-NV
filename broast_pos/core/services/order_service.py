@@ -85,6 +85,8 @@ class OrderService:
         delivery_repo=None,         # DeliveryRepository (C4)
     ) -> None:
         self._orders = order_repo or OrderRepository()
+        # bearbeitet: dieselbe DB-Verbindung wie die Repos, um Order+Ledger atomar zu kapseln
+        self._db = self._orders._db
         self._audit = audit_repo or AuditRepository()
         self._auth = auth_service
         self._financial = financial_service
@@ -360,21 +362,26 @@ class OrderService:
         old_status = order.status
         if finalize:
             order.status = OrderStatus.COMPLETED
-        saved = self._orders.save(order)
 
-        # Phase 3: Create SALE_CASH ledger entry for cash payments (ADR-1).
-        # Non-cash (visa/online) do NOT enter the physical drawer (FR-CASH-4).
-        # The money arrives now regardless of finalize, so the entry is always
-        # recorded at payment time.
-        if self._ledger is not None and payment_method == PaymentMethod.CASH:
-            self._create_sale_cash_entry(
-                order=saved,
-                actor_id=actor_id,
-                shift_id=saved.shift_id,
-                cashier_id=actor_id,
-            )
+        # bearbeitet: Order-Speicherung + Kassen-Ledger-Eintrag atomar kapseln,
+        # damit eine bezahlte Order niemals ohne passenden SALE_CASH-Eintrag committet wird.
+        with self._db.transaction():
+            saved = self._orders.save(order)
+
+            # Phase 3: Create SALE_CASH ledger entry for cash payments (ADR-1).
+            # Non-cash (visa/online) do NOT enter the physical drawer (FR-CASH-4).
+            # The money arrives now regardless of finalize, so the entry is always
+            # recorded at payment time.
+            if self._ledger is not None and payment_method == PaymentMethod.CASH:
+                self._create_sale_cash_entry(
+                    order=saved,
+                    actor_id=actor_id,
+                    shift_id=saved.shift_id,
+                    cashier_id=actor_id,
+                )
 
         # Record status history only when the order is actually closed here.
+        # Non-critical → kept outside the money transaction (best-effort).
         if finalize:
             try:
                 self._status_history.record_transition(
@@ -428,7 +435,14 @@ class OrderService:
         order.cancel_reason = reason
         order.cancelled_at = datetime.datetime.now().isoformat()
 
-        saved = self._orders.save(order)
+        # bearbeitet: Stornierung + Kassen-Reversal atomar kapseln, damit eine
+        # stornierte bezahlte Order niemals ohne passenden REVERSAL-Eintrag committet.
+        with self._db.transaction():
+            saved = self._orders.save(order)
+
+            # C6: Write REVERSAL entry if cancelling a paid order with cash in drawer
+            if order.is_paid and self._ledger is not None:
+                self._create_cancel_reversal_entry(order, manager.id, reason)
 
         # C4: If order was assigned to an unsettled delivery trip, remove it
         if self._delivery_repo is not None:
@@ -451,10 +465,6 @@ class OrderService:
             )
         except Exception:
             pass
-
-        # C6: Write REVERSAL entry if cancelling a paid order with cash in drawer
-        if order.is_paid and self._ledger is not None:
-            self._create_cancel_reversal_entry(order, manager.id, reason)
 
         # B-03: Audit trail — always via AuditService (never direct repo)
         self._audit_svc.log(

@@ -22,6 +22,7 @@ Migration history:
     v1 → v2: Add order_status_history table + indexes.
     v2 → v3: Extend audit_log with entity_type, entity_id, action, reason, before_data, after_data.
     v3 → v4: Add driver_settlements table + index.
+    v5 → v6: Add users.pin_salt column (salted+peppered PIN hashing).
 """
 
 from __future__ import annotations
@@ -38,7 +39,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Version tracking (bumped when a new migration is added)
 # ---------------------------------------------------------------------------
-LATEST_VERSION = 5
+LATEST_VERSION = 6
 
 # ---------------------------------------------------------------------------
 # Path to the schema file (sibling of this module)
@@ -337,6 +338,19 @@ def _migrate_v4_to_v5(db: "DatabaseConnection") -> None:
     db.commit()
 
 
+def _migrate_v5_to_v6(db: "DatabaseConnection") -> None:
+    """v5 → v6: Add users.pin_salt for salted+peppered PIN hashing.
+
+    The column is nullable. Existing users keep their legacy (unsalted)
+    hash — pin_salt stays NULL and they are transparently upgraded to a
+    salted hash on their next successful login (see AuthService).
+    """
+    existing_cols = {row["name"] for row in db.fetch_all("PRAGMA table_info(users)")}
+    if "pin_salt" not in existing_cols:
+        db.execute("ALTER TABLE users ADD COLUMN pin_salt TEXT")
+    db.commit()
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — maps from_version → migration function
 # NOTE: Must be defined AFTER all migration functions are declared.
@@ -346,4 +360,5 @@ _MIGRATIONS: dict = {
     2: _migrate_v2_to_v3,
     3: _migrate_v3_to_v4,
     4: _migrate_v4_to_v5,
+    5: _migrate_v5_to_v6,
 }

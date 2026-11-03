@@ -123,12 +123,15 @@ class UserRepository(BaseRepository[User]):
 
     def _row_to_user(self, row: sqlite3.Row) -> User:
         """Map a database row to a User object."""
+        # pin_salt may be absent on a pre-v6 row → treat as legacy (None)
+        pin_salt = row["pin_salt"] if "pin_salt" in row.keys() else None
         return User(
             id=row["id"],
             username=row["username"],
             display_name=row["display_name"],
             avatar_path=row["avatar_path"],
             pin_hash=row["pin_hash"],
+            pin_salt=pin_salt,
             role=UserRole(row["role"]),
             cashier_slot=row["cashier_slot"],
             is_active=bool(row["is_active"]),
@@ -139,12 +142,12 @@ class UserRepository(BaseRepository[User]):
         """Insert a new user."""
         self._db.execute(
             """INSERT INTO users
-                   (username, display_name, avatar_path, pin_hash,
+                   (username, display_name, avatar_path, pin_hash, pin_salt,
                     role, cashier_slot, is_active)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 user.username, user.display_name, user.avatar_path,
-                user.pin_hash, user.role.value, user.cashier_slot,
+                user.pin_hash, user.pin_salt, user.role.value, user.cashier_slot,
                 1 if user.is_active else 0,
             ),
         )
@@ -157,11 +160,11 @@ class UserRepository(BaseRepository[User]):
         self._db.execute(
             """UPDATE users SET
                    username = ?, display_name = ?, avatar_path = ?,
-                   pin_hash = ?, role = ?, cashier_slot = ?, is_active = ?
+                   pin_hash = ?, pin_salt = ?, role = ?, cashier_slot = ?, is_active = ?
                WHERE id = ?""",
             (
                 user.username, user.display_name, user.avatar_path,
-                user.pin_hash, user.role.value, user.cashier_slot,
+                user.pin_hash, user.pin_salt, user.role.value, user.cashier_slot,
                 1 if user.is_active else 0,
                 user.id,
             ),

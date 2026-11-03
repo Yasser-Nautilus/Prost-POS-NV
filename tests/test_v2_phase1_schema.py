@@ -68,7 +68,7 @@ class TestSchemaVersion:
     def test_fresh_install_is_latest(self):
         db = _fresh_db()
         v = db.fetch_one("SELECT version FROM schema_version LIMIT 1")["version"]
-        assert v == LATEST_VERSION == 5
+        assert v == LATEST_VERSION == 6
 
     def test_tables_exist(self):
         db = _fresh_db()

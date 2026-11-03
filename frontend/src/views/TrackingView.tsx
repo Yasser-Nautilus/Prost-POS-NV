@@ -65,16 +65,17 @@ const LiveTimer: React.FC<{ since: string | null; urgentSecs?: number }> = ({ si
 
 /** Countdown to a deadline `windowSecs` after `since` → "MM:SS" remaining. */
 const CountdownTimer: React.FC<{ since: string | null; windowSecs: number }> = ({ since, windowSecs }) => {
-  const remaining = () => {
+  // bearbeitet: remaining als useCallback, damit es als effect-dep genutzt werden kann (lint fix)
+  const remaining = useCallback(() => {
     if (!since) return windowSecs;
     const elapsed = Math.floor((Date.now() - new Date(since).getTime()) / 1000);
     return windowSecs - elapsed;
-  };
+  }, [since, windowSecs]);
   const [left, setLeft] = useState(remaining);
   useEffect(() => {
     const id = setInterval(() => setLeft(remaining()), 1000);
     return () => clearInterval(id);
-  }, [since, windowSecs]);
+  }, [remaining]);
 
   if (left <= 0) {
     return <span className="font-bold text-[10px] text-gray-500">انتهى — يُؤرشَف</span>;
@@ -85,7 +86,8 @@ const CountdownTimer: React.FC<{ since: string | null; windowSecs: number }> = (
   return (
     <span className={`inline-flex items-center gap-1 font-mono font-bold tabular-nums text-xs ${urgent ? "text-red-400 animate-pulse" : "text-brand-teal"}`}>
       <Clock size={11} />
-      {m}:{s.toString().padStart(2, "0")}
+      {/* bearbeitet: Minuten auf 2 Stellen auffüllen → 04:05 statt 4:05 */}
+      {m.toString().padStart(2, "0")}:{s.toString().padStart(2, "0")}
     </span>
   );
 };

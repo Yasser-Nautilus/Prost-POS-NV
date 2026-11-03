@@ -45,6 +45,7 @@ class User:
     display_name: str = ""
     avatar_path: Optional[str] = None
     pin_hash: str = ""
+    pin_salt: Optional[str] = None  # per-user salt; None = legacy unsalted hash
     role: UserRole = UserRole.CASHIER
     cashier_slot: Optional[int] = None  # 1 or 2, NULL for drivers
     is_active: bool = True
