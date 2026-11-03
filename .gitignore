@@ -21,8 +21,13 @@ build/
 
 # Database
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
+
+# Scratch / dev experiments
+broast_pos/scratch/
 
 # Logs
 logs/

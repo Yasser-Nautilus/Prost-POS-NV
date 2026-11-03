@@ -1,0 +1,242 @@
+"""
+Financial controller — coordinates shift lifecycle, expenses, and history.
+
+Acts as the interface between the Financial View and core services.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from broast_pos.core.services.auth_service import AuthService
+from broast_pos.core.services.financial_service import FinancialService
+
+logger = logging.getLogger(__name__)
+
+
+class FinancialController:
+    """Orchestrates financial operations for the Financial View."""
+
+    def __init__(
+        self,
+        financial_service: FinancialService,
+        auth_service: AuthService,
+        printer_manager: Any | None = None,
+    ) -> None:
+        self._financial_svc = financial_service
+        self._auth_svc = auth_service
+        self._printer = printer_manager
+
+    def get_active_shift(self) -> dict[str, Any] | None:
+        """Return details of the current active shift, if any."""
+        try:
+            shift = self._financial_svc._financial.get_active_shift()
+            if shift is None:
+                return None
+            return {
+                "id": shift.id,
+                "opened_by": shift.opened_by,
+                "opened_at": shift.opened_at,
+                "next_invoice_no": shift.next_invoice_no,
+                "is_active": shift.is_active,
+                "summary_printed_at": shift.summary_printed_at,
+            }
+        except Exception as e:
+            logger.error("Error fetching active shift: %s", e)
+            return None
+
+    def open_shift(self, user_id: int) -> dict[str, Any] | None:
+        """Open a new shift."""
+        try:
+            shift = self._financial_svc.open_shift(user_id)
+            return {
+                "id": shift.id,
+                "opened_by": shift.opened_by,
+                "opened_at": shift.opened_at,
+                "next_invoice_no": shift.next_invoice_no,
+                "is_active": shift.is_active,
+            }
+        except Exception as e:
+            logger.error("Error opening shift: %s", e)
+            raise ValueError(str(e))
+
+    # Sales figures a cashier must never see — only the manager learns the
+    # revenue / drawer totals, at shift change. The cashier only knows his
+    # own expenses and the still-uncashed orders.
+    _CASHIER_HIDDEN_KEYS = ("total_sales", "cash_sales", "expected_cash")
+
+    def get_shift_summary(self, shift_id: int) -> dict[str, Any]:
+        """Get live financial summary of a shift.
+
+        Role-aware: a cashier receives only expenses and pending-order
+        figures. Sales totals and expected drawer cash are stripped from
+        the payload so they never reach the cashier's screen at all.
+        """
+        try:
+            summary = self._financial_svc.get_shift_summary(shift_id)
+            # Compute total order count from breakdown by type
+            order_count = sum(
+                v.get("count", 0)
+                for v in (summary.order_breakdown or {}).values()
+            )
+            payload = {
+                "total_sales": summary.total_sales,
+                "cash_sales": summary.cash_sales,       # FIN-001: cash-only for reconciliation
+                "total_expenses": summary.total_expenses,
+                "pending_delivery": summary.pending_delivery,
+                "pending_dinein": summary.pending_dinein,
+                "pending_kitchen": summary.pending_kitchen,
+                "expected_cash": summary.expected_cash,
+                "order_count": order_count,
+                "order_breakdown": summary.order_breakdown,
+            }
+
+            current_user = self._auth_svc.get_current_user()
+            if current_user is not None and not current_user.is_manager_or_above():
+                for key in self._CASHIER_HIDDEN_KEYS:
+                    payload.pop(key, None)
+
+            return payload
+        except Exception as e:
+            logger.exception("Error getting shift summary: %s", e)
+            raise ValueError(f"خطأ في تحميل ملخص الوردية: {e}")
+
+    def get_expenses(self, shift_id: int) -> list[dict[str, Any]]:
+        """Get list of expenses in a shift."""
+        try:
+            expenses = self._financial_svc.get_expenses(shift_id)
+            return [
+                {
+                    "id": exp.id,
+                    "amount": exp.amount,
+                    "description": exp.description,
+                    "category": exp.category,
+                    "timestamp": exp.timestamp,
+                    "user_id": exp.user_id,
+                }
+                for exp in expenses
+            ]
+        except Exception as e:
+            logger.error("Error fetching expenses: %s", e)
+            return []
+
+    def add_expense(
+        self,
+        shift_id: int,
+        amount: float,
+        description: str,
+        category: str,
+        user_id: int,
+    ) -> dict[str, Any]:
+        """Record an expense."""
+        try:
+            exp = self._financial_svc.add_expense(
+                shift_id=shift_id,
+                amount=amount,
+                description=description,
+                category=category,
+                user_id=user_id,
+            )
+            return {
+                "id": exp.id,
+                "amount": exp.amount,
+                "description": exp.description,
+                "category": exp.category,
+                "timestamp": exp.timestamp,
+            }
+        except Exception as e:
+            logger.error("Error adding expense: %s", e)
+            raise ValueError(str(e))
+
+    def get_users_for_transfer(self) -> list[dict[str, Any]]:
+        """Get list of cashiers and managers for shift transfer dropdown."""
+        try:
+            users = self._auth_svc.get_all_users()
+            return [
+                {"id": u.id, "display_name": u.display_name, "role": u.role.value}
+                for u in users
+            ]
+        except Exception as e:
+            logger.error("Error listing users for transfer: %s", e)
+            return []
+
+    def transfer_shift(
+        self,
+        from_user_id: int,
+        to_user_id: int,
+        manager_pin: str | None = None,
+    ) -> bool:
+        """Perform a mid-day cashier transfer."""
+        try:
+            transfer_obj = self._financial_svc.transfer_shift(
+                from_user_id=from_user_id,
+                to_user_id=to_user_id,
+                manager_pin=manager_pin,
+            )
+            # Try to print shift transfer report
+            if self._printer:
+                try:
+                    import json
+                    snapshot = json.loads(transfer_obj.summary_snapshot)
+
+                    # Get cashier display names
+                    from_user = self._auth_svc._users.get_by_id(from_user_id)
+                    to_user = self._auth_svc._users.get_by_id(to_user_id)
+                    from_name = from_user.display_name if from_user else f"#{from_user_id}"
+                    to_name = to_user.display_name if to_user else f"#{to_user_id}"
+
+                    transfer_data = {
+                        "from_cashier": from_name,
+                        "to_cashier": to_name,
+                        "total_sales": snapshot.get("total_sales", 0.0),
+                        "total_expenses": snapshot.get("total_expenses", 0.0),
+                        "pending_delivery": snapshot.get("pending_delivery", 0.0),
+                        "pending_dinein": snapshot.get("pending_dinein", 0.0),
+                        "pending_kitchen": snapshot.get("pending_kitchen", 0.0),
+                        "expected_cash": snapshot.get("expected_cash", 0.0),
+                    }
+
+                    current_user = self._auth_svc.get_current_user()
+                    cashier_slot = current_user.cashier_slot if (current_user and current_user.cashier_slot) else 1
+
+                    self._printer.print_shift_transfer(transfer_data, cashier_slot=cashier_slot)
+                except Exception as pe:
+                    logger.warning("Failed to print shift transfer report: %s", pe)
+            return True
+        except Exception as e:
+            logger.error("Error transferring shift: %s", e)
+            raise ValueError(str(e))
+
+    def close_shift(self, shift_id: int, manager_pin: str | None = None) -> bool:
+        """Close the active shift."""
+        try:
+            self._financial_svc.close_shift(shift_id, manager_pin)
+            return True
+        except Exception as e:
+            logger.error("Error closing shift: %s", e)
+            raise ValueError(str(e))
+
+    def get_shift_history(self) -> list[dict[str, Any]]:
+        """Get past shifts with display names resolved."""
+        try:
+            shifts = self._financial_svc.get_shift_history()
+            result = []
+            for s in shifts:
+                # Resolve integer FK to display name
+                opened_user = self._auth_svc._users.get_by_id(s.opened_by) if s.opened_by else None
+                closed_user = self._auth_svc._users.get_by_id(s.closed_by) if s.closed_by else None
+                result.append({
+                    "id": s.id,
+                    "opened_by": s.opened_by,
+                    "opened_by_name": opened_user.display_name if opened_user else f"#{s.opened_by}",
+                    "closed_by": s.closed_by,
+                    "closed_by_name": closed_user.display_name if closed_user else (f"#{s.closed_by}" if s.closed_by else None),
+                    "opened_at": s.opened_at,
+                    "closed_at": s.closed_at,
+                    "is_active": s.is_active,
+                })
+            return result
+        except Exception as e:
+            logger.error("Error fetching shift history: %s", e)
+            return []

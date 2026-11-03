@@ -1,0 +1,17 @@
+{
+  "kitchen": {
+    "type": "network",
+    "host": "192.168.1.100",
+    "port": 9100
+  },
+  "cashier_1": {
+    "type": "usb",
+    "vendor_id": "0x0483",
+    "product_id": "0x5743"
+  },
+  "cashier_2": {
+    "type": "usb",
+    "vendor_id": "0x0483",
+    "product_id": "0x5743"
+  }
+}
