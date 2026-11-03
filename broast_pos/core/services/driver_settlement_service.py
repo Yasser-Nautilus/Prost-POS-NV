@@ -287,11 +287,14 @@ class DriverSettlementService:
                             order = self._orders.get_by_id(oid)
                             if order and order.status == OrderStatus.DELIVERED:
                                 try:
+                                    # bearbeitet (Checkup-Fix): Tagesabschluss-Settlement
+                                    # bucht Cash separat -> unbezahlten Abschluss autorisieren.
                                     self._order_svc.change_order_status(
                                         order_id=oid,
                                         new_status=OrderStatus.COMPLETED,
                                         changed_by_id=settled_by_id,
                                         changed_by_name=settled_by_name,
+                                        allow_unpaid_complete=True,
                                     )
                                 except Exception as exc:
                                     logger.warning(

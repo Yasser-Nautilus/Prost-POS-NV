@@ -197,6 +197,7 @@ class OrderService:
         changed_by_id: int | None = None,
         changed_by_name: str | None = None,
         reason: str | None = None,
+        allow_unpaid_complete: bool = False,
     ) -> Order:
         """Validate, apply, and record a status transition.
 
@@ -230,14 +231,11 @@ class OrderService:
             )
 
         order.status = new_status
-        # If moving to COMPLETED, ensure is_paid is set (e.g. delivery settlement)
+        # bearbeitet (Checkup-Fix): Abschluss einer noch unbezahlten Order fail-closed.
+        # Früher wurde hier still is_paid=True + amount_paid=total gesetzt, OHNE
+        # Ledger-Eintrag -> Umsatz ohne Kassendeckung. Jetzt entscheidet die Policy.
         if new_status == OrderStatus.COMPLETED and not order.is_paid:
-            import datetime as _dt
-            order.is_paid = True
-            if not order.amount_paid:
-                order.amount_paid = order.total
-            if not order.paid_at:
-                order.paid_at = _dt.datetime.now().isoformat()
+            self._apply_unpaid_completion_policy(order, allow_unpaid_complete)
 
         saved = self._orders.save(order)
 
@@ -258,6 +256,37 @@ class OrderService:
             )
 
         return saved
+
+    def _apply_unpaid_completion_policy(
+        self, order: Order, allow_unpaid_complete: bool
+    ) -> None:
+        """Decide what happens when an order reaches COMPLETED while unpaid.
+
+        Context:
+          - This runs INSIDE change_order_status, the authoritative status path.
+          - The cash of a legitimate unpaid completion (delivery trip settlement)
+            is booked separately at the trip level via remit_trip_cash — NOT as a
+            per-order SALE_CASH entry here. So this method must never create a
+            ledger entry; it only reconciles the order's own paid-state fields.
+          - `allow_unpaid_complete` is True only for callers that have already
+            guaranteed the cash side (delivery settlement). For everyone else it
+            is False, meaning "this order has no cash backing".
+
+        Args:
+            order: The order being transitioned to COMPLETED (not yet saved).
+            allow_unpaid_complete: Whether the caller authorized unpaid completion.
+
+        Raises:
+            ValueError: when completion is not authorized (fail-closed).
+        """
+        # bearbeitet (Checkup-Fix): fail-closed, kein Ledger-Schreibzugriff.
+        if not allow_unpaid_complete:
+            raise ValueError("لا يمكن إكمال طلب غير مدفوع")
+        order.is_paid = True
+        if not order.amount_paid:
+            order.amount_paid = order.total
+        if not order.paid_at:
+            order.paid_at = datetime.datetime.now().isoformat()
 
     # ------------------------------------------------------------------
     # Amend order (edit saved order)

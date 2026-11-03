@@ -70,12 +70,16 @@ class DeliveryService:
                 "OrderService not injected into DeliveryService — "
                 "cannot change order status without it"
             )
+        # bearbeitet (Checkup-Fix): Trip-Settlement bucht Bargeld separat über
+        # remit_trip_cash, daher darf eine noch unbezahlte Order hier abgeschlossen
+        # werden — explizit autorisiert statt still im OrderService.
         self._order_svc.change_order_status(
             order_id=order_id,
             new_status=new_status,
             changed_by_id=None,
             changed_by_name=changed_by_name,
             reason=reason,
+            allow_unpaid_complete=(new_status == OrderStatus.COMPLETED),
         )
 
     # ------------------------------------------------------------------
