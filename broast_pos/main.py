@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import sys
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from broast_pos.config.config import get_app_name
@@ -200,6 +200,14 @@ def main() -> int:
 
     shell = WebShell(bridge)
     shell.show()
+
+    # ------------------------------------------------------------------
+    # 7. Background Tasks
+    # ------------------------------------------------------------------
+    # Periodic timer to auto-complete expired paid takeaway orders (every 60s)
+    takeaway_timer = QTimer(shell)
+    takeaway_timer.timeout.connect(lambda: order_service.auto_complete_expired_takeaways())
+    takeaway_timer.start(60_000)
 
     logger.info("Application ready — showing modernized QWebEngineView Web UI shell")
     return app.exec()

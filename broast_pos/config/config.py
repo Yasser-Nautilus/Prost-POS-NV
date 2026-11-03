@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -25,9 +26,9 @@ logger = logging.getLogger(__name__)
 # 1. General Settings (Task 2)
 # ============================================================================
 APP_VERSION: str = "1.0.0"
-ENVIRONMENT: str = "dev"       # "dev" | "prod"
-DEBUG: bool = True
-LANGUAGE: str = "ar"           # Arabic primary
+ENVIRONMENT: str = os.getenv("APP_ENV", os.getenv("ENVIRONMENT", "dev")).lower()       # "dev" | "prod"
+DEBUG: bool = os.getenv("DEBUG", "true" if ENVIRONMENT == "dev" else "false").lower() in ("true", "1", "yes")
+LANGUAGE: str = os.getenv("LANGUAGE", "ar")           # Arabic primary
 
 # ============================================================================
 # 2. Business Rules (Task 4)

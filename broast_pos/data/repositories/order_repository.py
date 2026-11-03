@@ -82,7 +82,7 @@ class OrderRepository(BaseRepository[Order]):
         rows = self._db.fetch_all(
             "SELECT * FROM orders WHERE status NOT IN ('completed', 'cancelled') ORDER BY created_at"
         )
-        return [self._row_to_order_with_items(r) for r in rows]
+        return self._rows_to_orders_with_items(rows)
 
     def get_active_by_type(self, order_type: OrderType) -> List[Order]:
         """Active orders filtered by type (for tracking views)."""
@@ -92,7 +92,7 @@ class OrderRepository(BaseRepository[Order]):
                ORDER BY created_at""",
             (order_type.value,),
         )
-        return [self._row_to_order_with_items(r) for r in rows]
+        return self._rows_to_orders_with_items(rows)
 
     def get_unassigned_deliveries(self) -> List[Order]:
         """Delivery orders not yet assigned to a driver (from both cashiers)."""
@@ -102,7 +102,7 @@ class OrderRepository(BaseRepository[Order]):
                  AND status NOT IN ('completed', 'cancelled')
                ORDER BY created_at"""
         )
-        return [self._row_to_order_with_items(r) for r in rows]
+        return self._rows_to_orders_with_items(rows)
 
     def get_today_orders(self) -> List[Order]:
         """All orders created today (current shift)."""
@@ -354,6 +354,41 @@ class OrderRepository(BaseRepository[Order]):
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
+
+    def _load_items_for_orders(self, order_ids: List[int]) -> Dict[int, List[OrderItem]]:
+        """Batch load items for multiple orders in a single SQL query."""
+        if not order_ids:
+            return {}
+        placeholders = ",".join("?" for _ in order_ids)
+        rows = self._db.fetch_all(
+            f"SELECT * FROM order_items WHERE order_id IN ({placeholders})",
+            tuple(order_ids),
+        )
+        res: Dict[int, List[OrderItem]] = {oid: [] for oid in order_ids}
+        for r in rows:
+            oid = r["order_id"]
+            res[oid].append(
+                OrderItem(
+                    id=r["id"],
+                    product_id=r["product_id"],
+                    product_name=r["product_name"],
+                    quantity=r["quantity"],
+                    unit_price=r["unit_price"],
+                    notes=r["notes"] or "",
+                )
+            )
+        return res
+
+    def _rows_to_orders_with_items(self, rows: List[sqlite3.Row]) -> List[Order]:
+        """Batch map rows to Orders and load all items in a single query (solves N+1)."""
+        if not rows:
+            return []
+        orders = [self._row_to_order(r) for r in rows]
+        order_ids = [o.id for o in orders if o.id is not None]
+        items_by_order = self._load_items_for_orders(order_ids)
+        for order in orders:
+            order.items = items_by_order.get(order.id, [])
+        return orders
 
     def _row_to_order_with_items(self, row: sqlite3.Row) -> Order:
         """Map row to Order and load its items."""

@@ -61,6 +61,7 @@ _PERMISSIONS: Dict[UserRole, Set[Action]] = {
         Action.CHECK_IN_OUT_DRIVERS,
         Action.OPEN_CLOSE_SHIFT,
         Action.VIEW_REPORTS,
+        Action.MANAGE_USERS,
     },
     UserRole.ADMIN: set(Action),  # Admin can do everything
 }

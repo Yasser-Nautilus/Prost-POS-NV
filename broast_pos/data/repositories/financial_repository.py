@@ -304,8 +304,7 @@ class FinancialRepository(BaseRepository[Shift]):
                FROM orders
                WHERE shift_id = ?
                  AND status IN ('new', 'preparing', 'ready')
-                 AND is_paid = 0
-                 AND (order_type != 'delivery' OR status != 'delivered')""",
+                 AND is_paid = 0""",
             (shift_id,),
         )
         return (row["cnt"] if row else 0) > 0
