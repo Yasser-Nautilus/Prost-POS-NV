@@ -18,7 +18,6 @@ from typing import Any, Dict, List, Optional
 
 from broast_pos.infrastructure.printing.escpos_printer import EscPosPrinter
 from broast_pos.infrastructure.printing.printer_config import (
-    PrinterEntry,
     load_printer_config,
 )
 from broast_pos.infrastructure.printing.receipt_templates import (

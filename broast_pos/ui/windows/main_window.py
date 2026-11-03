@@ -31,7 +31,6 @@ from enum import Enum, auto
 from typing import Dict, List, Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -45,7 +44,7 @@ from PyQt6.QtWidgets import (
 
 from broast_pos.config.config import get_app_name
 from broast_pos.core.models.user import User, UserRole
-from broast_pos.ui.styles.theme import get_color, get_font_family
+from broast_pos.ui.styles.theme import get_color
 
 logger = logging.getLogger(__name__)
 
@@ -279,7 +278,7 @@ class MainWindow(QWidget):
         # Printer status indicator
         self._printer_badge = QLabel("🖨")
         self._printer_badge.setToolTip("حالة الطابعة")
-        self._printer_badge.setStyleSheet(f"""
+        self._printer_badge.setStyleSheet("""
             font-size: 18px;
             background: transparent;
             margin-right: 12px;
@@ -400,7 +399,7 @@ class MainWindow(QWidget):
         """
         for item in _NAV_ITEMS:
             placeholder = self._make_placeholder(item)
-            index = self._stack.addWidget(placeholder)
+            self._stack.addWidget(placeholder)
             self._page_widgets[item.page] = placeholder
 
     def _make_placeholder(self, item: NavItem) -> QWidget:

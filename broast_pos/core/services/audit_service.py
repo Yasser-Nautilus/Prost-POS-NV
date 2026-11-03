@@ -14,7 +14,6 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
-from broast_pos.core.models.audit import AuditEventType
 from broast_pos.data.repositories.audit_repository import AuditEntry, AuditRepository
 
 if TYPE_CHECKING:

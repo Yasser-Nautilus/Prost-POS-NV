@@ -1,13 +1,11 @@
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal
 
-from broast_pos.core.models.order import Order, OrderItem, OrderType, OrderStatus, PaymentMethod
+from broast_pos.core.models.order import Order
 from broast_pos.core.models.user import User, UserRole
-from broast_pos.core.models.customer import Customer, CustomerAddress, Zone
-from broast_pos.core.models.financial import Shift, ShiftSummary, CashTransaction
-from broast_pos.core.models.delivery import DeliveryTrip, DriverStatus
+from broast_pos.core.models.customer import Customer, Zone
 from broast_pos.features.order_lifecycle.order_controller import OrderController
 from broast_pos.features.delivery_system.delivery_controller import DeliveryController
 from broast_pos.features.financial.financial_controller import FinancialController

@@ -12,7 +12,7 @@ Features:
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import date
 from typing import Any, Dict, List, Optional
 
 from PyQt6.QtCore import QDate, QPointF, QRectF, Qt
@@ -22,16 +22,13 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QDateEdit,
     QFrame,
-    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
     QLayout,
-    QListWidget,
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -144,7 +141,7 @@ class RoundedBarChartWidget(QWidget):
             y = rect.height() - bottom_margin - bar_h
 
             if bar_h > 0:
-                bar_rect = QRectF(x, y, bar_width, bar_h)
+                QRectF(x, y, bar_width, bar_h)
                 path = QPainterPath()
                 # Rounded top corners path
                 radius = min(8.0, bar_width / 2.0)

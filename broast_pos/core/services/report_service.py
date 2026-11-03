@@ -14,7 +14,7 @@ B-10 business-date pattern:
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date
 from typing import Any, Dict, List, Optional
 
 from broast_pos.data.repositories.order_repository import OrderRepository

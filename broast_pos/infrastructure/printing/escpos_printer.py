@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Optional
 
 from broast_pos.infrastructure.printing.printer_config import PrinterEntry
 

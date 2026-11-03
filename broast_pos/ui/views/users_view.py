@@ -5,7 +5,7 @@ Users view — manager-only screen to manage system users/cashiers, roles, and P
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QRegularExpressionValidator
@@ -30,7 +30,7 @@ from PyQt6.QtWidgets import (
 
 from broast_pos.core.models.user import User, UserRole
 from broast_pos.core.services.auth_service import AuthService
-from broast_pos.ui.styles.theme import get_color, get_font_family
+from broast_pos.ui.styles.theme import get_color
 
 logger = logging.getLogger(__name__)
 

@@ -24,7 +24,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from broast_pos.config.config import get_restaurant_info, SERVICE_CHARGE_PCT
+from broast_pos.config.config import get_restaurant_info
 from broast_pos.infrastructure.printing.escpos_printer import EscPosPrinter
 
 # ---------------------------------------------------------------------------

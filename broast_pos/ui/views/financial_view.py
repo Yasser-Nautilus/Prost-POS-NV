@@ -7,31 +7,28 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-from PyQt6.QtCore import QTime, Qt, pyqtSignal, QTimer
-from PyQt6.QtGui import QDoubleValidator, QFont
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer
+from PyQt6.QtGui import QDoubleValidator
 from PyQt6.QtWidgets import (
     QComboBox,
     QDialog,
-    QFormLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
-    QScrollArea,
     QStackedWidget,
     QTabWidget,
-    QTableWidget,
     QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from broast_pos.features.financial.financial_controller import FinancialController
-from broast_pos.ui.styles.theme import get_color, get_font_family, _lighten
+from broast_pos.ui.styles.theme import get_color, _lighten
 from broast_pos.core.models.user import UserRole
 from broast_pos.ui.dialogs.pin_dialog import PinDialog
 from broast_pos.ui.views.reports_view import (

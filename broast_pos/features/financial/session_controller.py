@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional
 from broast_pos.core.models.cashier_session import CashierSession, Station
 from broast_pos.core.services.cashier_session_service import CashierSessionService
 from broast_pos.core.services.business_day_service import (
-    BusinessDayService, XReport, ZReport, SessionSnapshot,
+    BusinessDayService, XReport, SessionSnapshot,
 )
 
 logger = logging.getLogger(__name__)
@@ -153,7 +153,6 @@ class SessionController:
 
     def get_all_sessions(self, day_id: int) -> List[Dict[str, Any]]:
         """All sessions (open + closed) for a business day."""
-        from broast_pos.data.repositories.cashier_session_repository import CashierSessionRepository
         sessions = self._svc._sessions.get_sessions_for_day(day_id)
         return [self._session_to_dict(s) for s in sessions]
 

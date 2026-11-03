@@ -212,7 +212,6 @@ class ReportsController:
             # We need to calculate actual delivery_fee amounts from orders.
             try:
                 d_str = d.isoformat()
-                from broast_pos.data.repositories.order_repository import OrderRepository
                 orders = self._report_svc._orders.get_completed_for_date(d_str)
                 total_delivery_fees = round(
                     sum(o.delivery_fee for o in orders), 2,
@@ -284,7 +283,6 @@ class ReportsController:
             # Build shift period for header
             shift_period = None
             try:
-                from broast_pos.data.repositories.financial_repository import FinancialRepository
                 shift = self._financial_svc._financial.get_by_id(shift_id)
                 if shift:
                     shift_period = {

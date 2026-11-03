@@ -14,7 +14,7 @@ There is NO other formula for the expected drawer balance.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 

@@ -10,9 +10,8 @@ atomically updates the order AND inserts an OrderStatusHistory record.
 
 from __future__ import annotations
 
-import hashlib
 import datetime
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING, List, Optional
 
 from broast_pos.core.models.audit import AuditEventType
 from broast_pos.core.models.order import (

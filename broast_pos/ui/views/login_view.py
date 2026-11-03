@@ -11,7 +11,7 @@ Emits ``login_success(User)`` on valid authentication.
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+from typing import Optional
 
 from PyQt6.QtCore import (
     QEasingCurve,
@@ -27,7 +27,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSizePolicy,
     QStackedWidget,
     QVBoxLayout,
     QWidget,

@@ -14,7 +14,7 @@ Business rules from FinancialService:
 from __future__ import annotations
 
 import logging
-from typing import Callable, List, Optional
+from typing import Callable, Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -24,13 +24,11 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
 from broast_pos.core.models.financial import (
-    CashTransaction,
     Shift,
     ShiftSummary,
 )

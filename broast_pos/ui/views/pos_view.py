@@ -41,13 +41,13 @@ from PyQt6.QtWidgets import (
 
 from broast_pos.config.config import (
     SERVICE_CHARGE_PCT,
-    TABLE_COUNT,
     get_category_colors,
 )
 from broast_pos.core.models.order import Order, OrderItem, OrderType
 from broast_pos.core.models.user import User, UserRole
 from broast_pos.core.models.product import Category, Product
 from broast_pos.core.services.product_service import ProductService
+from broast_pos.core.models.customer import Customer, CustomerAddress  # FIX: fehlten (nur in Annotationen genutzt)
 from broast_pos.core.services.customer_service import CustomerService
 from broast_pos.core.services.auth_service import AuthService
 from broast_pos.ui.components.customer_panel import CustomerPanel
@@ -421,7 +421,7 @@ class PosView(QWidget):
         colors = self._category_colors
 
         for idx, cat in enumerate(self._categories):
-            color = colors[idx % len(colors)] if colors else get_color("accent_blue")
+            colors[idx % len(colors)] if colors else get_color("accent_blue")
             btn = QPushButton(cat.name)
             btn.setObjectName(f"cat_{cat.id}")
             btn.setCursor(Qt.CursorShape.PointingHandCursor)

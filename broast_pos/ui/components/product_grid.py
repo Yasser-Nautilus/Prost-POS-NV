@@ -12,7 +12,7 @@ never calls the database.
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -26,8 +26,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from broast_pos.config.config import get_category_colors, get_fonts
-from broast_pos.core.models.product import Category, Product
+from broast_pos.config.config import get_fonts
+from broast_pos.core.models.product import Product
 from broast_pos.ui.styles.theme import get_color
 
 logger = logging.getLogger(__name__)

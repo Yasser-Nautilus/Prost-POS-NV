@@ -33,7 +33,6 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -42,7 +41,6 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -53,7 +51,7 @@ from broast_pos.config.config import (
 )
 from broast_pos.core.models.order import Order, OrderStatus, OrderType
 from broast_pos.core.services.order_service import OrderService
-from broast_pos.ui.styles.theme import get_color, get_font_family
+from broast_pos.ui.styles.theme import get_color
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +90,7 @@ _STATUS_COLORS: Dict[OrderStatus, str] = {}
 
 def _init_status_colors() -> None:
     """Lazily initialise status → colour map (theme must be loaded first)."""
-    global _STATUS_COLORS
+    # FIX: redundantes `global` entfernt — Dict wird nur mutiert, nie neu gebunden
     if _STATUS_COLORS:
         return
     _STATUS_COLORS.update({

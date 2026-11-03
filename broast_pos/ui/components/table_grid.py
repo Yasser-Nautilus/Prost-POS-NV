@@ -12,7 +12,7 @@ Emits:
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional, Set
+from typing import Dict, Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -21,7 +21,6 @@ from PyQt6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )

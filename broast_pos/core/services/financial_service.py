@@ -127,14 +127,7 @@ class FinancialService:
             "expected_cash": summary.expected_cash,
         })
 
-        transfer = ShiftTransfer(
-            shift_id=shift.id,
-            from_user_id=from_user_id,
-            to_user_id=to_user_id,
-            timestamp=datetime.now().isoformat(),
-            summary_snapshot=snapshot,
-        )
-
+        # FIX: toter ShiftTransfer-Block entfernt — Persistenz läuft über save_transfer()
         saved = self._financial.save_transfer(
             shift.id, from_user_id, to_user_id,
             json.loads(snapshot),

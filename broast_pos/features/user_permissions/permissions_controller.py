@@ -206,7 +206,7 @@ class PermissionsController:
             user_role = UserRole(role)
         except ValueError:
             raise ValueError(
-                f"الدور غير صحيح — يجب أن يكون: cashier, manager, admin"
+                "الدور غير صحيح — يجب أن يكون: cashier, manager, admin"
             )
 
         # Validate username uniqueness

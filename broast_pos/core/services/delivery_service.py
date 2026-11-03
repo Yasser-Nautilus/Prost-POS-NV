@@ -11,6 +11,7 @@ every transition is recorded in order_status_history.
 
 from __future__ import annotations
 
+import logging
 from datetime import date, datetime
 from typing import Dict, List, Optional
 
@@ -26,6 +27,8 @@ from broast_pos.data.repositories.audit_repository import AuditRepository
 from broast_pos.data.repositories.delivery_repository import DeliveryRepository
 from broast_pos.data.repositories.order_repository import OrderRepository
 from broast_pos.data.repositories.user_repository import UserRepository
+
+logger = logging.getLogger(__name__)  # FIX: war undefiniert im reassign except-Block
 
 
 class DeliveryService:

@@ -40,7 +40,6 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -203,11 +202,11 @@ class DeliveryView(QWidget):
 
         # Tab widget
         self._center_tabs = QTabWidget()
-        self._center_tabs.setStyleSheet(f"""
-            QTabBar::tab {{
+        self._center_tabs.setStyleSheet("""
+            QTabBar::tab {
                 padding: 8px 16px;
                 font-size: 13px;
-            }}
+            }
         """)
 
         # Tab 1: Unassigned orders

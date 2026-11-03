@@ -13,7 +13,7 @@ Design:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Generic, List, Optional, TypeVar
+from typing import Generic, Optional, TypeVar
 
 from broast_pos.data.database.connection import DatabaseConnection
 

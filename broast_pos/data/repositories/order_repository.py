@@ -7,7 +7,7 @@ Handles order + items as a unit. No modifier joins — items are self-contained.
 from __future__ import annotations
 
 import sqlite3
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from broast_pos.core.models.order import (
     Order,

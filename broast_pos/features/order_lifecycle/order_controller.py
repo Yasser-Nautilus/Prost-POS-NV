@@ -601,7 +601,7 @@ class OrderController:
 
         try:
             # Verify manager PIN (or session if PIN is None)
-            manager = self._order_svc._verify_manager_pin(manager_pin)
+            self._order_svc._verify_manager_pin(manager_pin)
         except PermissionError as exc:
             return False, str(exc)
 

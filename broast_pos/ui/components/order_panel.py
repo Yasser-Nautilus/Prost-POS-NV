@@ -18,7 +18,6 @@ import logging
 from typing import List, Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -26,12 +25,10 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
 
-from broast_pos.config.config import get_fonts
 from broast_pos.core.models.order import OrderItem
 from broast_pos.ui.styles.theme import get_color
 

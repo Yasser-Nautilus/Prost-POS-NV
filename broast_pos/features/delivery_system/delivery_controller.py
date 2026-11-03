@@ -11,8 +11,6 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from broast_pos.core.models.delivery import DeliveryTrip
-from broast_pos.core.models.order import OrderStatus, PaymentMethod
 from broast_pos.core.services.delivery_service import DeliveryService
 from broast_pos.core.services.order_service import OrderService
 from broast_pos.infrastructure.printing.print_triggers import PrintTriggers
@@ -181,7 +179,7 @@ class DeliveryController:
     def dispatch_trip(self, trip_id: int) -> Tuple[bool, str]:
         """Mark trip as dispatched (driver physically left)."""
         try:
-            trip = self._delivery_svc.mark_dispatched(trip_id)
+            self._delivery_svc.mark_dispatched(trip_id)
             self._notify_trips()
             self._notify_drivers()
             return True, "تم تسجيل خروج الرحلة"
@@ -195,7 +193,7 @@ class DeliveryController:
     def mark_returned(self, trip_id: int) -> Tuple[bool, str]:
         """Mark trip as returned (driver back at restaurant)."""
         try:
-            trip = self._delivery_svc.mark_returned(trip_id)
+            self._delivery_svc.mark_returned(trip_id)
             self._notify_trips()
             self._notify_drivers()
             return True, "تم تسجيل عودة السائق"
@@ -236,7 +234,7 @@ class DeliveryController:
             settlement_details = self.get_settlement_details(trip_id)
 
         try:
-            trip = self._delivery_svc.settle_trip(trip_id, settled_by_id, settled_by_name)
+            self._delivery_svc.settle_trip(trip_id, settled_by_id, settled_by_name)
         except Exception as exc:
             return False, str(exc)
 

@@ -135,6 +135,6 @@ def update_takeaway_auto_complete_minutes(minutes: int) -> None:
             json.dump(config_data, f, indent=2, ensure_ascii=False)
         _restaurant_cache = config_data
         logger.info("Saved takeaway_auto_complete_minutes=%d to %s", minutes, config_path.name)
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to write restaurant config to %s", config_path)
 

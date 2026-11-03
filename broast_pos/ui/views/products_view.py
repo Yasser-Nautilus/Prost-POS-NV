@@ -36,7 +36,7 @@ from broast_pos.core.models.customer import Zone
 from broast_pos.core.models.product import Category, Product
 from broast_pos.core.services.customer_service import CustomerService
 from broast_pos.core.services.product_service import ProductService
-from broast_pos.ui.styles.theme import get_color, get_font_family
+from broast_pos.ui.styles.theme import get_color
 
 logger = logging.getLogger(__name__)
 
