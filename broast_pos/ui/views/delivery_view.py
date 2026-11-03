@@ -85,6 +85,10 @@ class DeliveryView(QWidget):
         self._selected_orders: list[int] = []
         self._selected_driver_id: int | None = None
         self._selected_trip_id: int | None = None
+        self._driver_data: list[dict[str, Any]] = []
+        self._unassigned_data: list[dict[str, Any]] = []
+        self._active_trip_data: list[dict[str, Any]] = []
+        self._unsettled_data: list[dict[str, Any]] = []
 
         self._setup_ui()
         self._start_auto_refresh()
@@ -426,8 +430,6 @@ class DeliveryView(QWidget):
     # Data: Drivers
     # ------------------------------------------------------------------
 
-    _driver_data: list[dict[str, Any]] = []
-
     def _refresh_drivers(self) -> None:
         from broast_pos.data.database.connection import DatabaseConnection
         from broast_pos.data.repositories.user_repository import UserRepository
@@ -495,8 +497,6 @@ class DeliveryView(QWidget):
     # Data: Unassigned orders
     # ------------------------------------------------------------------
 
-    _unassigned_data: list[dict[str, Any]] = []
-
     def _refresh_unassigned(self) -> None:
         self._unassigned_list.blockSignals(True)
         self._unassigned_list.clear()
@@ -517,8 +517,6 @@ class DeliveryView(QWidget):
     # ------------------------------------------------------------------
     # Data: Active trips
     # ------------------------------------------------------------------
-
-    _active_trip_data: list[dict[str, Any]] = []
 
     def _refresh_active_trips(self) -> None:
         self._active_trips_list.blockSignals(True)
@@ -553,8 +551,6 @@ class DeliveryView(QWidget):
     # ------------------------------------------------------------------
     # Data: Unsettled trips
     # ------------------------------------------------------------------
-
-    _unsettled_data: list[dict[str, Any]] = []
 
     def _refresh_unsettled(self) -> None:
         self._unsettled_list.blockSignals(True)
