@@ -32,16 +32,16 @@ def _hash_pin(pin: str) -> str:
     return hashlib.sha256(pin.encode("utf-8")).hexdigest()
 
 
-def _is_empty(db: "DatabaseConnection", table: str) -> bool:
+def _is_empty(db: DatabaseConnection, table: str) -> bool:
     """Return True if *table* has zero rows."""
-    row = db.fetch_one(f"SELECT COUNT(*) AS c FROM {table}")  # noqa: S608
+    row = db.fetch_one(f"SELECT COUNT(*) AS c FROM {table}")
     return row["c"] == 0
 
 
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
-def seed_database(db: "DatabaseConnection") -> None:
+def seed_database(db: DatabaseConnection) -> None:
     """Insert sample data into empty tables.
 
     Call this after ``initialise_database()`` at app startup.
@@ -54,7 +54,7 @@ def seed_database(db: "DatabaseConnection") -> None:
 # ---------------------------------------------------------------------------
 # Users
 # ---------------------------------------------------------------------------
-def _seed_users(db: "DatabaseConnection") -> None:
+def _seed_users(db: DatabaseConnection) -> None:
     if not _is_empty(db, "users"):
         logger.debug("users table already populated — skipping seed")
         return
@@ -101,7 +101,7 @@ _SEED_PRODUCTS: dict[str, list[tuple[str, float, int]]] = {
 }
 
 
-def _seed_categories_and_products(db: "DatabaseConnection") -> None:
+def _seed_categories_and_products(db: DatabaseConnection) -> None:
     if not _is_empty(db, "categories"):
         logger.debug("categories table already populated — skipping seed")
         return
@@ -149,7 +149,7 @@ _SEED_ZONES: list[tuple[str, float]] = [
 ]
 
 
-def _seed_zones(db: "DatabaseConnection") -> None:
+def _seed_zones(db: DatabaseConnection) -> None:
     if not _is_empty(db, "zones"):
         logger.debug("zones table already populated — skipping seed")
         return

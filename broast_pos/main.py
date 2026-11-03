@@ -20,35 +20,42 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QApplication
 
 from broast_pos.config.config import get_app_name
+from broast_pos.core.services.audit_service import AuditService
 from broast_pos.core.services.auth_service import AuthService
+from broast_pos.core.services.business_day_service import BusinessDayService
+from broast_pos.core.services.cashier_session_service import CashierSessionService
 from broast_pos.core.services.customer_service import CustomerService
+from broast_pos.core.services.delivery_service import DeliveryService
+from broast_pos.core.services.driver_settlement_service import DriverSettlementService
 from broast_pos.core.services.financial_service import FinancialService
 from broast_pos.core.services.order_service import OrderService
 from broast_pos.core.services.product_service import ProductService
-from broast_pos.core.services.audit_service import AuditService
-from broast_pos.core.services.driver_settlement_service import DriverSettlementService
+from broast_pos.core.services.report_service import ReportService
 from broast_pos.data.database.connection import DatabaseConnection
 from broast_pos.data.database.migrations import initialise_database
 from broast_pos.data.database.seed import seed_database
 from broast_pos.data.repositories.audit_repository import AuditRepository
+from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
+from broast_pos.data.repositories.cashier_session_repository import (
+    CashierSessionRepository,
+)
 from broast_pos.data.repositories.customer_repository import CustomerRepository
+from broast_pos.data.repositories.delivery_repository import DeliveryRepository
+from broast_pos.data.repositories.driver_settlement_repository import (
+    DriverSettlementRepository,
+)
+from broast_pos.data.repositories.financial_repository import FinancialRepository
 from broast_pos.data.repositories.order_repository import OrderRepository
-from broast_pos.data.repositories.order_status_history_repository import OrderStatusHistoryRepository
-from broast_pos.data.repositories.driver_settlement_repository import DriverSettlementRepository
+from broast_pos.data.repositories.order_status_history_repository import (
+    OrderStatusHistoryRepository,
+)
 from broast_pos.data.repositories.product_repository import ProductRepository
 from broast_pos.data.repositories.user_repository import UserRepository
-from broast_pos.data.repositories.financial_repository import FinancialRepository
-from broast_pos.data.repositories.delivery_repository import DeliveryRepository
-from broast_pos.data.repositories.cashier_session_repository import CashierSessionRepository
-from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
-from broast_pos.core.services.delivery_service import DeliveryService
-from broast_pos.core.services.report_service import ReportService
-from broast_pos.core.services.cashier_session_service import CashierSessionService
-from broast_pos.core.services.business_day_service import BusinessDayService
 from broast_pos.infrastructure.printing.print_triggers import PrintTriggers
 from broast_pos.infrastructure.printing.printer_manager import PrinterManager
-from broast_pos.ui.styles.theme import apply_theme
 from broast_pos.infrastructure.web_bridge.bridge import POSBridge
+from broast_pos.ui.styles.theme import apply_theme
+
 # NOTE: WebShell is imported lazily inside main() — QWebEngineWidgets
 # must be imported AFTER QApplication is created per Qt6 requirements.
 
@@ -180,7 +187,7 @@ def main() -> int:
     # 6. Web UI Shell and Bridge Initialization
     # ------------------------------------------------------------------
     # Lazy import — QWebEngineWidgets must be imported AFTER QApplication is created
-    from broast_pos.ui.web_shell import WebShell  # noqa: PLC0415
+    from broast_pos.ui.web_shell import WebShell
 
     bridge = POSBridge(
         auth_service=auth_service,

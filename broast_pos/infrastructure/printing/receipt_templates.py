@@ -22,7 +22,7 @@ Template catalogue:
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from broast_pos.config.config import get_restaurant_info
 from broast_pos.infrastructure.printing.escpos_printer import EscPosPrinter
@@ -36,14 +36,14 @@ DOUBLE_SEP = "=" * LINE_WIDTH
 CUT_LINE = "- " * 8 + "✂" + " -" * 8
 
 # Order type display labels
-ORDER_TYPE_LABELS: Dict[str, Dict[str, str]] = {
+ORDER_TYPE_LABELS: dict[str, dict[str, str]] = {
     "dine_in":  {"ar": "صالة",       "en": "Dine IN"},
     "takeaway": {"ar": "تيك اواي",   "en": "Takeaway"},
     "delivery": {"ar": "دليفري",     "en": "Delivery"},
     "pickup":   {"ar": "استلام محل", "en": "Pickup"},
 }
 
-PAYMENT_LABELS: Dict[str, str] = {
+PAYMENT_LABELS: dict[str, str] = {
     "cash":   "كاش",
     "visa":   "فيزا",
     "online": "اونلاين",
@@ -54,7 +54,7 @@ PAYMENT_LABELS: Dict[str, str] = {
 # Branding helpers
 # ---------------------------------------------------------------------------
 
-def _get_branding() -> Dict[str, str]:
+def _get_branding() -> dict[str, str]:
     """Return branding dict from restaurant.json."""
     info = get_restaurant_info()
     return {
@@ -65,7 +65,7 @@ def _get_branding() -> Dict[str, str]:
     }
 
 
-def _print_header(printer: EscPosPrinter, brand: Dict[str, str]) -> None:
+def _print_header(printer: EscPosPrinter, brand: dict[str, str]) -> None:
     """Print the restaurant header block."""
     printer.print_double_line(LINE_WIDTH)
     name_line = f"{brand['name_ar']} / {brand['name_en']}"
@@ -73,7 +73,7 @@ def _print_header(printer: EscPosPrinter, brand: Dict[str, str]) -> None:
     printer.print_text("-", align="center")
 
 
-def _print_footer(printer: EscPosPrinter, brand: Dict[str, str]) -> None:
+def _print_footer(printer: EscPosPrinter, brand: dict[str, str]) -> None:
     """Print the branded footer + cut line."""
     printer.print_line("-", LINE_WIDTH)
     if brand["slogan_ar"]:
@@ -85,7 +85,7 @@ def _print_footer(printer: EscPosPrinter, brand: Dict[str, str]) -> None:
 
 def _print_items_table(
     printer: EscPosPrinter,
-    items: List[Dict[str, Any]],
+    items: list[dict[str, Any]],
     *,
     show_prices: bool = True,
 ) -> None:
@@ -132,7 +132,7 @@ def _fmt_money(value) -> str:
 # 1. Customer Receipt — Dine-In
 # ===========================================================================
 
-def print_dinein_receipt(printer: EscPosPrinter, order: Dict[str, Any]) -> bool:
+def print_dinein_receipt(printer: EscPosPrinter, order: dict[str, Any]) -> bool:
     """Print a dine-in customer receipt.
 
     Args:
@@ -176,7 +176,7 @@ def print_dinein_receipt(printer: EscPosPrinter, order: Dict[str, Any]) -> bool:
 # 2. Customer Receipt — Delivery
 # ===========================================================================
 
-def print_delivery_receipt(printer: EscPosPrinter, order: Dict[str, Any]) -> bool:
+def print_delivery_receipt(printer: EscPosPrinter, order: dict[str, Any]) -> bool:
     """Print a delivery customer receipt."""
     brand = _get_branding()
     _print_header(printer, brand)
@@ -220,7 +220,7 @@ def print_delivery_receipt(printer: EscPosPrinter, order: Dict[str, Any]) -> boo
 # 3. Customer Receipt — Takeaway
 # ===========================================================================
 
-def print_takeaway_receipt(printer: EscPosPrinter, order: Dict[str, Any]) -> bool:
+def print_takeaway_receipt(printer: EscPosPrinter, order: dict[str, Any]) -> bool:
     """Print a takeaway customer receipt.
 
     Same as dine-in but: no table, shows TAKEAWAY banner.
@@ -259,7 +259,7 @@ def print_takeaway_receipt(printer: EscPosPrinter, order: Dict[str, Any]) -> boo
 # 4. Customer Receipt — Pickup
 # ===========================================================================
 
-def print_pickup_receipt(printer: EscPosPrinter, order: Dict[str, Any]) -> bool:
+def print_pickup_receipt(printer: EscPosPrinter, order: dict[str, Any]) -> bool:
     """Print a pickup customer receipt.
 
     Shows customer name + phone (ordered by phone, will collect).
@@ -303,7 +303,7 @@ def print_pickup_receipt(printer: EscPosPrinter, order: Dict[str, Any]) -> bool:
 # 5. Kitchen Ticket
 # ===========================================================================
 
-def print_kitchen_ticket(printer: EscPosPrinter, order: Dict[str, Any]) -> bool:
+def print_kitchen_ticket(printer: EscPosPrinter, order: dict[str, Any]) -> bool:
     """Print a kitchen ticket — NO prices, NO customer info, NO totals.
 
     Order number is printed LARGE for easy identification.
@@ -349,8 +349,8 @@ def print_kitchen_ticket(printer: EscPosPrinter, order: Dict[str, Any]) -> bool:
 
 def print_amendment_ticket(
     printer: EscPosPrinter,
-    order: Dict[str, Any],
-    changes: List[Dict[str, Any]],
+    order: dict[str, Any],
+    changes: list[dict[str, Any]],
 ) -> bool:
     """Print an amendment kitchen ticket.
 
@@ -399,8 +399,8 @@ def print_amendment_ticket(
 
 def print_daily_sales_report(
     printer: EscPosPrinter,
-    report: Dict[str, Any],
-    shift_period: Optional[Dict[str, str]] = None,
+    report: dict[str, Any],
+    shift_period: dict[str, str] | None = None,
 ) -> bool:
     """Print the daily sales report (matches receipt photo format).
 
@@ -447,7 +447,7 @@ def print_daily_sales_report(
 
 def print_shift_transfer_report(
     printer: EscPosPrinter,
-    transfer: Dict[str, Any],
+    transfer: dict[str, Any],
 ) -> bool:
     """Print shift transfer report (mid-day cashier handover)."""
     now = datetime.now()
@@ -482,7 +482,7 @@ def print_shift_transfer_report(
 
 def print_driver_settlement(
     printer: EscPosPrinter,
-    settlement: Dict[str, Any],
+    settlement: dict[str, Any],
 ) -> bool:
     """Print a per-trip driver settlement receipt."""
     printer.print_double_line(LINE_WIDTH)
@@ -522,7 +522,7 @@ def print_driver_settlement(
 
 def print_driver_summary(
     printer: EscPosPrinter,
-    summary: Dict[str, Any],
+    summary: dict[str, Any],
 ) -> bool:
     """Print the daily driver summary (all drivers who worked)."""
     printer.print_double_line(LINE_WIDTH)
@@ -563,7 +563,7 @@ RECEIPT_PRINTERS = {
 }
 
 
-def print_customer_receipt(printer: EscPosPrinter, order: Dict[str, Any]) -> bool:
+def print_customer_receipt(printer: EscPosPrinter, order: dict[str, Any]) -> bool:
     """Auto-select the correct receipt template based on order type."""
     order_type = order.get("order_type", "dine_in")
     template_fn = RECEIPT_PRINTERS.get(order_type)

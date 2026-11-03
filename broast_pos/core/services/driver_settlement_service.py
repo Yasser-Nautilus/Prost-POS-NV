@@ -14,17 +14,18 @@ All numbers are calculated server-side from actual order records.
 from __future__ import annotations
 
 import json
-
 import logging
 from datetime import date
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from broast_pos.core.models.audit import AuditEventType
 from broast_pos.core.models.driver_settlement import DriverSettlement
 from broast_pos.core.models.order import OrderStatus, PaymentMethod
 from broast_pos.data.repositories.audit_repository import AuditRepository
 from broast_pos.data.repositories.delivery_repository import DeliveryRepository
-from broast_pos.data.repositories.driver_settlement_repository import DriverSettlementRepository
+from broast_pos.data.repositories.driver_settlement_repository import (
+    DriverSettlementRepository,
+)
 from broast_pos.data.repositories.order_repository import OrderRepository
 from broast_pos.data.repositories.user_repository import UserRepository
 
@@ -39,12 +40,12 @@ class DriverSettlementService:
 
     def __init__(
         self,
-        settlement_repo: Optional[DriverSettlementRepository] = None,
-        delivery_repo: Optional[DeliveryRepository] = None,
-        order_repo: Optional[OrderRepository] = None,
-        user_repo: Optional[UserRepository] = None,
-        audit_repo: Optional[AuditRepository] = None,
-        order_svc: Optional["OrderService"] = None,
+        settlement_repo: DriverSettlementRepository | None = None,
+        delivery_repo: DeliveryRepository | None = None,
+        order_repo: OrderRepository | None = None,
+        user_repo: UserRepository | None = None,
+        audit_repo: AuditRepository | None = None,
+        order_svc: OrderService | None = None,
         ledger_repo=None,           # CashLedgerRepository (Phase 3)
         cashier_session_repo=None,  # CashierSessionRepository (Phase 3)
     ) -> None:
@@ -66,9 +67,9 @@ class DriverSettlementService:
     def get_driver_settlement_preview(
         self,
         driver_id: int,
-        settlement_date: Optional[str] = None,
-        trip_id: Optional[int] = None,
-    ) -> Dict:
+        settlement_date: str | None = None,
+        trip_id: int | None = None,
+    ) -> dict:
         """Calculate what a settlement would look like, without committing.
 
         Returns a summary dict the frontend can display for manager review.
@@ -124,9 +125,9 @@ class DriverSettlementService:
         driver_id: int,
         settled_by_id: int,
         settled_by_name: str,
-        settlement_date: Optional[str] = None,
-        notes: Optional[str] = None,
-        trip_id: Optional[int] = None,
+        settlement_date: str | None = None,
+        notes: str | None = None,
+        trip_id: int | None = None,
     ) -> DriverSettlement:
         """Settle one specific trip (if trip_id given) or all unsettled trips for a driver.
 
@@ -266,7 +267,7 @@ class DriverSettlementService:
                     # Phase 3: DRIVER_REMITTANCE ledger entry (ADR-1)
                     # day_id = shift_id from the trip's first order (the business day)
                     if self._ledger is not None and trip_cash > 0:
-                        _trip_day_id: Optional[int] = None
+                        _trip_day_id: int | None = None
                         for _oid in trip.order_ids:
                             _o = self._orders.get_by_id(_oid)
                             if _o and _o.shift_id:
@@ -335,17 +336,17 @@ class DriverSettlementService:
     # Query methods
     # ------------------------------------------------------------------
 
-    def get_settlements_for_driver(self, driver_id: int) -> List[DriverSettlement]:
+    def get_settlements_for_driver(self, driver_id: int) -> list[DriverSettlement]:
         """All settlement records for a driver (newest first)."""
         return self._settlements.get_by_driver(driver_id)
 
-    def get_settlements_for_date(self, date_str: str) -> List[DriverSettlement]:
+    def get_settlements_for_date(self, date_str: str) -> list[DriverSettlement]:
         """All settlement records for a specific date."""
         return self._settlements.get_for_date(date_str)
 
     def get_settlement_by_driver_date(
         self, driver_id: int, date_str: str
-    ) -> Optional[DriverSettlement]:
+    ) -> DriverSettlement | None:
         """Find a specific settlement record."""
         return self._settlements.get_by_driver_date(driver_id, date_str)
 
@@ -359,7 +360,7 @@ class DriverSettlementService:
         driver_name: str,
         settlement_date: str,
         eligible_trips,
-    ) -> Dict:
+    ) -> dict:
         """Calculate financial summary from actual order data.
 
         This is the authoritative financial calculation — NEVER trust
@@ -455,7 +456,7 @@ class DriverSettlementService:
             return
         if not actor_id:
             raise ValueError("لا يمكن توريد نقدية الرحلة بدون مستخدم مسؤول (actor_id)")
-        day_id: Optional[int] = None
+        day_id: int | None = None
         for oid in trip.order_ids:
             order = self._orders.get_by_id(oid)
             if order and order.shift_id:
@@ -490,10 +491,13 @@ class DriverSettlementService:
           - Amount = round(trip_cash * 100) piasters (positive: cash into drawer).
           - Idempotency guaranteed by DB's uq_ledger_remit unique index on trip_id.
         """
-        from broast_pos.core.models.cashier_session import (
-            CashLedgerEntry, LedgerEntryType, Station,
-        )
         import datetime as _dt
+
+        from broast_pos.core.models.cashier_session import (
+            CashLedgerEntry,
+            LedgerEntryType,
+            Station,
+        )
 
         if self._cashier_sessions is None:
             return
@@ -519,7 +523,7 @@ class DriverSettlementService:
                 amount_pt=amount_pt,
                 trip_id=trip_id,
                 actor_id=actor_id,
-                created_at=_dt.datetime.now(_dt.timezone.utc).isoformat(),
+                created_at=_dt.datetime.now(_dt.UTC).isoformat(),
             ))
         except Exception as exc:
             # uq_ledger_remit: already recorded (idempotency). Log and continue.

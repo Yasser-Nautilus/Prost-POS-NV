@@ -1,15 +1,16 @@
 import json
 import logging
-from typing import Any, Dict, Optional
-from PyQt6.QtCore import QObject, pyqtSlot, pyqtSignal
+from typing import Any
 
+from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
+
+from broast_pos.core.models.customer import Customer, Zone
 from broast_pos.core.models.order import Order
 from broast_pos.core.models.user import User, UserRole
-from broast_pos.core.models.customer import Customer, Zone
-from broast_pos.features.order_lifecycle.order_controller import OrderController
 from broast_pos.features.delivery_system.delivery_controller import DeliveryController
 from broast_pos.features.financial.financial_controller import FinancialController
 from broast_pos.features.financial.session_controller import SessionController
+from broast_pos.features.order_lifecycle.order_controller import OrderController
 from broast_pos.features.reports.reports_controller import ReportsController
 
 logger = logging.getLogger(__name__)
@@ -126,7 +127,7 @@ class POSBridge(QObject):
 
     # ── Serializers ───────────────────────────────────────────────────────────
 
-    def _user_to_dict(self, u: Optional[User]) -> Optional[Dict[str, Any]]:
+    def _user_to_dict(self, u: User | None) -> dict[str, Any] | None:
         if not u:
             return None
         return {
@@ -139,7 +140,7 @@ class POSBridge(QObject):
             "is_active": u.is_active,
         }
 
-    def _order_to_dict(self, o: Optional[Order]) -> Optional[Dict[str, Any]]:
+    def _order_to_dict(self, o: Order | None) -> dict[str, Any] | None:
         if not o:
             return None
         return {
@@ -190,14 +191,14 @@ class POSBridge(QObject):
             ],
         }
 
-    def _category_to_dict(self, c) -> Dict[str, Any]:
+    def _category_to_dict(self, c) -> dict[str, Any]:
         return {"id": c.id, "name": c.name, "sort_order": c.sort_order, "is_active": c.is_active}
 
-    def _product_to_dict(self, p) -> Dict[str, Any]:
+    def _product_to_dict(self, p) -> dict[str, Any]:
         return {"id": p.id, "name": p.name, "price": p.price,
                 "category_id": p.category_id, "is_active": p.is_active, "sort_order": p.sort_order}
 
-    def _customer_to_dict(self, c: Customer) -> Dict[str, Any]:
+    def _customer_to_dict(self, c: Customer) -> dict[str, Any]:
         return {
             "id": c.id, "name": c.name, "phone": c.phone,
             "notes": c.notes, "created_at": c.created_at,
@@ -208,7 +209,7 @@ class POSBridge(QObject):
             ],
         }
 
-    def _zone_to_dict(self, z: Zone) -> Dict[str, Any]:
+    def _zone_to_dict(self, z: Zone) -> dict[str, Any]:
         return {"id": z.id, "name": z.name, "delivery_fee": z.delivery_fee, "is_active": z.is_active}
 
     # ── Main Dispatcher ───────────────────────────────────────────────────────

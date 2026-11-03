@@ -1,11 +1,13 @@
+import logging
 import os
 import sys
-import logging
-from PyQt6.QtCore import QUrl, Qt
-from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QWidget, QMessageBox
-from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtWebEngineCore import QWebEngineSettings, QWebEngineScript, QWebEnginePage
+
+from PyQt6.QtCore import Qt, QUrl
 from PyQt6.QtWebChannel import QWebChannel
+from PyQt6.QtWebEngineCore import QWebEnginePage, QWebEngineScript, QWebEngineSettings
+from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtWidgets import QMainWindow, QMessageBox, QVBoxLayout, QWidget
+
 from broast_pos.infrastructure.web_bridge.bridge import POSBridge
 
 logger = logging.getLogger(__name__)
@@ -163,5 +165,6 @@ class WebShell(QMainWindow):
             try:
                 self.bridge.dispatch("logout", "")
             except Exception:
-                pass
+                # Checkup-Fix: logout on close is best-effort, but log failures.
+                logger.debug("Dispatching logout on window close failed", exc_info=True)
         event.accept()

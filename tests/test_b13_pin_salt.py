@@ -15,11 +15,11 @@ import tempfile
 import pytest
 
 from broast_pos.core.models.user import UserRole
+from broast_pos.core.services import auth_service
+from broast_pos.core.services.auth_service import AuthService
 from broast_pos.data.database.connection import DatabaseConnection
 from broast_pos.data.database.migrations import initialise_database
 from broast_pos.data.repositories.user_repository import UserRepository
-from broast_pos.core.services import auth_service
-from broast_pos.core.services.auth_service import AuthService
 
 _PEPPER = "test-pepper"
 
@@ -62,8 +62,12 @@ def test_legacy_user_authenticates_and_upgrades(auth):
 
     after = repo.get_all_active()[0]
     assert after.pin_salt  # upgraded
-    expected = hashlib.sha256((_PEPPER + after.pin_salt + "4321").encode()).hexdigest()
+    # Checkup-Fix: upgraded hashes use the versioned PBKDF2 scheme.
+    assert after.pin_hash.startswith("pbkdf2_sha256$")
+    expected = auth_service.AuthService._hash_secure("4321", after.pin_salt)
     assert after.pin_hash == expected
+    # Re-authentication with the upgraded hash still succeeds.
+    assert svc.verify_pin("4321") is not None
 
 
 def test_wrong_pin_rejected(auth):

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from PyQt6.QtCore import QDate, QPointF, QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QMouseEvent, QPainter, QPainterPath, QPen
@@ -29,9 +29,9 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
-    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QToolTip,
     QVBoxLayout,
     QWidget,
@@ -54,10 +54,10 @@ class RoundedBarChartWidget(QWidget):
     Fits the modern 'bento-grid' visual design requested by the user.
     """
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setMouseTracking(True)
-        self.data: List[Dict[str, Any]] = []  # list of {"label": str, "value": float}
+        self.data: list[dict[str, Any]] = []  # list of {"label": str, "value": float}
         self.hovered_idx = -1
         self.max_val = 0.0
 
@@ -68,7 +68,7 @@ class RoundedBarChartWidget(QWidget):
         self.text_color = QColor("#a0aec0")
         self.bg_color = QColor("#1b2838")
 
-    def set_data(self, data: List[Dict[str, Any]], accent_color_hex: str = "#007bff") -> None:
+    def set_data(self, data: list[dict[str, Any]], accent_color_hex: str = "#007bff") -> None:
         """Update chart dataset and trigger repaint."""
         self.data = data
         self.accent_color = QColor(accent_color_hex)
@@ -231,7 +231,7 @@ class CircularProgressWidget(QWidget):
     Typically displays targeted percentage status (e.g. Sales Margin or Order Shares).
     """
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.percentage = 0.0
         self.label = ""
@@ -301,7 +301,7 @@ class MetricCard(QFrame):
         value: str,
         icon: str,
         color_hex: str = "#007bff",
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setStyleSheet(f"""
@@ -396,7 +396,7 @@ def make_bento_box(title: str, widget_or_layout: Any) -> QFrame:
     return frame
 
 
-def create_styled_table(headers: List[str]) -> QTableWidget:
+def create_styled_table(headers: list[str]) -> QTableWidget:
     """Helper to initialize and style a flat headerless QTableWidget."""
     table = QTableWidget()
     table.setColumnCount(len(headers))
@@ -452,7 +452,7 @@ class ReportsView(QWidget):
         self,
         reports_controller: ReportsController,
         cashier_slot: int = 1,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._ctrl = reports_controller

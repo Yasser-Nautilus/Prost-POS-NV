@@ -12,7 +12,7 @@ Orchestrates AuthService, UserRepository, and AuditRepository to provide:
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from broast_pos.core.models.user import User, UserRole
 from broast_pos.core.services.auth_service import Action, AuthService
@@ -31,7 +31,7 @@ VIEW_PRODUCTS = "products"
 VIEW_FINANCIAL = "financial"
 VIEW_USERS = "users"
 
-_VIEW_ACCESS: Dict[UserRole, List[str]] = {
+_VIEW_ACCESS: dict[UserRole, list[str]] = {
     UserRole.CASHIER: [VIEW_POS, VIEW_TRACKING, VIEW_DELIVERY],
     UserRole.MANAGER: [
         VIEW_POS, VIEW_TRACKING, VIEW_DELIVERY,
@@ -54,9 +54,9 @@ class PermissionsController:
 
     def __init__(
         self,
-        auth_service: Optional[AuthService] = None,
-        user_repo: Optional[UserRepository] = None,
-        audit_repo: Optional[AuditRepository] = None,
+        auth_service: AuthService | None = None,
+        user_repo: UserRepository | None = None,
+        audit_repo: AuditRepository | None = None,
     ) -> None:
         self._auth = auth_service or AuthService()
         self._users = user_repo or UserRepository()
@@ -66,7 +66,7 @@ class PermissionsController:
     # Session management (delegates to AuthService)
     # ==================================================================
 
-    def get_login_users(self) -> List[Dict[str, Any]]:
+    def get_login_users(self) -> list[dict[str, Any]]:
         """Return active users for the login screen tile grid.
 
         Returns a list of dicts with id, display_name, avatar_path, and role
@@ -95,7 +95,7 @@ class PermissionsController:
         """End the current session — return to login screen."""
         self._auth.logout()
 
-    def get_current_user(self) -> Optional[User]:
+    def get_current_user(self) -> User | None:
         """Return the currently logged-in user, or None."""
         return self._auth.get_current_user()
 
@@ -107,7 +107,7 @@ class PermissionsController:
     # Manager override flow
     # ==================================================================
 
-    def request_override(self, pin: str, action: Action) -> Dict[str, Any]:
+    def request_override(self, pin: str, action: Action) -> dict[str, Any]:
         """Verify a manager/admin PIN for a restricted action.
 
         This is the method the PinDialog calls. It verifies the PIN,
@@ -149,14 +149,14 @@ class PermissionsController:
     # Navigation access control
     # ==================================================================
 
-    def get_allowed_views(self, role: UserRole) -> List[str]:
+    def get_allowed_views(self, role: UserRole) -> list[str]:
         """Return the view identifiers a role is allowed to access.
 
         Used by main_window.py to show/hide sidebar navigation items.
         """
         return _VIEW_ACCESS.get(role, [VIEW_POS])
 
-    def get_allowed_views_for_current_user(self) -> List[str]:
+    def get_allowed_views_for_current_user(self) -> list[str]:
         """Convenience: allowed views for the logged-in user."""
         user = self._auth.get_current_user()
         if user is None:
@@ -167,11 +167,11 @@ class PermissionsController:
     # User management (admin-only operations)
     # ==================================================================
 
-    def get_all_users(self) -> List[User]:
+    def get_all_users(self) -> list[User]:
         """Return all active users for the user management screen."""
         return self._users.get_all_active()
 
-    def get_users_by_role(self, role: UserRole) -> List[User]:
+    def get_users_by_role(self, role: UserRole) -> list[User]:
         """Return active users filtered by role."""
         return self._users.get_by_role(role)
 
@@ -182,8 +182,8 @@ class PermissionsController:
         pin: str,
         role: str,
         admin_pin: str,
-        cashier_slot: Optional[int] = None,
-        avatar_path: Optional[str] = None,
+        cashier_slot: int | None = None,
+        avatar_path: str | None = None,
     ) -> User:
         """Create a new user — requires admin PIN.
 
@@ -252,10 +252,10 @@ class PermissionsController:
         self,
         user_id: int,
         admin_pin: str,
-        display_name: Optional[str] = None,
-        role: Optional[str] = None,
-        cashier_slot: Optional[int] = None,
-        avatar_path: Optional[str] = None,
+        display_name: str | None = None,
+        role: str | None = None,
+        cashier_slot: int | None = None,
+        avatar_path: str | None = None,
     ) -> User:
         """Update user fields — requires admin PIN.
 
@@ -271,7 +271,7 @@ class PermissionsController:
         if user is None:
             raise ValueError("المستخدم غير موجود")
 
-        changes: Dict[str, Any] = {}
+        changes: dict[str, Any] = {}
 
         if display_name is not None:
             changes["display_name"] = (user.display_name, display_name)
@@ -392,23 +392,23 @@ class PermissionsController:
     # Audit log queries
     # ==================================================================
 
-    def get_audit_logs(self, date_str: str) -> List[AuditEntry]:
+    def get_audit_logs(self, date_str: str) -> list[AuditEntry]:
         """All audit entries for a date (YYYY-MM-DD)."""
         return self._audit.get_logs_for_date(date_str)
 
-    def get_user_audit_trail(self, user_id: int, limit: int = 50) -> List[AuditEntry]:
+    def get_user_audit_trail(self, user_id: int, limit: int = 50) -> list[AuditEntry]:
         """Audit trail for a specific user."""
         return self._audit.get_logs_by_user(user_id, limit)
 
-    def get_order_audit_trail(self, order_id: int) -> List[AuditEntry]:
+    def get_order_audit_trail(self, order_id: int) -> list[AuditEntry]:
         """Audit trail for a specific order."""
         return self._audit.get_logs_for_order(order_id)
 
     def get_audit_by_event_type(
         self,
         event_type: str,
-        date_str: Optional[str] = None,
-    ) -> List[AuditEntry]:
+        date_str: str | None = None,
+    ) -> list[AuditEntry]:
         """All audit entries of a specific type, optionally for a date."""
         return self._audit.get_logs_by_event_type(event_type, date_str)
 

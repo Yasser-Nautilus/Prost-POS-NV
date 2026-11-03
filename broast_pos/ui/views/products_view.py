@@ -6,7 +6,6 @@ and order-related configurations (takeaway auto-complete threshold).
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
@@ -24,9 +23,9 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QSpinBox,
-    QTabWidget,
     QTableWidget,
     QTableWidgetItem,
+    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -48,7 +47,7 @@ class ProductsView(QWidget):
         self,
         product_service: ProductService,
         customer_service: CustomerService,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._products = product_service
@@ -439,21 +438,21 @@ class ProductsView(QWidget):
             self._products.update_product(product_id, is_active=not current_status)
             self._refresh_products()
         except Exception as e:
-            QMessageBox.critical(self, "خطأ", f"فشل تغيير حالة المنتج: {str(e)}")
+            QMessageBox.critical(self, "خطأ", f"فشل تغيير حالة المنتج: {e!s}")
 
     def _toggle_category_status(self, category_id: int, current_status: bool) -> None:
         try:
             self._products.update_category(category_id, is_active=not current_status)
             self.refresh_all()
         except Exception as e:
-            QMessageBox.critical(self, "خطأ", f"فشل تغيير حالة الفئة: {str(e)}")
+            QMessageBox.critical(self, "خطأ", f"فشل تغيير حالة الفئة: {e!s}")
 
     def _toggle_zone_status(self, zone_id: int, current_status: bool) -> None:
         try:
             self._customers.update_zone(zone_id, is_active=not current_status)
             self._refresh_zones()
         except Exception as e:
-            QMessageBox.critical(self, "خطأ", f"فشل تغيير حالة المنطقة: {str(e)}")
+            QMessageBox.critical(self, "خطأ", f"فشل تغيير حالة المنطقة: {e!s}")
 
     def _on_add_product(self) -> None:
         categories = self._products.get_categories()
@@ -470,7 +469,7 @@ class ProductsView(QWidget):
                 )
                 self._refresh_products()
             except Exception as e:
-                QMessageBox.critical(self, "خطأ", f"فشل إضافة المنتج: {str(e)}")
+                QMessageBox.critical(self, "خطأ", f"فشل إضافة المنتج: {e!s}")
 
     def _on_edit_product(self, product: Product) -> None:
         categories = self._products.get_all_categories()
@@ -487,7 +486,7 @@ class ProductsView(QWidget):
                 )
                 self._refresh_products()
             except Exception as e:
-                QMessageBox.critical(self, "خطأ", f"فشل تعديل المنتج: {str(e)}")
+                QMessageBox.critical(self, "خطأ", f"فشل تعديل المنتج: {e!s}")
 
     def _on_add_category(self) -> None:
         dialog = CategoryFormDialog(parent=self)
@@ -497,7 +496,7 @@ class ProductsView(QWidget):
                 self._products.create_category(name=name, sort_order=sort_order)
                 self.refresh_all()
             except Exception as e:
-                QMessageBox.critical(self, "خطأ", f"فشل إضافة الفئة: {str(e)}")
+                QMessageBox.critical(self, "خطأ", f"فشل إضافة الفئة: {e!s}")
 
     def _on_edit_category(self, category: Category) -> None:
         dialog = CategoryFormDialog(category, parent=self)
@@ -509,7 +508,7 @@ class ProductsView(QWidget):
                 )
                 self.refresh_all()
             except Exception as e:
-                QMessageBox.critical(self, "خطأ", f"فشل تعديل الفئة: {str(e)}")
+                QMessageBox.critical(self, "خطأ", f"فشل تعديل الفئة: {e!s}")
 
     def _on_add_zone(self) -> None:
         dialog = ZoneFormDialog(parent=self)
@@ -519,7 +518,7 @@ class ProductsView(QWidget):
                 self._customers.create_zone(name=name, delivery_fee=fee)
                 self._refresh_zones()
             except Exception as e:
-                QMessageBox.critical(self, "خطأ", f"فشل إضافة المنطقة: {str(e)}")
+                QMessageBox.critical(self, "خطأ", f"فشل إضافة المنطقة: {e!s}")
 
     def _on_edit_zone(self, zone: Zone) -> None:
         dialog = ZoneFormDialog(zone, parent=self)
@@ -529,7 +528,7 @@ class ProductsView(QWidget):
                 self._customers.update_zone(zone_id=zone.id, name=name, delivery_fee=fee)
                 self._refresh_zones()
             except Exception as e:
-                QMessageBox.critical(self, "خطأ", f"فشل تعديل المنطقة: {str(e)}")
+                QMessageBox.critical(self, "خطأ", f"فشل تعديل المنطقة: {e!s}")
 
     def _on_save_settings(self) -> None:
         try:
@@ -537,12 +536,12 @@ class ProductsView(QWidget):
             config.update_takeaway_auto_complete_minutes(val)
             QMessageBox.information(self, "نجاح", "تم حفظ إعدادات صالة الكاشير بنجاح.")
         except Exception as e:
-            QMessageBox.critical(self, "خطأ", f"فشل حفظ الإعدادات: {str(e)}")
+            QMessageBox.critical(self, "خطأ", f"فشل حفظ الإعدادات: {e!s}")
 
     # ------------------------------------------------------------------
     # UI Helpers
     # ------------------------------------------------------------------
-    def _create_table(self, headers: List[str]) -> QTableWidget:
+    def _create_table(self, headers: list[str]) -> QTableWidget:
         """Utility method to configure standardized styled data tables."""
         table = QTableWidget()
         table.setColumnCount(len(headers))
@@ -602,9 +601,9 @@ class ProductFormDialog(QDialog):
 
     def __init__(
         self,
-        categories: List[Category],
-        product: Optional[Product] = None,
-        parent: Optional[QWidget] = None,
+        categories: list[Category],
+        product: Product | None = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("تعديل منتج" if product else "إضافة منتج جديد")
@@ -694,8 +693,8 @@ class CategoryFormDialog(QDialog):
 
     def __init__(
         self,
-        category: Optional[Category] = None,
-        parent: Optional[QWidget] = None,
+        category: Category | None = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("تعديل فئة" if category else "إضافة فئة جديدة")
@@ -762,8 +761,8 @@ class ZoneFormDialog(QDialog):
 
     def __init__(
         self,
-        zone: Optional[Zone] = None,
-        parent: Optional[QWidget] = None,
+        zone: Zone | None = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("تعديل منطقة توصيل" if zone else "إضافة منطقة توصيل")

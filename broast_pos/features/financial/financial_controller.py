@@ -7,10 +7,10 @@ Acts as the interface between the Financial View and core services.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from broast_pos.core.services.financial_service import FinancialService
 from broast_pos.core.services.auth_service import AuthService
+from broast_pos.core.services.financial_service import FinancialService
 
 logger = logging.getLogger(__name__)
 
@@ -22,13 +22,13 @@ class FinancialController:
         self,
         financial_service: FinancialService,
         auth_service: AuthService,
-        printer_manager: Optional[Any] = None,
+        printer_manager: Any | None = None,
     ) -> None:
         self._financial_svc = financial_service
         self._auth_svc = auth_service
         self._printer = printer_manager
 
-    def get_active_shift(self) -> Optional[Dict[str, Any]]:
+    def get_active_shift(self) -> dict[str, Any] | None:
         """Return details of the current active shift, if any."""
         try:
             shift = self._financial_svc._financial.get_active_shift()
@@ -46,7 +46,7 @@ class FinancialController:
             logger.error("Error fetching active shift: %s", e)
             return None
 
-    def open_shift(self, user_id: int) -> Optional[Dict[str, Any]]:
+    def open_shift(self, user_id: int) -> dict[str, Any] | None:
         """Open a new shift."""
         try:
             shift = self._financial_svc.open_shift(user_id)
@@ -66,7 +66,7 @@ class FinancialController:
     # own expenses and the still-uncashed orders.
     _CASHIER_HIDDEN_KEYS = ("total_sales", "cash_sales", "expected_cash")
 
-    def get_shift_summary(self, shift_id: int) -> Dict[str, Any]:
+    def get_shift_summary(self, shift_id: int) -> dict[str, Any]:
         """Get live financial summary of a shift.
 
         Role-aware: a cashier receives only expenses and pending-order
@@ -99,10 +99,10 @@ class FinancialController:
 
             return payload
         except Exception as e:
-            logger.error("Error getting shift summary: %s", e, exc_info=True)
+            logger.exception("Error getting shift summary: %s", e)
             raise ValueError(f"خطأ في تحميل ملخص الوردية: {e}")
 
-    def get_expenses(self, shift_id: int) -> List[Dict[str, Any]]:
+    def get_expenses(self, shift_id: int) -> list[dict[str, Any]]:
         """Get list of expenses in a shift."""
         try:
             expenses = self._financial_svc.get_expenses(shift_id)
@@ -128,7 +128,7 @@ class FinancialController:
         description: str,
         category: str,
         user_id: int,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Record an expense."""
         try:
             exp = self._financial_svc.add_expense(
@@ -149,7 +149,7 @@ class FinancialController:
             logger.error("Error adding expense: %s", e)
             raise ValueError(str(e))
 
-    def get_users_for_transfer(self) -> List[Dict[str, Any]]:
+    def get_users_for_transfer(self) -> list[dict[str, Any]]:
         """Get list of cashiers and managers for shift transfer dropdown."""
         try:
             users = self._auth_svc.get_all_users()
@@ -165,7 +165,7 @@ class FinancialController:
         self,
         from_user_id: int,
         to_user_id: int,
-        manager_pin: Optional[str] = None,
+        manager_pin: str | None = None,
     ) -> bool:
         """Perform a mid-day cashier transfer."""
         try:
@@ -208,7 +208,7 @@ class FinancialController:
             logger.error("Error transferring shift: %s", e)
             raise ValueError(str(e))
 
-    def close_shift(self, shift_id: int, manager_pin: Optional[str] = None) -> bool:
+    def close_shift(self, shift_id: int, manager_pin: str | None = None) -> bool:
         """Close the active shift."""
         try:
             self._financial_svc.close_shift(shift_id, manager_pin)
@@ -217,7 +217,7 @@ class FinancialController:
             logger.error("Error closing shift: %s", e)
             raise ValueError(str(e))
 
-    def get_shift_history(self) -> List[Dict[str, Any]]:
+    def get_shift_history(self) -> list[dict[str, Any]]:
         """Get past shifts with display names resolved."""
         try:
             shifts = self._financial_svc.get_shift_history()

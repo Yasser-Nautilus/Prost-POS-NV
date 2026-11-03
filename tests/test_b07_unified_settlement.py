@@ -12,12 +12,18 @@ Test strategy: unit-test with mocks — no real DB.
 """
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch, call
 
-from broast_pos.core.models.order import Order, OrderItem, OrderStatus, OrderType, PaymentMethod
 from broast_pos.core.models.delivery import DeliveryTrip
-
+from broast_pos.core.models.order import (
+    Order,
+    OrderItem,
+    OrderStatus,
+    OrderType,
+    PaymentMethod,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -82,7 +88,9 @@ def _delivery_svc_mock(trip: DeliveryTrip, orders: dict):
 class TestSettleDriverCompletesOrders:
 
     def _build_settlement_svc(self, orders: dict):
-        from broast_pos.core.services.driver_settlement_service import DriverSettlementService
+        from broast_pos.core.services.driver_settlement_service import (
+            DriverSettlementService,
+        )
 
         order_repo = MagicMock()
         order_repo.get_by_id.side_effect = lambda oid: orders.get(oid)
@@ -122,7 +130,9 @@ class TestSettleDriverCompletesOrders:
     def test_settle_driver_summarizes_the_days_returned_trips(self):
         """Whole-day settlement: the day record is built from the driver's
         returned trips for that date (get_driver_trips_for_date)."""
-        from broast_pos.core.services.driver_settlement_service import DriverSettlementService
+        from broast_pos.core.services.driver_settlement_service import (
+            DriverSettlementService,
+        )
 
         orders = {101: _order(101), 102: _order(102)}
         order_repo = MagicMock()
@@ -159,7 +169,9 @@ class TestSettleDriverCompletesOrders:
 
     def test_settle_driver_rejects_second_settlement_same_day(self):
         """Guard: a day already closed cannot be settled again."""
-        from broast_pos.core.services.driver_settlement_service import DriverSettlementService
+        from broast_pos.core.services.driver_settlement_service import (
+            DriverSettlementService,
+        )
 
         order_repo = MagicMock()
         order_repo.get_by_id.return_value = _order(101)
@@ -182,7 +194,9 @@ class TestSettleDriverCompletesOrders:
 
     def test_settle_driver_skips_side_effects_for_already_settled_trips(self):
         """Trips already settled per-trip are only summarized, not re-completed."""
-        from broast_pos.core.services.driver_settlement_service import DriverSettlementService
+        from broast_pos.core.services.driver_settlement_service import (
+            DriverSettlementService,
+        )
 
         orders = {101: _order(101, status=OrderStatus.DELIVERED)}
         order_repo = MagicMock()
@@ -247,7 +261,9 @@ class TestSettleDriverCompletesOrders:
 
     def test_settle_driver_without_order_svc_still_settles(self):
         """B-07: order_svc is optional — settlement must succeed even without it."""
-        from broast_pos.core.services.driver_settlement_service import DriverSettlementService
+        from broast_pos.core.services.driver_settlement_service import (
+            DriverSettlementService,
+        )
 
         delivery_repo = MagicMock()
         delivery_repo.get_driver_trips_for_date.return_value = [_trip()]

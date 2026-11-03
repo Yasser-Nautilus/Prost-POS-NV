@@ -70,7 +70,7 @@ def load_restaurant_config() -> dict[str, Any]:
     Returns the full dict.  Called once at startup; subsequent calls
     return the cached copy.
     """
-    global _restaurant_cache  # noqa: PLW0603
+    global _restaurant_cache
     if _restaurant_cache is not None:
         return _restaurant_cache
 

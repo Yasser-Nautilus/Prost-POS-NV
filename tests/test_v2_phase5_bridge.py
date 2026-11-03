@@ -16,21 +16,19 @@ Covers:
 from __future__ import annotations
 
 import json
-import pytest
-from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
+from unittest.mock import MagicMock
 
+import pytest
+
+from broast_pos.core.services.business_day_service import BusinessDayService
+from broast_pos.core.services.cashier_session_service import CashierSessionService
 from broast_pos.data.database.connection import DatabaseConnection
 from broast_pos.data.database.migrations import initialise_database
-from broast_pos.core.models.cashier_session import (
-    CashierSession, CashLedgerEntry, LedgerEntryType, Station,
-)
-from broast_pos.data.repositories.cashier_session_repository import CashierSessionRepository
 from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
-from broast_pos.core.services.cashier_session_service import CashierSessionService
-from broast_pos.core.services.business_day_service import BusinessDayService
+from broast_pos.data.repositories.cashier_session_repository import (
+    CashierSessionRepository,
+)
 from broast_pos.features.financial.session_controller import SessionController
-
 
 # ---------------------------------------------------------------------------
 # Singleton isolation
@@ -188,7 +186,7 @@ class TestSessionController:
     def test_x_report_breakdown_included(self):
         db = _fresh_db()
         ctrl = _make_ctrl(db)
-        s = ctrl.open_session(day_id=1, user_id=2, station="ALL", opening_float_egp=50.0)
+        ctrl.open_session(day_id=1, user_id=2, station="ALL", opening_float_egp=50.0)
         report = ctrl.generate_x_report(day_id=1)
         session_snap = report["sessions"][0]
         assert "breakdown" in session_snap

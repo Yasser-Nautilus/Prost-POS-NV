@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
 
 from broast_pos.core.models.order import OrderItem
 
@@ -40,13 +39,13 @@ class AmendmentTracker:
 
     # Key type: (product_id, notes) — distinguishes same product with
     # different special instructions (e.g., "chicken fries" vs "chicken fries, no salt").
-    _Key = Tuple[int, str]
+    _Key = tuple[int, str]
 
     def __init__(self) -> None:
-        self._original: Optional[Dict[AmendmentTracker._Key, int]] = None
-        self._original_names: Dict[AmendmentTracker._Key, str] = {}
+        self._original: dict[AmendmentTracker._Key, int] | None = None
+        self._original_names: dict[AmendmentTracker._Key, str] = {}
 
-    def snapshot(self, items: List[OrderItem]) -> None:
+    def snapshot(self, items: list[OrderItem]) -> None:
         """Take a snapshot of the current items before editing.
 
         Args:
@@ -60,7 +59,7 @@ class AmendmentTracker:
             self._original_names[key] = item.product_name
         logger.debug("Amendment snapshot taken: %d items", len(items))
 
-    def diff(self, current_items: List[OrderItem]) -> List[Dict[str, object]]:
+    def diff(self, current_items: list[OrderItem]) -> list[dict[str, object]]:
         """Compare current items against snapshot and return changes.
 
         Returns list of change dicts for printing:
@@ -74,9 +73,9 @@ class AmendmentTracker:
         if self._original is None:
             return []
 
-        changes: List[OrderChange] = []
-        current_map: Dict[AmendmentTracker._Key, int] = {}
-        current_names: Dict[AmendmentTracker._Key, str] = {}
+        changes: list[OrderChange] = []
+        current_map: dict[AmendmentTracker._Key, int] = {}
+        current_names: dict[AmendmentTracker._Key, str] = {}
 
         for item in current_items:
             key = (item.product_id, item.notes or "")
@@ -115,7 +114,7 @@ class AmendmentTracker:
             for c in changes
         ]
 
-    def has_changes(self, current_items: List[OrderItem]) -> bool:
+    def has_changes(self, current_items: list[OrderItem]) -> bool:
         """Check if there are any changes since the snapshot."""
         return len(self.diff(current_items)) > 0
 

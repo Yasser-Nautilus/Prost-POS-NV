@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime
-from typing import Dict, List, Optional
 
 from broast_pos.core.models.audit import AuditEventType
 from broast_pos.core.models.delivery import (
@@ -36,10 +35,10 @@ class DeliveryService:
 
     def __init__(
         self,
-        delivery_repo: Optional[DeliveryRepository] = None,
-        order_repo: Optional[OrderRepository] = None,
-        user_repo: Optional[UserRepository] = None,
-        audit_repo: Optional[AuditRepository] = None,
+        delivery_repo: DeliveryRepository | None = None,
+        order_repo: OrderRepository | None = None,
+        user_repo: UserRepository | None = None,
+        audit_repo: AuditRepository | None = None,
         order_service=None,    # Optional[OrderService] — avoids circular import
         settlement_svc=None,   # Optional[DriverSettlementService] — B-07
     ) -> None:
@@ -59,7 +58,7 @@ class DeliveryService:
         order_id: int,
         new_status: OrderStatus,
         changed_by_name: str = "نظام",
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> None:
         """Route status changes through OrderService (the authoritative path).
 
@@ -104,11 +103,11 @@ class DeliveryService:
             )
         self._delivery.check_out_driver(driver_id)
 
-    def get_active_drivers(self) -> List[User]:
+    def get_active_drivers(self) -> list[User]:
         """Return only checked-in (available) drivers for the dispatch list."""
         return self._delivery.get_active_drivers()
 
-    def get_all_drivers(self) -> List[User]:
+    def get_all_drivers(self) -> list[User]:
         """Return all registered active drivers (cashier_slot is None)."""
         return self._users.get_drivers()
 
@@ -116,7 +115,7 @@ class DeliveryService:
     # Trip management
     # ------------------------------------------------------------------
 
-    def get_trip(self, trip_id: int) -> Optional[DeliveryTrip]:
+    def get_trip(self, trip_id: int) -> DeliveryTrip | None:
         """Get a delivery trip by its ID."""
         return self._delivery.get_by_id(trip_id)
 
@@ -131,7 +130,7 @@ class DeliveryService:
     def create_trip(
         self,
         driver_id: int,
-        order_ids: List[int],
+        order_ids: list[int],
     ) -> DeliveryTrip:
         """Create a new delivery trip with selected orders.
 
@@ -202,7 +201,8 @@ class DeliveryService:
                 entity_id=trip.id,
             )
         except Exception:
-            pass
+            # Checkup-Fix: audit write is best-effort, but log the failure.
+            logger.debug("Audit log for new trip %s failed", trip.id, exc_info=True)
 
         return trip
 
@@ -247,7 +247,8 @@ class DeliveryService:
                 entity_id=trip_id,
             )
         except Exception:
-            pass
+            # Checkup-Fix: audit write is best-effort, but log the failure.
+            logger.debug("Audit log for trip %s failed (dispatch)", trip_id, exc_info=True)
 
         updated_trip = self._delivery.get_trip_by_id(trip_id)
         return updated_trip or trip
@@ -291,7 +292,8 @@ class DeliveryService:
                 entity_id=trip_id,
             )
         except Exception:
-            pass
+            # Checkup-Fix: audit write is best-effort, but log the failure.
+            logger.debug("Audit log for trip %s failed", trip_id, exc_info=True)
 
         updated_trip = self._delivery.get_trip_by_id(trip_id)
         return updated_trip or trip
@@ -466,16 +468,17 @@ class DeliveryService:
                 after={"cash_collected": cash_total, "fees": fees_total},
             )
         except Exception:
-            pass
+            # Checkup-Fix: audit write is best-effort, but log the failure.
+            logger.debug("Audit log for trip %s settlement failed", trip_id, exc_info=True)
 
         updated_trip = self._delivery.get_trip_by_id(trip_id)
         return updated_trip or trip
 
-    def get_unsettled_trips(self, driver_id: Optional[int] = None) -> List[DeliveryTrip]:
+    def get_unsettled_trips(self, driver_id: int | None = None) -> list[DeliveryTrip]:
         """Returned trips awaiting settlement, optionally for one driver."""
         return self._delivery.get_unsettled_trips(driver_id)
 
-    def get_active_trips(self) -> List[DeliveryTrip]:
+    def get_active_trips(self) -> list[DeliveryTrip]:
         """All trips currently in transit (dispatched but not returned)."""
         return self._delivery.get_active_trips()
 
@@ -484,7 +487,7 @@ class DeliveryService:
         active = self._delivery.get_active_trips()
         return any(t.driver_id == driver_id for t in active)
 
-    def get_trip_details(self, trip_id: int) -> Optional[Dict]:
+    def get_trip_details(self, trip_id: int) -> dict | None:
         """Full trip details for settlement dialog.
 
         Returns dict with:
@@ -540,7 +543,7 @@ class DeliveryService:
             "amount_to_hand_over": cash_collected,
         }
 
-    def get_driver_attendance_today(self) -> List[Dict]:
+    def get_driver_attendance_today(self) -> list[dict]:
         """All attendance records for today — for the attendance panel."""
         try:
             records = self._delivery.get_attendance_for_date(date.today().isoformat())
@@ -560,8 +563,8 @@ class DeliveryService:
     # ------------------------------------------------------------------
 
     def get_all_drivers_daily_summary(
-        self, target_date: Optional[date] = None,
-    ) -> List[Dict]:
+        self, target_date: date | None = None,
+    ) -> list[dict]:
         """All drivers with trip count, order count, fees earned for a day.
 
         Returns:
@@ -572,8 +575,8 @@ class DeliveryService:
         return self._delivery.get_daily_summary(target.isoformat())
 
     def get_driver_daily_summary(
-        self, driver_id: int, target_date: Optional[date] = None,
-    ) -> Dict:
+        self, driver_id: int, target_date: date | None = None,
+    ) -> dict:
         """Single driver detail for a specific day.
 
         Returns:

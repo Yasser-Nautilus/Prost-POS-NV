@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from broast_pos.core.services.report_service import ReportService
 from broast_pos.core.services.financial_service import FinancialService
+from broast_pos.core.services.report_service import ReportService
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ class ReportsController:
         self,
         report_service: ReportService,
         financial_service: FinancialService,
-        printer_manager: Optional[Any] = None,
+        printer_manager: Any | None = None,
     ) -> None:
         self._report_svc = report_service
         self._financial_svc = financial_service
@@ -39,8 +39,8 @@ class ReportsController:
     # ------------------------------------------------------------------
 
     def get_sales_by_type(
-        self, target_date: Optional[date] = None,
-    ) -> Dict[str, Any]:
+        self, target_date: date | None = None,
+    ) -> dict[str, Any]:
         """Group completed orders by type with count and revenue.
 
         Queries all non-cancelled orders for the given date.
@@ -85,8 +85,8 @@ class ReportsController:
             }
 
     def get_payment_breakdown(
-        self, target_date: Optional[date] = None,
-    ) -> Dict[str, Any]:
+        self, target_date: date | None = None,
+    ) -> dict[str, Any]:
         """Sales split by payment method (كاش / فيزا / اونلاين).
 
         Args:
@@ -125,8 +125,8 @@ class ReportsController:
             }
 
     def get_bestsellers(
-        self, target_date: Optional[date] = None,
-    ) -> List[Dict[str, Any]]:
+        self, target_date: date | None = None,
+    ) -> list[dict[str, Any]]:
         """Top products by quantity sold for the day.
 
         Returns:
@@ -139,8 +139,8 @@ class ReportsController:
             return []
 
     def get_cancelled_orders(
-        self, target_date: Optional[date] = None,
-    ) -> Dict[str, Any]:
+        self, target_date: date | None = None,
+    ) -> dict[str, Any]:
         """Cancelled orders with reasons."""
         try:
             return self._report_svc.generate_cancelled_orders(target_date)
@@ -154,9 +154,9 @@ class ReportsController:
 
     def generate_daily_summary(
         self,
-        target_date: Optional[date] = None,
-        shift_id: Optional[int] = None,
-    ) -> Dict[str, Any]:
+        target_date: date | None = None,
+        shift_id: int | None = None,
+    ) -> dict[str, Any]:
         """Full daily summary with revenue distinction and driver data.
 
         Combines:
@@ -244,7 +244,7 @@ class ReportsController:
             }
 
         except Exception as exc:
-            logger.error("Failed to generate daily summary: %s", exc, exc_info=True)
+            logger.exception("Failed to generate daily summary: %s", exc)
             raise ValueError(f"خطأ في إنشاء التقرير اليومي: {exc}")
 
     # ------------------------------------------------------------------
@@ -255,7 +255,7 @@ class ReportsController:
         self,
         shift_id: int,
         cashier_slot: int = 1,
-        target_date: Optional[date] = None,
+        target_date: date | None = None,
     ) -> bool:
         """Print the daily summary report — silent, non-blocking.
 
@@ -290,7 +290,8 @@ class ReportsController:
                         "closed_at": shift.closed_at or datetime.now().isoformat(),
                     }
             except Exception:
-                pass
+                # Checkup-Fix: shift period is optional for the summary, but log failures.
+                logger.warning("Loading shift period for report failed", exc_info=True)
 
             printed = self._printer.print_shift_summary(
                 summary, cashier_slot=cashier_slot, shift_period=shift_period,
@@ -314,8 +315,8 @@ class ReportsController:
     # ------------------------------------------------------------------
 
     def validate_report(
-        self, target_date: Optional[date] = None,
-    ) -> Dict[str, Any]:
+        self, target_date: date | None = None,
+    ) -> dict[str, Any]:
         """Cross-validate report totals for data integrity.
 
         Checks:
@@ -334,7 +335,7 @@ class ReportsController:
         """
         d = target_date or date.today()
         d_str = d.isoformat()
-        warnings: List[str] = []
+        warnings: list[str] = []
 
         try:
             # Get individual order totals
@@ -396,7 +397,7 @@ class ReportsController:
     # Monthly reports wrappers
     # ------------------------------------------------------------------
 
-    def get_monthly_summary(self, year: int, month: int) -> Dict[str, Any]:
+    def get_monthly_summary(self, year: int, month: int) -> dict[str, Any]:
         """Total sales + expenses + daily breakdown for a month."""
         try:
             return self._report_svc.generate_monthly_summary(year, month)
@@ -412,7 +413,7 @@ class ReportsController:
 
     def get_monthly_bestsellers(
         self, year: int, month: int, limit: int = 20,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Top products by quantity sold for a month."""
         try:
             return self._report_svc.generate_monthly_bestsellers(year, month, limit)
@@ -420,7 +421,7 @@ class ReportsController:
             logger.error("Failed to get monthly bestsellers: %s", exc)
             return []
 
-    def get_monthly_expenses(self, year: int, month: int) -> Dict[str, Any]:
+    def get_monthly_expenses(self, year: int, month: int) -> dict[str, Any]:
         """Expense breakdown by category for a month."""
         try:
             return self._report_svc.generate_monthly_expenses(year, month)
@@ -437,7 +438,7 @@ class ReportsController:
     # Yearly reports wrappers
     # ------------------------------------------------------------------
 
-    def get_yearly_summary(self, year: int) -> Dict[str, Any]:
+    def get_yearly_summary(self, year: int) -> dict[str, Any]:
         """12-month sales + expenses overview."""
         try:
             return self._report_svc.generate_yearly_summary(year)
@@ -452,7 +453,7 @@ class ReportsController:
 
     def get_yearly_bestsellers(
         self, year: int, limit: int = 20,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Top products for the entire year."""
         try:
             return self._report_svc.generate_yearly_bestsellers(year, limit)
@@ -460,7 +461,7 @@ class ReportsController:
             logger.error("Failed to get yearly bestsellers: %s", exc)
             return []
 
-    def get_active_shift_id(self) -> Optional[int]:
+    def get_active_shift_id(self) -> int | None:
         """Get current active shift ID."""
         try:
             shift = self._financial_svc._financial.get_active_shift()

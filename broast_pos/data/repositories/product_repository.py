@@ -8,7 +8,6 @@ Sort order matters — the POS grid displays in configured order.
 from __future__ import annotations
 
 import sqlite3
-from typing import List, Optional
 
 from broast_pos.core.models.product import Category, Product
 from broast_pos.data.repositories.base_repository import BaseRepository
@@ -21,7 +20,7 @@ class ProductRepository(BaseRepository[Product]):
     # Core contract (for Product)
     # ------------------------------------------------------------------
 
-    def get_by_id(self, entity_id: int) -> Optional[Product]:
+    def get_by_id(self, entity_id: int) -> Product | None:
         row = self._db.fetch_one("SELECT * FROM products WHERE id = ?", (entity_id,))
         return self._row_to_product(row) if row else None
 
@@ -39,14 +38,14 @@ class ProductRepository(BaseRepository[Product]):
     # Category queries
     # ------------------------------------------------------------------
 
-    def get_categories(self) -> List[Category]:
+    def get_categories(self) -> list[Category]:
         """Sorted list of active categories — for POS tab bar."""
         rows = self._db.fetch_all(
             "SELECT * FROM categories WHERE is_active = 1 ORDER BY sort_order, name"
         )
         return [self._row_to_category(r) for r in rows]
 
-    def get_category_by_id(self, category_id: int) -> Optional[Category]:
+    def get_category_by_id(self, category_id: int) -> Category | None:
         """Fetch a single category."""
         row = self._db.fetch_one(
             "SELECT * FROM categories WHERE id = ?", (category_id,)
@@ -78,7 +77,7 @@ class ProductRepository(BaseRepository[Product]):
         )
         self._db.commit()
 
-    def get_all_categories(self) -> List[Category]:
+    def get_all_categories(self) -> list[Category]:
         """All categories (active and inactive) — for category management screen."""
         rows = self._db.fetch_all(
             "SELECT * FROM categories ORDER BY sort_order, name"
@@ -89,7 +88,7 @@ class ProductRepository(BaseRepository[Product]):
     # Product queries
     # ------------------------------------------------------------------
 
-    def get_products_by_category(self, category_id: int) -> List[Product]:
+    def get_products_by_category(self, category_id: int) -> list[Product]:
         """Sorted products for a category — for POS grid display."""
         rows = self._db.fetch_all(
             """SELECT * FROM products
@@ -99,7 +98,7 @@ class ProductRepository(BaseRepository[Product]):
         )
         return [self._row_to_product(r) for r in rows]
 
-    def search_products(self, query: str) -> List[Product]:
+    def search_products(self, query: str) -> list[Product]:
         """Text search across product names."""
         rows = self._db.fetch_all(
             "SELECT * FROM products WHERE name LIKE ? AND is_active = 1 ORDER BY name",
@@ -107,14 +106,14 @@ class ProductRepository(BaseRepository[Product]):
         )
         return [self._row_to_product(r) for r in rows]
 
-    def get_all_active_products(self) -> List[Product]:
+    def get_all_active_products(self) -> list[Product]:
         """All active products — for product management screen."""
         rows = self._db.fetch_all(
             "SELECT * FROM products WHERE is_active = 1 ORDER BY category_id, sort_order"
         )
         return [self._row_to_product(r) for r in rows]
 
-    def get_all_products(self) -> List[Product]:
+    def get_all_products(self) -> list[Product]:
         """All products (active and inactive) — for product management screen."""
         rows = self._db.fetch_all(
             "SELECT * FROM products ORDER BY category_id, sort_order"

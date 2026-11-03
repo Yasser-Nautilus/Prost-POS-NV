@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from broast_pos.infrastructure.printing.escpos_printer import EscPosPrinter
 from broast_pos.infrastructure.printing.printer_config import (
@@ -49,7 +49,7 @@ class PrinterManager:
     """
 
     def __init__(self) -> None:
-        self._printers: Dict[str, EscPosPrinter] = {}
+        self._printers: dict[str, EscPosPrinter] = {}
         self._kitchen_lock = threading.Lock()
 
     # ------------------------------------------------------------------
@@ -93,7 +93,7 @@ class PrinterManager:
     # Print jobs — NEVER raise
     # ------------------------------------------------------------------
 
-    def print_kitchen_ticket_job(self, order: Dict[str, Any]) -> bool:
+    def print_kitchen_ticket_job(self, order: dict[str, Any]) -> bool:
         """Print kitchen ticket → always routes to kitchen printer.
 
         Thread-safe: kitchen lock prevents interleaved output from
@@ -113,8 +113,8 @@ class PrinterManager:
 
     def print_amendment_ticket_job(
         self,
-        order: Dict[str, Any],
-        changes: List[Dict[str, Any]],
+        order: dict[str, Any],
+        changes: list[dict[str, Any]],
     ) -> bool:
         """Print amendment kitchen ticket (تابع) → kitchen printer."""
         printer = self._printers.get(KITCHEN)
@@ -131,7 +131,7 @@ class PrinterManager:
 
     def print_receipt(
         self,
-        order: Dict[str, Any],
+        order: dict[str, Any],
         cashier_slot: int = 1,
     ) -> bool:
         """Print customer receipt → routes to correct cashier printer.
@@ -154,9 +154,9 @@ class PrinterManager:
 
     def print_shift_summary(
         self,
-        report: Dict[str, Any],
+        report: dict[str, Any],
         cashier_slot: int = 1,
-        shift_period: Optional[Dict[str, str]] = None,
+        shift_period: dict[str, str] | None = None,
     ) -> bool:
         """Print end-of-day sales report → cashier printer."""
         key = _SLOT_MAP.get(cashier_slot, CASHIER_1)
@@ -173,7 +173,7 @@ class PrinterManager:
 
     def print_shift_transfer(
         self,
-        transfer: Dict[str, Any],
+        transfer: dict[str, Any],
         cashier_slot: int = 1,
     ) -> bool:
         """Print shift transfer report → cashier printer."""
@@ -190,7 +190,7 @@ class PrinterManager:
 
     def print_driver_settlement_job(
         self,
-        settlement: Dict[str, Any],
+        settlement: dict[str, Any],
         cashier_slot: int = 1,
     ) -> bool:
         """Print driver settlement receipt → cashier printer."""
@@ -207,7 +207,7 @@ class PrinterManager:
 
     def print_driver_summary_job(
         self,
-        summary: Dict[str, Any],
+        summary: dict[str, Any],
         cashier_slot: int = 1,
     ) -> bool:
         """Print end-of-day driver summary → cashier printer."""

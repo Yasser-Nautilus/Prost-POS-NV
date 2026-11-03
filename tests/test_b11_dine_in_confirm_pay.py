@@ -12,16 +12,19 @@ Verifies:
 """
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock
 
-from broast_pos.core.models.order import (
-    Order, OrderItem, OrderStatus, OrderType,
-)
-from broast_pos.core.services.order_service import OrderService
-from broast_pos.core.services.audit_service import AuditService
-from broast_pos.features.order_lifecycle.order_controller import OrderController
+import pytest
 
+from broast_pos.core.models.order import (
+    Order,
+    OrderItem,
+    OrderStatus,
+    OrderType,
+)
+from broast_pos.core.services.audit_service import AuditService
+from broast_pos.core.services.order_service import OrderService
+from broast_pos.features.order_lifecycle.order_controller import OrderController
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -210,7 +213,7 @@ class TestCompletePaymentClearsCurrentOrder:
         ctrl = _ctrl_stub(order, order_svc=svc)
         ctrl._occupied_tables = {2: "#55"}
 
-        ok, msg = ctrl.complete_payment(
+        ok, _msg = ctrl.complete_payment(
             order_id=7,
             payment_method="cash",
             amount_paid=150.0,
@@ -237,7 +240,7 @@ class TestCompletePaymentClearsCurrentOrder:
         svc.complete_order.return_value = takeaway
         ctrl = _ctrl_stub(takeaway, order_svc=svc)
 
-        ok, msg = ctrl.complete_payment(
+        ok, _msg = ctrl.complete_payment(
             order_id=12,
             payment_method="cash",
             amount_paid=100.0,

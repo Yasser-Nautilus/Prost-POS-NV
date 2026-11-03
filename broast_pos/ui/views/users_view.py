@@ -5,11 +5,9 @@ Users view — manager-only screen to manage system users/cashiers, roles, and P
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QRegularExpression, Qt
 from PyQt6.QtGui import QRegularExpressionValidator
-from PyQt6.QtCore import QRegularExpression
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -41,7 +39,7 @@ class UsersView(QWidget):
     def __init__(
         self,
         auth_service: AuthService,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._auth = auth_service
@@ -127,7 +125,7 @@ class UsersView(QWidget):
             users = self._auth.get_users_for_management()
         except Exception as e:
             logger.exception("Failed to load users")
-            QMessageBox.critical(self, "خطأ", f"فشل تحميل بيانات المستخدمين: {str(e)}")
+            QMessageBox.critical(self, "خطأ", f"فشل تحميل بيانات المستخدمين: {e!s}")
             return
 
         self._users_table.setRowCount(0)
@@ -186,7 +184,7 @@ class UsersView(QWidget):
             self._auth.update_user(user_id, is_active=not current_status)
             self.refresh_users()
         except Exception as e:
-            QMessageBox.critical(self, "خطأ", f"فشل تغيير حالة المستخدم: {str(e)}")
+            QMessageBox.critical(self, "خطأ", f"فشل تغيير حالة المستخدم: {e!s}")
 
     def _on_add_user(self) -> None:
         dialog = UserFormDialog(parent=self)
@@ -209,7 +207,7 @@ class UsersView(QWidget):
                 )
                 self.refresh_users()
             except Exception as e:
-                QMessageBox.critical(self, "خطأ", f"فشل إضافة المستخدم: {str(e)}")
+                QMessageBox.critical(self, "خطأ", f"فشل إضافة المستخدم: {e!s}")
 
     def _on_edit_user(self, user: User) -> None:
         dialog = UserFormDialog(user, parent=self)
@@ -234,7 +232,7 @@ class UsersView(QWidget):
                 )
                 self.refresh_users()
             except Exception as e:
-                QMessageBox.critical(self, "خطأ", f"فشل تعديل المستخدم: {str(e)}")
+                QMessageBox.critical(self, "خطأ", f"فشل تعديل المستخدم: {e!s}")
 
 
 # ============================================================================
@@ -247,8 +245,8 @@ class UserFormDialog(QDialog):
 
     def __init__(
         self,
-        user: Optional[User] = None,
-        parent: Optional[QWidget] = None,
+        user: User | None = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("تعديل مستخدم" if user else "إضافة مستخدم جديد")
@@ -332,7 +330,7 @@ class UserFormDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
-    def get_data(self) -> tuple[str, str, str, Optional[int]]:
+    def get_data(self) -> tuple[str, str, str, int | None]:
         return (
             self._name_edit.text().strip(),
             self._role_combo.currentData(),

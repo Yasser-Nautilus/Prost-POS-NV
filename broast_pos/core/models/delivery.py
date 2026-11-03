@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional
 
 
 class DriverStatus(Enum):
@@ -39,22 +38,22 @@ class DeliveryTrip:
     - `cash_collected`: sum of order.total WHERE payment_method = 'cash'
     - `total_delivery_fees`: sum of delivery_fee for ALL orders on this trip
     """
-    id: Optional[int] = None
-    driver_id: Optional[int] = None
+    id: int | None = None
+    driver_id: int | None = None
     driver_name: str = ""
 
     # Trip lifecycle timestamps
-    created_at: Optional[str] = None
-    dispatched_at: Optional[str] = None
-    returned_at: Optional[str] = None
-    settled_at: Optional[str] = None
+    created_at: str | None = None
+    dispatched_at: str | None = None
+    returned_at: str | None = None
+    settled_at: str | None = None
 
     # Orders on this trip
-    order_ids: List[int] = field(default_factory=list)
+    order_ids: list[int] = field(default_factory=list)
 
     # Financial snapshots (set at settlement time)
-    cash_collected: Optional[float] = None
-    total_delivery_fees: Optional[float] = None
+    cash_collected: float | None = None
+    total_delivery_fees: float | None = None
 
     # Settlement flag
     is_settled: bool = False
@@ -77,7 +76,7 @@ class DriverAttendance:
 
     - `check_out_at` is NULL while driver is still checked in.
     """
-    id: Optional[int] = None
-    driver_id: Optional[int] = None
-    check_in_at: Optional[str] = None
-    check_out_at: Optional[str] = None  # NULL = still checked in
+    id: int | None = None
+    driver_id: int | None = None
+    check_in_at: str | None = None
+    check_out_at: str | None = None  # NULL = still checked in

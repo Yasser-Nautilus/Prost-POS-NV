@@ -11,7 +11,8 @@ atomically updates the order AND inserts an OrderStatusHistory record.
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING, List, Optional
+import logging
+from typing import TYPE_CHECKING
 
 from broast_pos.core.models.audit import AuditEventType
 from broast_pos.core.models.order import (
@@ -21,16 +22,20 @@ from broast_pos.core.models.order import (
     OrderType,
     PaymentMethod,
 )
-from broast_pos.data.repositories.order_repository import OrderRepository
-from broast_pos.data.repositories.audit_repository import AuditRepository
-from broast_pos.data.repositories.order_status_history_repository import OrderStatusHistoryRepository
-from broast_pos.core.services.audit_service import AuditService
 from broast_pos.core.policies.discount import compute_discount
+from broast_pos.core.services.audit_service import AuditService
+from broast_pos.data.repositories.audit_repository import AuditRepository
+from broast_pos.data.repositories.order_repository import OrderRepository
+from broast_pos.data.repositories.order_status_history_repository import (
+    OrderStatusHistoryRepository,
+)
 
 if TYPE_CHECKING:
     from broast_pos.core.services.auth_service import AuthService
-    from broast_pos.core.services.financial_service import FinancialService
     from broast_pos.core.services.cashier_session_service import CashierSessionService
+    from broast_pos.core.services.financial_service import FinancialService
+
+logger = logging.getLogger(__name__)
 
 # Lazy imports to avoid circular deps — loaded only when ledger is wired in.
 _LEDGER_IMPORTS_DONE = False
@@ -71,14 +76,14 @@ class OrderService:
 
     def __init__(
         self,
-        order_repo: Optional[OrderRepository] = None,
-        audit_repo: Optional[AuditRepository] = None,
-        auth_service: Optional["AuthService"] = None,
-        financial_service: Optional["FinancialService"] = None,
-        payment_coordinator: Optional[object] = None,
-        status_history_repo: Optional[OrderStatusHistoryRepository] = None,
-        audit_service: Optional[AuditService] = None,
-        session_service: Optional["CashierSessionService"] = None,
+        order_repo: OrderRepository | None = None,
+        audit_repo: AuditRepository | None = None,
+        auth_service: AuthService | None = None,
+        financial_service: FinancialService | None = None,
+        payment_coordinator: object | None = None,
+        status_history_repo: OrderStatusHistoryRepository | None = None,
+        audit_service: AuditService | None = None,
+        session_service: CashierSessionService | None = None,
         ledger_repo=None,           # CashLedgerRepository (Phase 3)
         cashier_session_repo=None,  # CashierSessionRepository (Phase 3)
         delivery_repo=None,         # DeliveryRepository (C4)
@@ -94,7 +99,9 @@ class OrderService:
         # B-03: _audit_svc is ALWAYS an AuditService — never None, never bypassed.
         self._audit_svc: AuditService = audit_service or AuditService(self._audit)
         if payment_coordinator is None:
-            from broast_pos.features.order_lifecycle.payment_coordinator import PaymentCoordinator
+            from broast_pos.features.order_lifecycle.payment_coordinator import (
+                PaymentCoordinator,
+            )
             payment_coordinator = PaymentCoordinator()
         self._payments = payment_coordinator
         # Phase 3: cash ledger wiring (optional — skipped if not injected)
@@ -174,7 +181,8 @@ class OrderService:
                 changed_by_name=cashier_name,
             )
         except Exception:
-            pass  # History failure must not block order creation
+            # Checkup-Fix: History failure must not block order creation, but log it.
+            logger.warning("Status-history record failed for new order %s", saved.id, exc_info=True)
 
         return saved
 
@@ -186,9 +194,9 @@ class OrderService:
         self,
         order_id: int,
         new_status: OrderStatus,
-        changed_by_id: Optional[int] = None,
-        changed_by_name: Optional[str] = None,
-        reason: Optional[str] = None,
+        changed_by_id: int | None = None,
+        changed_by_name: str | None = None,
+        reason: str | None = None,
     ) -> Order:
         """Validate, apply, and record a status transition.
 
@@ -249,9 +257,9 @@ class OrderService:
     def amend_order(
         self,
         order_id: int,
-        added_items: List[OrderItem],
-        removed_items: List[OrderItem],
-        manager_pin: Optional[str] = None,
+        added_items: list[OrderItem],
+        removed_items: list[OrderItem],
+        manager_pin: str | None = None,
     ) -> Order:
         """Edit a saved order — add or remove items.
 
@@ -317,7 +325,7 @@ class OrderService:
         order_id: int,
         payment_method: PaymentMethod,
         amount_received: float = 0.0,
-        actor_id: Optional[int] = None,
+        actor_id: int | None = None,
         actor_name: str = "نظام",
         finalize: bool = True,
     ) -> Order:
@@ -391,7 +399,8 @@ class OrderService:
                     changed_by_name=actor_name,
                 )
             except Exception:
-                pass
+                # Checkup-Fix: non-fatal status-history write, but log it.
+                logger.warning("Status-history record failed on completion", exc_info=True)
 
         return saved
 
@@ -402,7 +411,7 @@ class OrderService:
     def cancel_order(
         self,
         order_id: int,
-        manager_pin: Optional[str] = None,
+        manager_pin: str | None = None,
         reason: str = "",
     ) -> Order:
         """Cancel an order — requires manager PIN + reason.
@@ -450,7 +459,8 @@ class OrderService:
                 if trip and not trip.is_settled:
                     self._delivery_repo.remove_order_from_trip(trip.id, order_id)
             except Exception:
-                pass
+                # Checkup-Fix: detaching the cancelled order from its trip is best-effort.
+                logger.warning("Removing cancelled order %s from trip failed", order_id, exc_info=True)
 
         # Record status history
         try:
@@ -463,7 +473,8 @@ class OrderService:
                 reason=reason,
             )
         except Exception:
-            pass
+            # Checkup-Fix: non-fatal status-history write on cancel, but log it.
+            logger.warning("Status-history record failed on cancellation of order %s", order_id, exc_info=True)
 
         # B-03: Audit trail — always via AuditService (never direct repo)
         self._audit_svc.log(
@@ -491,7 +502,7 @@ class OrderService:
         order: Order,
         value: float,
         discount_type: str,
-        manager_pin: Optional[str] = None,
+        manager_pin: str | None = None,
     ) -> Order:
         """Apply discount to order — requires manager PIN.
 
@@ -547,11 +558,11 @@ class OrderService:
     # Query helpers
     # ------------------------------------------------------------------
 
-    def get_order_by_id(self, order_id: int) -> Optional[Order]:
+    def get_order_by_id(self, order_id: int) -> Order | None:
         """Fetch a single order."""
         return self._orders.get_by_id(order_id)
 
-    def get_order_by_table(self, table_number: int) -> Optional[Order]:
+    def get_order_by_table(self, table_number: int) -> Order | None:
         """Load the active dine-in order for a table."""
         return self._orders.get_by_table(table_number)
 
@@ -582,11 +593,11 @@ class OrderService:
         order.table_no = new_table_number
         return self._orders.save(order)
 
-    def get_active_orders(self) -> List[Order]:
+    def get_active_orders(self) -> list[Order]:
         """All non-completed, non-cancelled orders."""
         return self._orders.get_active_orders()
 
-    def get_active_by_type(self, order_type: OrderType) -> List[Order]:
+    def get_active_by_type(self, order_type: OrderType) -> list[Order]:
         """Active orders filtered by type."""
         return self._orders.get_active_by_type(order_type)
 
@@ -595,8 +606,8 @@ class OrderService:
     TAKEAWAY_AUTO_CLOSE_MINUTES = 30
 
     def auto_complete_expired_takeaways(
-        self, minutes: Optional[int] = None
-    ) -> List[int]:
+        self, minutes: int | None = None
+    ) -> list[int]:
         """Close paid takeaway orders whose pickup window has elapsed.
 
         Takeaway is paid up front but kept on the live board while the customer
@@ -610,7 +621,7 @@ class OrderService:
         if minutes is None:
             minutes = self.TAKEAWAY_AUTO_CLOSE_MINUTES
         cutoff = datetime.datetime.now() - datetime.timedelta(minutes=minutes)
-        closed: List[int] = []
+        closed: list[int] = []
         for order in self._orders.get_active_by_type(OrderType.TAKEAWAY):
             # C1: NEVER auto-complete unpaid takeaway orders
             if not order.is_paid:
@@ -636,11 +647,12 @@ class OrderService:
                     changed_by_name="النظام (تلقائي)",
                 )
             except Exception:
-                pass
+                # Checkup-Fix: non-fatal auto-complete status-history write, but log it.
+                logger.warning("Status-history record failed on auto-complete", exc_info=True)
             closed.append(order.id)
         return closed
 
-    def get_order_history(self, date_str: Optional[str] = None) -> List[Order]:
+    def get_order_history(self, date_str: str | None = None) -> list[Order]:
         """Finished orders (completed + cancelled) for a date, newest first.
 
         Defaults to today. Powers the order archive ("سجل الأوردرات").
@@ -649,7 +661,7 @@ class OrderService:
             date_str = datetime.date.today().isoformat()
         return self._orders.get_finished_for_date(date_str)
 
-    def get_unassigned_deliveries(self) -> List[Order]:
+    def get_unassigned_deliveries(self) -> list[Order]:
         """Delivery orders not yet assigned to a driver."""
         return self._orders.get_unassigned_deliveries()
 
@@ -688,7 +700,7 @@ class OrderService:
             + order.delivery_fee
         )
 
-    def _verify_manager_pin(self, pin: Optional[str]):
+    def _verify_manager_pin(self, pin: str | None):
         """Hash PIN and verify against a manager/admin user.
 
         Returns the manager User object.
@@ -763,8 +775,12 @@ class OrderService:
         self, order: Order, actor_id: int, reason: str
     ) -> None:
         """C6: Create a REVERSAL entry when a paid cash order is cancelled."""
-        from broast_pos.core.models.cashier_session import CashLedgerEntry, LedgerEntryType
         import datetime as _dt
+
+        from broast_pos.core.models.cashier_session import (
+            CashLedgerEntry,
+            LedgerEntryType,
+        )
 
         sale_entry = self._ledger.get_entry_by_order(order.id, LedgerEntryType.SALE_CASH)
         if sale_entry is None:
@@ -782,15 +798,15 @@ class OrderService:
             actor_id=actor_id,
             approved_by=actor_id,
             reason=f"الغاء طلب #{order.invoice_no}: {reason}",
-            created_at=_dt.datetime.now(_dt.timezone.utc).isoformat(),
+            created_at=_dt.datetime.now(_dt.UTC).isoformat(),
         ))
 
     def _create_sale_cash_entry(
         self,
         order,
-        actor_id: Optional[int],
+        actor_id: int | None,
         shift_id: int,
-        cashier_id: Optional[int],
+        cashier_id: int | None,
     ) -> None:
         """
         Append a SALE_CASH entry to the active cashier session's ledger.
@@ -803,11 +819,15 @@ class OrderService:
 
         Called only for CASH payments from complete_order().
         """
-        from broast_pos.core.models.cashier_session import CashLedgerEntry, LedgerEntryType
         import datetime as _dt
 
+        from broast_pos.core.models.cashier_session import (
+            CashLedgerEntry,
+            LedgerEntryType,
+        )
+
         # Resolve session_id
-        session_id: Optional[int] = None
+        session_id: int | None = None
         if self._cashier_sessions is not None and cashier_id is not None:
             open_sessions = self._cashier_sessions.get_open_sessions_for_day(
                 day_id=shift_id
@@ -831,5 +851,5 @@ class OrderService:
             amount_pt=amount_pt,
             order_id=order.id,
             actor_id=actor_id or cashier_id or 0,
-            created_at=_dt.datetime.now(_dt.timezone.utc).isoformat(),
+            created_at=_dt.datetime.now(_dt.UTC).isoformat(),
         ))

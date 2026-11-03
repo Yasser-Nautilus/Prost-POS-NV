@@ -50,7 +50,7 @@ _SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
-def initialise_database(db: "DatabaseConnection") -> None:
+def initialise_database(db: DatabaseConnection) -> None:
     """Create tables (if missing) and run any pending migrations.
 
     Call once at application startup, right after obtaining the singleton.
@@ -63,14 +63,14 @@ def initialise_database(db: "DatabaseConnection") -> None:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-def _apply_schema(db: "DatabaseConnection") -> None:
+def _apply_schema(db: DatabaseConnection) -> None:
     """Execute schema.sql to create all tables and indexes (idempotent)."""
     schema_sql = _SCHEMA_PATH.read_text(encoding="utf-8")
     db.executescript(schema_sql)
     logger.info("Schema applied from %s", _SCHEMA_PATH.name)
 
 
-def _ensure_version_row(db: "DatabaseConnection") -> None:
+def _ensure_version_row(db: DatabaseConnection) -> None:
     """Guarantee that schema_version has exactly one row."""
     row = db.fetch_one("SELECT version FROM schema_version LIMIT 1")
     if row is None:
@@ -82,12 +82,12 @@ def _ensure_version_row(db: "DatabaseConnection") -> None:
         logger.info("Initialised schema_version to v%d (fresh install)", LATEST_VERSION)
 
 
-def _get_current_version(db: "DatabaseConnection") -> int:
+def _get_current_version(db: DatabaseConnection) -> int:
     row = db.fetch_one("SELECT version FROM schema_version LIMIT 1")
     return row["version"]
 
 
-def _set_version(db: "DatabaseConnection", version: int) -> None:
+def _set_version(db: DatabaseConnection, version: int) -> None:
     db.execute(
         "UPDATE schema_version SET version = ?, applied_at = datetime('now')",
         (version,),
@@ -95,7 +95,7 @@ def _set_version(db: "DatabaseConnection", version: int) -> None:
     db.commit()
 
 
-def _run_pending_migrations(db: "DatabaseConnection") -> None:
+def _run_pending_migrations(db: DatabaseConnection) -> None:
     """Apply every migration between the current version and LATEST_VERSION."""
     current = _get_current_version(db)
 
@@ -131,7 +131,7 @@ def _run_pending_migrations(db: "DatabaseConnection") -> None:
 # Migration functions (defined BEFORE _MIGRATIONS dict)
 # ============================================================================
 
-def _migrate_v1_to_v2(db: "DatabaseConnection") -> None:
+def _migrate_v1_to_v2(db: DatabaseConnection) -> None:
     """v1 → v2: Add order_status_history table and its indexes."""
     db.execute("""
         CREATE TABLE IF NOT EXISTS order_status_history (
@@ -156,7 +156,7 @@ def _migrate_v1_to_v2(db: "DatabaseConnection") -> None:
     db.commit()
 
 
-def _migrate_v2_to_v3(db: "DatabaseConnection") -> None:
+def _migrate_v2_to_v3(db: DatabaseConnection) -> None:
     """v2 → v3: Extend audit_log with entity and before/after fields.
 
     All new columns are nullable — existing rows stay valid.
@@ -182,7 +182,7 @@ def _migrate_v2_to_v3(db: "DatabaseConnection") -> None:
     db.commit()
 
 
-def _migrate_v3_to_v4(db: "DatabaseConnection") -> None:
+def _migrate_v3_to_v4(db: DatabaseConnection) -> None:
     """v3 → v4: Add driver_settlements table and index."""
     db.execute("""
         CREATE TABLE IF NOT EXISTS driver_settlements (
@@ -209,7 +209,7 @@ def _migrate_v3_to_v4(db: "DatabaseConnection") -> None:
     db.commit()
 
 
-def _migrate_v4_to_v5(db: "DatabaseConnection") -> None:
+def _migrate_v4_to_v5(db: DatabaseConnection) -> None:
     """v4 → v5: Add cashier_sessions + cash_ledger tables (Phase 1 of v2)."""
 
     # ── 1. Extend shifts table with business-date + close metadata ────
@@ -338,7 +338,7 @@ def _migrate_v4_to_v5(db: "DatabaseConnection") -> None:
     db.commit()
 
 
-def _migrate_v5_to_v6(db: "DatabaseConnection") -> None:
+def _migrate_v5_to_v6(db: DatabaseConnection) -> None:
     """v5 → v6: Add users.pin_salt for salted+peppered PIN hashing.
 
     The column is nullable. Existing users keep their legacy (unsalted)

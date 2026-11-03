@@ -20,8 +20,8 @@ import os
 import secrets
 import time
 from enum import Enum
-from typing import Dict, List, Optional, Set, Tuple
 
+from broast_pos.config import config
 from broast_pos.core.models.user import User, UserRole
 from broast_pos.data.repositories.user_repository import UserRepository
 
@@ -35,7 +35,24 @@ _LOCKOUT_SECONDS: int = 30  # lockout window
 # Secret pepper mixed into every salted PIN hash. Kept OUT of the database so a
 # stolen DB file alone cannot brute-force short PINs via rainbow tables.
 # Override in production via the BROAST_PIN_PEPPER environment variable.
-_PIN_PEPPER: str = os.environ.get("BROAST_PIN_PEPPER", "broast-pos-default-pepper-change-me")
+_DEFAULT_PEPPER = "broast-pos-default-pepper-change-me"
+_PIN_PEPPER: str = os.environ.get("BROAST_PIN_PEPPER", _DEFAULT_PEPPER)
+
+# Checkup-Fix: der Default-Pepper darf niemals in Produktion aktiv sein.
+# In "prod" ohne gesetztes BROAST_PIN_PEPPER wird hart abgebrochen statt still
+# mit einem öffentlich bekannten Pepper weiterzulaufen.
+if _PIN_PEPPER == _DEFAULT_PEPPER and config.ENVIRONMENT == "prod":
+    raise RuntimeError(
+        "BROAST_PIN_PEPPER must be set in production (APP_ENV=prod). "
+        "Refusing to run with the public default pepper."
+    )
+
+# Checkup-Fix: PBKDF2 statt Single-Round-SHA-256 — macht das Durchprobieren
+# aller 10k vierstelligen PINs teuer. Versioniertes Format erlaubt es, alte
+# (bare-hex) und neue Hashes nebeneinander zu verifizieren.
+_PBKDF2_ALGO = "sha256"
+_PBKDF2_ITERATIONS = 100_000
+_PBKDF2_PREFIX = "pbkdf2_sha256$"
 
 
 class Action(str, Enum):
@@ -53,7 +70,7 @@ class Action(str, Enum):
 
 
 # Role → allowed actions
-_PERMISSIONS: Dict[UserRole, Set[Action]] = {
+_PERMISSIONS: dict[UserRole, set[Action]] = {
     UserRole.CASHIER: {
         Action.CREATE_ORDER,
         Action.CHECK_IN_OUT_DRIVERS,
@@ -77,13 +94,13 @@ _PERMISSIONS: Dict[UserRole, Set[Action]] = {
 class AuthService:
     """Login, session management, permission checks, and manager override."""
 
-    def __init__(self, user_repo: Optional[UserRepository] = None) -> None:
+    def __init__(self, user_repo: UserRepository | None = None) -> None:
         self._users = user_repo or UserRepository()
-        self._current_user: Optional[User] = None
+        self._current_user: User | None = None
         # B-08: in-memory throttle store — {identifier: (failure_count, first_failure_ts)}
         # Identifier: str(user_id) for login(), pin_hash[:8] for pin-only paths.
         # Resets on process restart (acceptable for a local POS).
-        self._throttle: Dict[str, Tuple[int, float]] = {}
+        self._throttle: dict[str, tuple[int, float]] = {}
         # Optional audit repository for recording failed attempts
         self._audit = None  # injected via set_audit() after construction
 
@@ -95,7 +112,7 @@ class AuthService:
     # Session management
     # ------------------------------------------------------------------
 
-    def get_all_users(self) -> List[User]:
+    def get_all_users(self) -> list[User]:
         """Return all active users for the login screen tiles."""
         return self._users.get_all_active()
 
@@ -152,7 +169,7 @@ class AuthService:
         """Clear the active session — return to login screen."""
         self._current_user = None
 
-    def get_current_user(self) -> Optional[User]:
+    def get_current_user(self) -> User | None:
         """Return the currently logged-in user, or None."""
         return self._current_user
 
@@ -164,7 +181,7 @@ class AuthService:
     # Manager override (PIN verification)
     # ------------------------------------------------------------------
 
-    def verify_pin(self, pin: str) -> Optional[User]:
+    def verify_pin(self, pin: str) -> User | None:
         """Verify a PIN belongs to a MANAGER or ADMIN user.
 
         B-08: throttled to prevent manager-PIN brute-force during overrides.
@@ -218,7 +235,7 @@ class AuthService:
     # User management (admin only)
     # ------------------------------------------------------------------
 
-    def get_users_for_management(self) -> List[User]:
+    def get_users_for_management(self) -> list[User]:
         """Return all users (active and inactive) for admin management."""
         return self._users.get_all()
 
@@ -228,8 +245,8 @@ class AuthService:
         display_name: str,
         role: UserRole,
         pin: str,
-        cashier_slot: Optional[int] = None,
-        avatar_path: Optional[str] = None,
+        cashier_slot: int | None = None,
+        avatar_path: str | None = None,
     ) -> User:
         """Create a new user. Validates username and unique PIN."""
         username = username.strip()
@@ -268,13 +285,13 @@ class AuthService:
     def update_user(
         self,
         user_id: int,
-        username: Optional[str] = None,
-        display_name: Optional[str] = None,
-        role: Optional[UserRole] = None,
-        pin: Optional[str] = None,
-        cashier_slot: Optional[int] = -1,  # use -1 as sentinel
-        avatar_path: Optional[str] = None,
-        is_active: Optional[bool] = None,
+        username: str | None = None,
+        display_name: str | None = None,
+        role: UserRole | None = None,
+        pin: str | None = None,
+        cashier_slot: int | None = -1,  # use -1 as sentinel
+        avatar_path: str | None = None,
+        is_active: bool | None = None,
     ) -> User:
         """Update an existing user. Validates unique PIN if changed."""
         user = self._users.get_by_id(user_id)
@@ -343,23 +360,55 @@ class AuthService:
 
     @staticmethod
     def _hash_secure(raw_pin: str, salt: str) -> str:
-        """Salted + peppered SHA-256 hash. Used for all PINs from v6 on."""
+        """Salted + peppered PBKDF2-HMAC-SHA256 hash (versioned format).
+
+        Checkup-Fix: ersetzt den früheren Single-Round-SHA-256. Rückgabe-Format
+        ``pbkdf2_sha256$<iterations>$<hex>`` macht das Schema selbstbeschreibend.
+        """
+        dk = hashlib.pbkdf2_hmac(
+            _PBKDF2_ALGO,
+            (_PIN_PEPPER + raw_pin).encode("utf-8"),
+            salt.encode("utf-8"),
+            _PBKDF2_ITERATIONS,
+        )
+        return f"{_PBKDF2_PREFIX}{_PBKDF2_ITERATIONS}${dk.hex()}"
+
+    @staticmethod
+    def _hash_legacy_salted(raw_pin: str, salt: str) -> str:
+        """Pre-checkup salted SHA-256 hash — kept only to verify old v6 hashes."""
         return hashlib.sha256((_PIN_PEPPER + salt + raw_pin).encode("utf-8")).hexdigest()
 
     def _verify_pin(self, user: User, raw_pin: str) -> bool:
-        """Return True if *raw_pin* matches *user*'s stored hash (either scheme)."""
+        """Return True if *raw_pin* matches *user*'s stored hash (any scheme)."""
         if user.pin_salt:
-            return user.pin_hash == self._hash_secure(raw_pin, user.pin_salt)
-        return user.pin_hash == self.hash_pin(raw_pin)
+            stored = user.pin_hash or ""
+            if stored.startswith(_PBKDF2_PREFIX):
+                # Format: pbkdf2_sha256$<iterations>$<hex>
+                try:
+                    _, iter_str, expected = stored.split("$", 2)
+                    iterations = int(iter_str)
+                except (ValueError, AttributeError):
+                    return False
+                dk = hashlib.pbkdf2_hmac(
+                    _PBKDF2_ALGO,
+                    (_PIN_PEPPER + raw_pin).encode("utf-8"),
+                    user.pin_salt.encode("utf-8"),
+                    iterations,
+                )
+                return secrets.compare_digest(dk.hex(), expected)
+            # Legacy salted SHA-256 (will be upgraded on next successful login)
+            return secrets.compare_digest(stored, self._hash_legacy_salted(raw_pin, user.pin_salt))
+        return secrets.compare_digest(user.pin_hash or "", self.hash_pin(raw_pin))
 
     def _upgrade_if_legacy(self, user: User, raw_pin: str) -> None:
-        """Transparently migrate a legacy (unsalted) user to a salted hash.
+        """Transparently migrate a user to the current PBKDF2 hash scheme.
 
-        Called after a successful authentication. Non-fatal: a failure here
-        never blocks the login.
+        Checkup-Fix: upgradet jetzt sowohl unsaltete Legacy-Hashes ALS AUCH die
+        alten salted-SHA-256-Hashes auf PBKDF2. Called after a successful
+        authentication; non-fatal — a failure here never blocks the login.
         """
-        if user.pin_salt:
-            return
+        if user.pin_salt and (user.pin_hash or "").startswith(_PBKDF2_PREFIX):
+            return  # already on the current scheme
         try:
             salt = self._make_salt()
             user.pin_salt = salt
@@ -368,7 +417,7 @@ class AuthService:
         except Exception:
             logger.exception("PIN upgrade failed for user id=%s", getattr(user, "id", "?"))
 
-    def _find_user_by_pin(self, raw_pin: str) -> Optional[User]:
+    def _find_user_by_pin(self, raw_pin: str) -> User | None:
         """Resolve a user from a PIN alone, across both hashing schemes.
 
         Fast path: legacy unsalted hash lookup (covers not-yet-upgraded users).
@@ -387,7 +436,7 @@ class AuthService:
             return None
         return None
 
-    def _pin_in_use(self, raw_pin: str, exclude_user_id: Optional[int] = None) -> bool:
+    def _pin_in_use(self, raw_pin: str, exclude_user_id: int | None = None) -> bool:
         """True if *raw_pin* already authenticates some other active user."""
         if self._users.pin_exists(self.hash_pin(raw_pin), exclude_user_id=exclude_user_id):
             return True
@@ -426,7 +475,7 @@ class AuthService:
                 # Lockout expired — reset
                 del self._throttle[key]
 
-    def _record_failure(self, key: str, user_id: Optional[int], reason: str) -> None:
+    def _record_failure(self, key: str, user_id: int | None, reason: str) -> None:
         """Increment failure count and optionally log to audit."""
         now = time.monotonic()
         if key in self._throttle:
@@ -448,13 +497,14 @@ class AuthService:
                     details={"reason": reason, "attempt": count_after, "key": key},
                 )
             except Exception:
-                pass
+                # Checkup-Fix: audit write is best-effort, but log the failure.
+                logger.debug("Audit log of failed login could not be written", exc_info=True)
 
     def _reset_throttle(self, key: str) -> None:
         """Clear failure count after a successful authentication."""
         self._throttle.pop(key, None)
 
-    def get_throttle_state(self, key: str) -> Tuple[int, bool]:
+    def get_throttle_state(self, key: str) -> tuple[int, bool]:
         """Return (attempt_count, is_locked_out) for a given key (testing/debug)."""
         record = self._throttle.get(key)
         if record is None:

@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
 
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -46,8 +45,8 @@ from PyQt6.QtWidgets import (
 )
 
 from broast_pos.config.config import (
-    get_takeaway_auto_complete_minutes,
     TRACKING_REFRESH_SECONDS,
+    get_takeaway_auto_complete_minutes,
 )
 from broast_pos.core.models.order import Order, OrderStatus, OrderType
 from broast_pos.core.services.order_service import OrderService
@@ -60,21 +59,21 @@ logger = logging.getLogger(__name__)
 # Arabic labels
 # ============================================================================
 
-_TYPE_LABELS: Dict[OrderType, str] = {
+_TYPE_LABELS: dict[OrderType, str] = {
     OrderType.DINE_IN: "صالة",
     OrderType.TAKEAWAY: "تيك اواي",
     OrderType.DELIVERY: "دليفري",
     OrderType.PICKUP: "استلام محل",
 }
 
-_TYPE_ICONS: Dict[OrderType, str] = {
+_TYPE_ICONS: dict[OrderType, str] = {
     OrderType.DINE_IN: "🍽",
     OrderType.TAKEAWAY: "🥡",
     OrderType.DELIVERY: "🚚",
     OrderType.PICKUP: "🏪",
 }
 
-_STATUS_LABELS: Dict[OrderStatus, str] = {
+_STATUS_LABELS: dict[OrderStatus, str] = {
     OrderStatus.NEW: "جديد",
     OrderStatus.PREPARING: "قيد التحضير",
     OrderStatus.READY: "جاهز",
@@ -85,7 +84,7 @@ _STATUS_LABELS: Dict[OrderStatus, str] = {
     OrderStatus.CANCELLED: "ملغي",
 }
 
-_STATUS_COLORS: Dict[OrderStatus, str] = {}
+_STATUS_COLORS: dict[OrderStatus, str] = {}
 
 
 def _init_status_colors() -> None:
@@ -138,14 +137,14 @@ class OrderCard(QFrame):
         self,
         order: Order,
         highlighted: bool = False,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._order = order
         self._highlighted = highlighted
         self._expanded = False
-        self._elapsed_label: Optional[QLabel] = None
-        self._items_container: Optional[QWidget] = None
+        self._elapsed_label: QLabel | None = None
+        self._items_container: QWidget | None = None
 
         self.setObjectName("orderCard")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -340,7 +339,7 @@ class OrderCard(QFrame):
         else:
             self._elapsed_label.setText("⏱ —:—")
 
-    def _compute_elapsed(self) -> Optional[timedelta]:
+    def _compute_elapsed(self) -> timedelta | None:
         """Calculate time since order creation."""
         if not self._order.created_at:
             return None
@@ -381,13 +380,13 @@ class TrackingView(QWidget):
     def __init__(
         self,
         order_service: OrderService,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._order_svc = order_service
-        self._active_filter: Optional[OrderType] = None  # None = all
+        self._active_filter: OrderType | None = None  # None = all
         self._search_query: str = ""
-        self._cards: List[OrderCard] = []
+        self._cards: list[OrderCard] = []
         self._dismissed_highlights: set = set()  # order_ids where highlight was dismissed
 
         self._setup_ui()
@@ -430,7 +429,7 @@ class TrackingView(QWidget):
         header.addStretch()
 
         # Filter tabs
-        self._filter_buttons: Dict[Optional[OrderType], QPushButton] = {}
+        self._filter_buttons: dict[OrderType | None, QPushButton] = {}
         for label, order_type in _FILTER_TABS:
             btn = QPushButton(label)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -481,7 +480,7 @@ class TrackingView(QWidget):
     # Filter handling
     # ------------------------------------------------------------------
 
-    def _on_filter_changed(self, order_type: Optional[OrderType]) -> None:
+    def _on_filter_changed(self, order_type: OrderType | None) -> None:
         self._active_filter = order_type
         self._update_filter_styles()
         self._refresh_orders()
@@ -582,7 +581,7 @@ class TrackingView(QWidget):
         self._rebuild_grid(orders)
         self._update_stats(orders)
 
-    def _rebuild_grid(self, orders: List[Order]) -> None:
+    def _rebuild_grid(self, orders: list[Order]) -> None:
         """Clear and rebuild the order card grid."""
         # Clear existing cards
         self._cards.clear()
@@ -634,7 +633,7 @@ class TrackingView(QWidget):
         except (ValueError, TypeError):
             return False
 
-    def _update_stats(self, orders: List[Order]) -> None:
+    def _update_stats(self, orders: list[Order]) -> None:
         """Update the stats bar."""
         total = len(orders)
         type_counts = {}

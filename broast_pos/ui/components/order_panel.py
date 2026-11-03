@@ -15,7 +15,6 @@ to do with them (update the in-memory Order, recalculate totals, etc.).
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -51,9 +50,9 @@ class OrderPanel(QWidget):
     item_removed = pyqtSignal(int)            # product_id
     note_changed = pyqtSignal(int, str)       # product_id, note_text
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._items: List[OrderItem] = []
+        self._items: list[OrderItem] = []
         self._subtotal: float = 0.0
         self._service: float = 0.0
         self._discount: float = 0.0
@@ -205,7 +204,7 @@ class OrderPanel(QWidget):
     # Public API
     # ------------------------------------------------------------------
 
-    def set_items(self, items: List[OrderItem]) -> None:
+    def set_items(self, items: list[OrderItem]) -> None:
         """Replace the panel contents with the given order items."""
         self._items = items
         self._rebuild_items()

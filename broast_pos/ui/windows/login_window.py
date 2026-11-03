@@ -11,7 +11,6 @@ Zero business logic — everything is delegated to ``LoginView`` and
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QMainWindow, QWidget
@@ -36,7 +35,7 @@ class LoginWindow(QMainWindow):
     def __init__(
         self,
         auth_service: AuthService,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._auth = auth_service

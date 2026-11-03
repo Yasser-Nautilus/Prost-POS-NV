@@ -15,10 +15,14 @@ import datetime
 from unittest.mock import MagicMock
 
 from broast_pos.core.models.order import (
-    Order, OrderItem, OrderStatus, OrderType, PaymentMethod,
+    Order,
+    OrderItem,
+    OrderStatus,
+    OrderType,
+    PaymentMethod,
 )
-from broast_pos.core.services.order_service import OrderService
 from broast_pos.core.services.audit_service import AuditService
+from broast_pos.core.services.order_service import OrderService
 
 
 def _item(price: float = 100.0) -> OrderItem:

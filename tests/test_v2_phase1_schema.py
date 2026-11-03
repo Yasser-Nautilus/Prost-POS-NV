@@ -14,17 +14,22 @@ Covers:
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC, datetime
+
 import pytest
-from datetime import datetime, timezone
 
-from broast_pos.data.database.connection import DatabaseConnection
-from broast_pos.data.database.migrations import initialise_database, LATEST_VERSION
 from broast_pos.core.models.cashier_session import (
-    CashierSession, CashLedgerEntry, Station, LedgerEntryType
+    CashierSession,
+    CashLedgerEntry,
+    LedgerEntryType,
+    Station,
 )
-from broast_pos.data.repositories.cashier_session_repository import CashierSessionRepository
+from broast_pos.data.database.connection import DatabaseConnection
+from broast_pos.data.database.migrations import LATEST_VERSION, initialise_database
 from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
-
+from broast_pos.data.repositories.cashier_session_repository import (
+    CashierSessionRepository,
+)
 
 # ---------------------------------------------------------------------------
 # Autouse fixture: reset the DB singleton before/after every test in this
@@ -95,7 +100,7 @@ class TestCashierSessionConstraints:
     def test_open_two_sessions_different_stations(self):
         """COUNTER + DELIVERY can both be open on the same day."""
         db = _fresh_db()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         db.execute(
             "INSERT INTO cashier_sessions (day_id,user_id,station,is_open,opened_at,opening_float_pt) "
             "VALUES (1,2,'COUNTER',1,?,0)", (now,)
@@ -111,7 +116,7 @@ class TestCashierSessionConstraints:
     def test_unique_index_blocks_duplicate_station(self):
         """Two open sessions for the same station on the same day → rejected."""
         db = _fresh_db()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         db.execute(
             "INSERT INTO cashier_sessions (day_id,user_id,station,is_open,opened_at,opening_float_pt) "
             "VALUES (1,2,'COUNTER',1,?,0)", (now,)
@@ -127,7 +132,7 @@ class TestCashierSessionConstraints:
     def test_trigger_blocks_all_plus_counter(self):
         """ALL + COUNTER on same day → trigger ABORT."""
         db = _fresh_db()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         db.execute(
             "INSERT INTO cashier_sessions (day_id,user_id,station,is_open,opened_at,opening_float_pt) "
             "VALUES (1,2,'ALL',1,?,0)", (now,)
@@ -143,7 +148,7 @@ class TestCashierSessionConstraints:
     def test_trigger_blocks_counter_plus_all(self):
         """COUNTER open → trying to open ALL → ABORT."""
         db = _fresh_db()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         db.execute(
             "INSERT INTO cashier_sessions (day_id,user_id,station,is_open,opened_at,opening_float_pt) "
             "VALUES (1,2,'COUNTER',1,?,0)", (now,)
@@ -159,7 +164,7 @@ class TestCashierSessionConstraints:
     def test_closed_all_then_open_counter_allowed(self):
         """Closed ALL session → opening COUNTER afterwards is fine."""
         db = _fresh_db()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         db.execute(
             "INSERT INTO cashier_sessions (day_id,user_id,station,is_open,opened_at,opening_float_pt) "
             "VALUES (1,2,'ALL',0,?,0)", (now,)  # is_open=0 → closed
@@ -181,7 +186,7 @@ class TestCashierSessionConstraints:
 class TestCashLedgerAppendOnly:
 
     def _insert_session(self, db):
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         db.execute(
             "INSERT INTO cashier_sessions (day_id,user_id,station,is_open,opened_at,opening_float_pt) "
             "VALUES (1,1,'ALL',1,?,0)", (now,)
@@ -190,7 +195,7 @@ class TestCashLedgerAppendOnly:
         return db.fetch_one("SELECT last_insert_rowid() AS id")["id"]
 
     def _insert_entry(self, db, session_id):
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         db.execute(
             "INSERT INTO cash_ledger (day_id,session_id,entry_type,amount_pt,actor_id,created_at) "
             "VALUES (1,?,?,?,1,?)", (session_id, "OPENING_FLOAT", 50000, now)
@@ -233,7 +238,7 @@ class TestCashLedgerAppendOnly:
             "VALUES (101,1,1,'takeaway','completed',100,100,1,'Manager',1)"
         )
         db.commit()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         db.execute(
             "INSERT INTO cash_ledger (day_id,session_id,entry_type,amount_pt,order_id,actor_id,created_at) "
             "VALUES (1,?,?,?,101,1,?)", (sid, "SALE_CASH", 10000, now)
@@ -256,7 +261,7 @@ class TestCashLedgerAppendOnly:
             "VALUES (55,1,'سائق',0)"
         )
         db.commit()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         db.execute(
             "INSERT INTO cash_ledger (day_id,session_id,entry_type,amount_pt,trip_id,actor_id,created_at) "
             "VALUES (1,?,?,?,55,1,?)", (sid, "DRIVER_REMITTANCE", 25000, now)
@@ -278,7 +283,7 @@ class TestCashBalanceFormula:
 
     def _setup(self):
         db = _fresh_db()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         db.execute(
             "INSERT INTO cashier_sessions (id,day_id,user_id,station,is_open,opened_at,opening_float_pt) "
             "VALUES (10,1,1,'ALL',1,?,0)", (now,)
@@ -287,7 +292,7 @@ class TestCashBalanceFormula:
         return db
 
     def _add_entry(self, db, session_id, entry_type, amount_pt):
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         db.execute(
             "INSERT INTO cash_ledger (day_id,session_id,entry_type,amount_pt,actor_id,created_at) "
             "VALUES (1,?,?,?,1,?)", (session_id, entry_type, amount_pt, now)
@@ -336,7 +341,7 @@ class TestCashierSessionRepository:
         session = CashierSession(
             id=None, day_id=1, user_id=2, station=Station.ALL,
             opening_float_pt=50000,
-            opened_at=datetime.now(timezone.utc).isoformat(),
+            opened_at=datetime.now(UTC).isoformat(),
         )
         created = repo.create(session)
         db.commit()
@@ -349,7 +354,7 @@ class TestCashierSessionRepository:
 
     def test_get_open_sessions_for_day(self):
         repo, db = self._repo()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         s = CashierSession(id=None, day_id=1, user_id=2, station=Station.COUNTER,
                            opening_float_pt=0, opened_at=now)
         repo.create(s)
@@ -360,7 +365,7 @@ class TestCashierSessionRepository:
 
     def test_close_session(self):
         repo, db = self._repo()
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         s = repo.create(CashierSession(id=None, day_id=1, user_id=2,
                                         station=Station.ALL, opening_float_pt=20000, opened_at=now))
         db.commit()
@@ -373,7 +378,7 @@ class TestCashierSessionRepository:
     def test_has_any_open_session(self):
         repo, db = self._repo()
         assert not repo.has_any_open_session(day_id=1)
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         repo.create(CashierSession(id=None, day_id=1, user_id=2, station=Station.DELIVERY,
                                     opening_float_pt=0, opened_at=now))
         db.commit()
@@ -385,7 +390,7 @@ class TestCashLedgerRepository:
     def _setup(self):
         db = _fresh_db()
         session_repo = CashierSessionRepository(db=db)
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         s = session_repo.create(CashierSession(
             id=None, day_id=1, user_id=1, station=Station.ALL,
             opening_float_pt=0, opened_at=now,

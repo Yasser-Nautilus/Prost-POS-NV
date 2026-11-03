@@ -12,21 +12,30 @@ Covers:
 """
 from __future__ import annotations
 
-import pytest
-from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone
+from unittest.mock import MagicMock
 
-from broast_pos.data.database.connection import DatabaseConnection
-from broast_pos.data.database.migrations import initialise_database
+import pytest
+
 from broast_pos.core.models.cashier_session import (
-    CashierSession, CashLedgerEntry, LedgerEntryType, Station
+    CashierSession,
+    LedgerEntryType,
+    Station,
 )
-from broast_pos.core.models.order import Order, OrderItem, OrderType, OrderStatus, PaymentMethod
-from broast_pos.data.repositories.cashier_session_repository import CashierSessionRepository
-from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
+from broast_pos.core.models.order import (
+    Order,
+    OrderItem,
+    OrderStatus,
+    OrderType,
+    PaymentMethod,
+)
 from broast_pos.core.services.cashier_session_service import CashierSessionService
 from broast_pos.core.services.order_service import OrderService
-
+from broast_pos.data.database.connection import DatabaseConnection
+from broast_pos.data.database.migrations import initialise_database
+from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
+from broast_pos.data.repositories.cashier_session_repository import (
+    CashierSessionRepository,
+)
 
 # ---------------------------------------------------------------------------
 # Singleton isolation
@@ -218,7 +227,7 @@ class TestSaleCashLedgerEntry:
         db.commit()
         assert result.is_paid
 
-        ledger = CashLedgerRepository(db=db)
+        CashLedgerRepository(db=db)
         count = db.fetch_one("SELECT COUNT(*) AS c FROM cash_ledger")["c"]
         assert count == 0
 
@@ -252,9 +261,13 @@ class TestDriverRemittanceLedgerEntry:
 
     def _setup_settled_trip(self, db: DatabaseConnection):
         """Seed a driver, trip, order, and perform settle_driver — return (session, trip_cash)."""
-        from broast_pos.core.services.driver_settlement_service import DriverSettlementService
+        from broast_pos.core.services.driver_settlement_service import (
+            DriverSettlementService,
+        )
         from broast_pos.data.repositories.delivery_repository import DeliveryRepository
-        from broast_pos.data.repositories.driver_settlement_repository import DriverSettlementRepository
+        from broast_pos.data.repositories.driver_settlement_repository import (
+            DriverSettlementRepository,
+        )
         from broast_pos.data.repositories.order_repository import OrderRepository
         from broast_pos.data.repositories.user_repository import UserRepository
 
@@ -319,9 +332,13 @@ class TestDriverRemittanceLedgerEntry:
 
     def test_no_remittance_when_ledger_not_wired(self):
         """Without ledger_repo, settle_driver completes with no ledger entries."""
-        from broast_pos.core.services.driver_settlement_service import DriverSettlementService
+        from broast_pos.core.services.driver_settlement_service import (
+            DriverSettlementService,
+        )
         from broast_pos.data.repositories.delivery_repository import DeliveryRepository
-        from broast_pos.data.repositories.driver_settlement_repository import DriverSettlementRepository
+        from broast_pos.data.repositories.driver_settlement_repository import (
+            DriverSettlementRepository,
+        )
         from broast_pos.data.repositories.order_repository import OrderRepository
         from broast_pos.data.repositories.user_repository import UserRepository
 

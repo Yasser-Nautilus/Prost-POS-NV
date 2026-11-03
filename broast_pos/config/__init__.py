@@ -2,27 +2,27 @@
 from broast_pos.config.config import (
     # General Settings
     APP_VERSION,
-    DEBUG,
-    ENVIRONMENT,
-    LANGUAGE,
     # Business Rules
     AUTO_PRINT_KITCHEN,
     AUTO_PRINT_RECEIPT,
+    # Paths
+    BRANDING_PATH,
+    DATABASE_PATH,
+    DEBUG,
     DEFAULT_TAX_RATE,
     DISCOUNT_TYPES,
+    ENVIRONMENT,
+    FONTS_PATH,
+    LANGUAGE,
+    LOGS_PATH,
     MAX_DISCOUNT_PERCENT,
     ORDER_NUMBER_PREFIX,
+    PRINTER_CONFIG_PATH,
+    RESTAURANT_CONFIG_PATH,
     SERVICE_CHARGE_PCT,
     TABLE_COUNT,
     TAKEAWAY_AUTO_COMPLETE_MINUTES,
     TRACKING_REFRESH_SECONDS,
-    # Paths
-    BRANDING_PATH,
-    DATABASE_PATH,
-    FONTS_PATH,
-    LOGS_PATH,
-    PRINTER_CONFIG_PATH,
-    RESTAURANT_CONFIG_PATH,
     # Restaurant loader
     get_app_name,
     get_category_colors,

@@ -4,10 +4,11 @@ Tests for DLV-001 — backend driver-availability enforcement in create_trip.
 These tests verify that DeliveryService.create_trip is the authoritative
 guard, not the frontend filter. Mocks are used throughout so no DB is needed.
 """
-import pytest
 from unittest.mock import MagicMock
 
-from broast_pos.core.models.delivery import DriverStatus, DeliveryTrip
+import pytest
+
+from broast_pos.core.models.delivery import DeliveryTrip, DriverStatus
 from broast_pos.core.models.order import OrderStatus, OrderType
 from broast_pos.core.services.delivery_service import DeliveryService
 

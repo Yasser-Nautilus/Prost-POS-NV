@@ -13,19 +13,23 @@ Covers:
 """
 from __future__ import annotations
 
-import pytest
 from unittest.mock import MagicMock
 
+import pytest
+
+from broast_pos.core.models.cashier_session import (
+    CashierSession,
+    LedgerEntryType,
+    Station,
+)
+from broast_pos.core.models.order import Order, OrderItem, OrderStatus, OrderType
+from broast_pos.core.services.cashier_session_service import CashierSessionService
 from broast_pos.data.database.connection import DatabaseConnection
 from broast_pos.data.database.migrations import initialise_database
-from broast_pos.core.models.cashier_session import (
-    CashierSession, CashLedgerEntry, LedgerEntryType, Station
-)
-from broast_pos.core.models.order import Order, OrderItem, OrderType, OrderStatus
-from broast_pos.data.repositories.cashier_session_repository import CashierSessionRepository
 from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
-from broast_pos.core.services.cashier_session_service import CashierSessionService
-
+from broast_pos.data.repositories.cashier_session_repository import (
+    CashierSessionRepository,
+)
 
 # ---------------------------------------------------------------------------
 # Singleton isolation

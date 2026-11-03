@@ -10,16 +10,15 @@ Covers:
 """
 from __future__ import annotations
 
-import pytest
-from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-from broast_pos.core.policies.discount import compute_discount
+import pytest
+
 from broast_pos.core.models.order import Order, OrderItem, OrderStatus, OrderType
 from broast_pos.core.models.user import User
+from broast_pos.core.policies.discount import compute_discount
 from broast_pos.core.services.audit_service import AuditService
 from broast_pos.core.services.order_service import OrderService
-
 
 # ---------------------------------------------------------------------------
 # Helpers

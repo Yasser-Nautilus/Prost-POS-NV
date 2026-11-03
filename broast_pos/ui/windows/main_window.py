@@ -28,7 +28,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Dict, List, Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -75,7 +74,7 @@ class NavItem:
 
 
 # Navigation items in display order
-_NAV_ITEMS: List[NavItem] = [
+_NAV_ITEMS: list[NavItem] = [
     NavItem(NavPage.POS,       "🛒", "نقطة البيع",   UserRole.CASHIER),
     NavItem(NavPage.TRACKING,  "📋", "تتبع الطلبات", UserRole.CASHIER),
     NavItem(NavPage.DELIVERY,  "🚚", "التوصيل",      UserRole.CASHIER),
@@ -86,7 +85,7 @@ _NAV_ITEMS: List[NavItem] = [
 ]
 
 # Role hierarchy for permission checks
-_ROLE_LEVEL: Dict[UserRole, int] = {
+_ROLE_LEVEL: dict[UserRole, int] = {
     UserRole.CASHIER: 0,
     UserRole.MANAGER: 1,
     UserRole.ADMIN: 2,
@@ -119,12 +118,12 @@ class MainWindow(QWidget):
     HEADER_MIN_HEIGHT = 48
     HEADER_MAX_HEIGHT = 64
 
-    def __init__(self, user: User, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, user: User, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._user = user
-        self._nav_buttons: Dict[NavPage, QPushButton] = {}
-        self._page_widgets: Dict[NavPage, QWidget] = {}
-        self._active_page: Optional[NavPage] = None
+        self._nav_buttons: dict[NavPage, QPushButton] = {}
+        self._page_widgets: dict[NavPage, QWidget] = {}
+        self._active_page: NavPage | None = None
 
         self._setup_window()
         self._setup_ui()
@@ -514,7 +513,7 @@ class MainWindow(QWidget):
             self._printer_badge.setText("🖨⚠")
             self._printer_badge.setToolTip("الطابعة غير متصلة")
 
-    def update_shift_status(self, active: bool, shift_id: Optional[int] = None) -> None:
+    def update_shift_status(self, active: bool, shift_id: int | None = None) -> None:
         """Update the header shift badge."""
         if active and shift_id is not None:
             self._shift_btn.setText(f"🟢  الوردية: #{shift_id}")

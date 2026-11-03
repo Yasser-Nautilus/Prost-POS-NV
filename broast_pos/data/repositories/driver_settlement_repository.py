@@ -8,7 +8,6 @@ authoritative historical record of what was paid on a given date.
 from __future__ import annotations
 
 import sqlite3
-from typing import List, Optional
 
 from broast_pos.core.models.driver_settlement import DriverSettlement
 from broast_pos.data.repositories.base_repository import BaseRepository
@@ -21,7 +20,7 @@ class DriverSettlementRepository(BaseRepository[DriverSettlement]):
     # Core contract
     # ------------------------------------------------------------------
 
-    def get_by_id(self, entity_id: int) -> Optional[DriverSettlement]:
+    def get_by_id(self, entity_id: int) -> DriverSettlement | None:
         row = self._db.fetch_one(
             "SELECT * FROM driver_settlements WHERE id = ?", (entity_id,)
         )
@@ -36,7 +35,7 @@ class DriverSettlementRepository(BaseRepository[DriverSettlement]):
 
     def delete(self, entity_id: int) -> None:
         """Settlement records are NEVER deleted — financial history."""
-        pass  # No-op
+        # No-op
 
     # ------------------------------------------------------------------
     # Primary insert
@@ -79,7 +78,7 @@ class DriverSettlementRepository(BaseRepository[DriverSettlement]):
 
     def get_by_driver_date(
         self, driver_id: int, date_str: str
-    ) -> Optional[DriverSettlement]:
+    ) -> DriverSettlement | None:
         """Find settlement record for a specific driver on a specific date."""
         row = self._db.fetch_one(
             """SELECT * FROM driver_settlements
@@ -89,7 +88,7 @@ class DriverSettlementRepository(BaseRepository[DriverSettlement]):
         )
         return self._row_to_settlement(row) if row else None
 
-    def get_by_driver(self, driver_id: int) -> List[DriverSettlement]:
+    def get_by_driver(self, driver_id: int) -> list[DriverSettlement]:
         """All settlement records for a driver, newest first."""
         rows = self._db.fetch_all(
             """SELECT * FROM driver_settlements
@@ -99,7 +98,7 @@ class DriverSettlementRepository(BaseRepository[DriverSettlement]):
         )
         return [self._row_to_settlement(r) for r in rows]
 
-    def get_for_date(self, date_str: str) -> List[DriverSettlement]:
+    def get_for_date(self, date_str: str) -> list[DriverSettlement]:
         """All settlement records for a specific date."""
         rows = self._db.fetch_all(
             """SELECT * FROM driver_settlements

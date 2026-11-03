@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class Station(str, Enum):
@@ -49,30 +48,30 @@ class CashierSession:
     recorded in cash_ledger — do NOT compute the balance from this object.
     Use CashLedgerRepository.get_session_balance_pt(session_id) instead.
     """
-    id: Optional[int]
+    id: int | None
     day_id: int                     # FK → shifts.id (the operating day)
     user_id: int                    # FK → users.id
     station: Station                # ALL / COUNTER / DELIVERY
     is_open: bool = True
 
-    opened_at: Optional[str] = None
-    closed_at: Optional[str] = None
+    opened_at: str | None = None
+    closed_at: str | None = None
 
     # Set at opening; stored for reference (ledger OPENING_FLOAT is authoritative)
     opening_float_pt: int = 0       # piasters (integer)
 
     # Set at closing (blind count → system compares to ledger balance)
-    counted_cash_pt: Optional[int] = None    # what the cashier physically counted
-    expected_cash_pt: Optional[int] = None  # SUM(ledger) snapshot at close
-    variance_pt: Optional[int] = None       # counted − expected
+    counted_cash_pt: int | None = None    # what the cashier physically counted
+    expected_cash_pt: int | None = None  # SUM(ledger) snapshot at close
+    variance_pt: int | None = None       # counted − expected
 
-    variance_approved_by: Optional[int] = None   # FK → users.id (manager)
-    variance_reason: Optional[str] = None
-    handover_to_session: Optional[int] = None    # FK → cashier_sessions.id
+    variance_approved_by: int | None = None   # FK → users.id (manager)
+    variance_reason: str | None = None
+    handover_to_session: int | None = None    # FK → cashier_sessions.id
 
     # Read-only metadata (populated from join in repo)
-    user_name: Optional[str] = None
-    user_display_name: Optional[str] = None
+    user_name: str | None = None
+    user_display_name: str | None = None
 
     @property
     def is_closed(self) -> bool:
@@ -102,21 +101,21 @@ class CashLedgerEntry:
       - Unique SALE_CASH per order_id
       - Unique DRIVER_REMITTANCE per trip_id
     """
-    id: Optional[int]
+    id: int | None
     day_id: int
     session_id: int
     entry_type: LedgerEntryType
     amount_pt: int                    # signed piasters
 
-    order_id: Optional[int] = None
-    trip_id: Optional[int] = None
-    expense_id: Optional[int] = None
-    reverses_entry_id: Optional[int] = None
+    order_id: int | None = None
+    trip_id: int | None = None
+    expense_id: int | None = None
+    reverses_entry_id: int | None = None
 
     actor_id: int = 0                 # FK → users.id (who triggered the entry)
-    approved_by: Optional[int] = None # FK → users.id (manager, if required)
-    reason: Optional[str] = None
-    created_at: Optional[str] = None
+    approved_by: int | None = None # FK → users.id (manager, if required)
+    reason: str | None = None
+    created_at: str | None = None
 
     @property
     def amount_egp(self) -> float:

@@ -22,11 +22,10 @@ Design:
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from PyQt6.QtCore import (
-    QPropertyAnimation,
     QEasingCurve,
+    QPropertyAnimation,
     Qt,
     pyqtSignal,
 )
@@ -76,7 +75,7 @@ class PinDialog(QDialog):
         self,
         title: str = "أدخل PIN المدير",
         verify_fn=None,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._title_text = title

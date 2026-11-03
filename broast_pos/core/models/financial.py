@@ -16,7 +16,6 @@ Expected cash formula (corrected in batch 1.2 — FIN-001):
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional
 
 
 @dataclass
@@ -28,14 +27,14 @@ class Shift:
     - `is_active` — only one shift can be active at a time.
     - `summary_printed_at` — must print summary before closing shift.
     """
-    id: Optional[int] = None
-    opened_by: Optional[int] = None     # user_id
-    opened_at: Optional[str] = None
-    closed_by: Optional[int] = None     # user_id, NULL while open
-    closed_at: Optional[str] = None     # NULL while open
+    id: int | None = None
+    opened_by: int | None = None     # user_id
+    opened_at: str | None = None
+    closed_by: int | None = None     # user_id, NULL while open
+    closed_at: str | None = None     # NULL while open
     next_invoice_no: int = 1            # resets to 1 each new shift
     is_active: bool = True
-    summary_printed_at: Optional[str] = None
+    summary_printed_at: str | None = None
 
     @property
     def is_open(self) -> bool:
@@ -55,11 +54,11 @@ class ShiftTransfer:
     `summary_snapshot` is a JSON string capturing the financial state
     at the moment of transfer (sales, expenses, pending amounts).
     """
-    id: Optional[int] = None
-    shift_id: Optional[int] = None
-    from_user_id: Optional[int] = None
-    to_user_id: Optional[int] = None
-    timestamp: Optional[str] = None
+    id: int | None = None
+    shift_id: int | None = None
+    from_user_id: int | None = None
+    to_user_id: int | None = None
+    timestamp: str | None = None
     summary_snapshot: str = "{}"    # JSON: sales, expenses, pending at transfer time
 
 
@@ -71,14 +70,14 @@ class CashTransaction:
     Only “expense” type — cash going out of the drawer.
     Categories: delivery_fees, supplies, other.
     """
-    id: Optional[int] = None
-    shift_id: Optional[int] = None
+    id: int | None = None
+    shift_id: int | None = None
     type: str = "expense"       # always "expense"
     amount: float = 0.0
     description: str = ""
     category: str = "other"     # "delivery_fees" | "supplies" | "other"
-    timestamp: Optional[str] = None
-    user_id: Optional[int] = None
+    timestamp: str | None = None
+    user_id: int | None = None
 
 
 @dataclass
@@ -107,7 +106,7 @@ class ShiftSummary:
     pending_delivery: float = 0.0       # unsettled driver orders
     pending_dinein: float = 0.0         # unpaid dine-in tables
     pending_kitchen: float = 0.0        # orders still being prepared
-    order_breakdown: Dict[str, dict] = field(default_factory=dict)
+    order_breakdown: dict[str, dict] = field(default_factory=dict)
     # e.g. {"dine_in": {"count": 15, "revenue": 2500.0}, ...}
 
     @property

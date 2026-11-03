@@ -12,13 +12,12 @@ All four guards must be independent — a failure on G2 must not mask G3/G4.
 """
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, patch
-from typing import Optional
 
 from broast_pos.core.models.financial import Shift
 from broast_pos.core.services.financial_service import FinancialService
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -65,7 +64,7 @@ def _financial_svc(
         unsettled_trip_list if has_unsettled_trips else []
     )
 
-    audit_repo = MagicMock()
+    MagicMock()
     audit_svc = MagicMock()
 
     svc = FinancialService.__new__(FinancialService)
@@ -210,7 +209,9 @@ class TestRepositoryGuardQueries:
 
     def test_has_active_trips_query_checks_not_returned(self):
         """has_active_trips SQL must filter dispatched_at IS NOT NULL AND returned_at IS NULL."""
-        from broast_pos.data.repositories.financial_repository import FinancialRepository
+        from broast_pos.data.repositories.financial_repository import (
+            FinancialRepository,
+        )
         repo = FinancialRepository.__new__(FinancialRepository)
         captured = []
 
@@ -229,7 +230,9 @@ class TestRepositoryGuardQueries:
 
     def test_has_open_orders_query_checks_status_and_paid(self):
         """has_open_orders SQL must check status IN (new/preparing/ready) AND is_paid=0."""
-        from broast_pos.data.repositories.financial_repository import FinancialRepository
+        from broast_pos.data.repositories.financial_repository import (
+            FinancialRepository,
+        )
         repo = FinancialRepository.__new__(FinancialRepository)
         captured = []
 
@@ -248,25 +251,33 @@ class TestRepositoryGuardQueries:
         assert "ready" in sql, f"Missing ready status: {sql!r}"
 
     def test_has_active_trips_returns_false_when_count_zero(self):
-        from broast_pos.data.repositories.financial_repository import FinancialRepository
+        from broast_pos.data.repositories.financial_repository import (
+            FinancialRepository,
+        )
         repo = FinancialRepository.__new__(FinancialRepository)
         repo._db = MagicMock(**{"fetch_one.return_value": {"cnt": 0}})
         assert repo.has_active_trips() is False
 
     def test_has_active_trips_returns_true_when_count_positive(self):
-        from broast_pos.data.repositories.financial_repository import FinancialRepository
+        from broast_pos.data.repositories.financial_repository import (
+            FinancialRepository,
+        )
         repo = FinancialRepository.__new__(FinancialRepository)
         repo._db = MagicMock(**{"fetch_one.return_value": {"cnt": 2}})
         assert repo.has_active_trips() is True
 
     def test_has_open_orders_returns_false_when_count_zero(self):
-        from broast_pos.data.repositories.financial_repository import FinancialRepository
+        from broast_pos.data.repositories.financial_repository import (
+            FinancialRepository,
+        )
         repo = FinancialRepository.__new__(FinancialRepository)
         repo._db = MagicMock(**{"fetch_one.return_value": {"cnt": 0}})
         assert repo.has_open_orders(shift_id=1) is False
 
     def test_has_open_orders_returns_true_when_count_positive(self):
-        from broast_pos.data.repositories.financial_repository import FinancialRepository
+        from broast_pos.data.repositories.financial_repository import (
+            FinancialRepository,
+        )
         repo = FinancialRepository.__new__(FinancialRepository)
         repo._db = MagicMock(**{"fetch_one.return_value": {"cnt": 3}})
         assert repo.has_open_orders(shift_id=1) is True

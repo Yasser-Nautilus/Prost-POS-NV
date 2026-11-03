@@ -24,7 +24,6 @@ here — saving is handled by ``OrderService`` when the user confirms.
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -43,13 +42,16 @@ from broast_pos.config.config import (
     SERVICE_CHARGE_PCT,
     get_category_colors,
 )
+from broast_pos.core.models.customer import (  # FIX: fehlten (nur in Annotationen genutzt)
+    Customer,
+    CustomerAddress,
+)
 from broast_pos.core.models.order import Order, OrderItem, OrderType
-from broast_pos.core.models.user import User, UserRole
 from broast_pos.core.models.product import Category, Product
-from broast_pos.core.services.product_service import ProductService
-from broast_pos.core.models.customer import Customer, CustomerAddress  # FIX: fehlten (nur in Annotationen genutzt)
-from broast_pos.core.services.customer_service import CustomerService
+from broast_pos.core.models.user import User, UserRole
 from broast_pos.core.services.auth_service import AuthService
+from broast_pos.core.services.customer_service import CustomerService
+from broast_pos.core.services.product_service import ProductService
 from broast_pos.ui.components.customer_panel import CustomerPanel
 from broast_pos.ui.components.order_panel import OrderPanel
 from broast_pos.ui.components.product_grid import ProductGrid
@@ -61,14 +63,14 @@ from broast_pos.ui.styles.theme import get_color
 logger = logging.getLogger(__name__)
 
 # Arabic labels for order types
-_ORDER_TYPE_LABELS: Dict[OrderType, str] = {
+_ORDER_TYPE_LABELS: dict[OrderType, str] = {
     OrderType.DINE_IN:  "صالة",
     OrderType.TAKEAWAY: "تيك اواي",
     OrderType.DELIVERY: "دليفري",
     OrderType.PICKUP:   "استلام محل",
 }
 
-_ORDER_TYPE_ICONS: Dict[OrderType, str] = {
+_ORDER_TYPE_ICONS: dict[OrderType, str] = {
     OrderType.DINE_IN:  "🍽",
     OrderType.TAKEAWAY: "🥡",
     OrderType.DELIVERY: "🚚",
@@ -96,7 +98,7 @@ class PosView(QWidget):
         auth_service: AuthService,
         current_user: User,
         cashier_slot: int = 1,
-        parent: Optional[QWidget] = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._product_svc = product_service
@@ -108,13 +110,13 @@ class PosView(QWidget):
         self._cashier_slot = cashier_slot
 
         # Data caches
-        self._categories: List[Category] = []
-        self._products_cache: Dict[int, List[Product]] = {}  # cat_id → products
+        self._categories: list[Category] = []
+        self._products_cache: dict[int, list[Product]] = {}  # cat_id → products
         self._category_colors = get_category_colors()
-        self._active_category_id: Optional[int] = None
+        self._active_category_id: int | None = None
 
         # Parked orders
-        self._orders: List[Order] = []
+        self._orders: list[Order] = []
         self._active_order_idx: int = -1
 
         # Build UI
@@ -234,7 +236,7 @@ class PosView(QWidget):
         self._parked_layout.addStretch()
 
         # --- Order type selector buttons (right side of top bar) ---
-        self._type_buttons: Dict[OrderType, QPushButton] = {}
+        self._type_buttons: dict[OrderType, QPushButton] = {}
         for otype in OrderType:
             icon = _ORDER_TYPE_ICONS[otype]
             label = _ORDER_TYPE_LABELS[otype]
@@ -417,7 +419,7 @@ class PosView(QWidget):
             if w:
                 w.deleteLater()
 
-        self._cat_buttons: Dict[int, QPushButton] = {}
+        self._cat_buttons: dict[int, QPushButton] = {}
         colors = self._category_colors
 
         for idx, cat in enumerate(self._categories):
@@ -546,7 +548,7 @@ class PosView(QWidget):
     # Parked orders management
     # ==================================================================
 
-    def _current_order(self) -> Optional[Order]:
+    def _current_order(self) -> Order | None:
         if 0 <= self._active_order_idx < len(self._orders):
             return self._orders[self._active_order_idx]
         return None

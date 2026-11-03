@@ -6,14 +6,21 @@ Unit tests covering Critical Phase 1 bug fixes:
 - C5: Paid order discount & amendment restrictions
 - C6: Paid order cancellation books REVERSAL entry in ledger
 """
-import pytest
 from unittest.mock import MagicMock
-from broast_pos.core.models.order import Order, OrderItem, OrderStatus, OrderType, PaymentMethod
+
+import pytest
+
 from broast_pos.core.models.cashier_session import CashLedgerEntry, LedgerEntryType
-from broast_pos.core.services.order_service import OrderService
+from broast_pos.core.models.order import (
+    Order,
+    OrderItem,
+    OrderStatus,
+    OrderType,
+    PaymentMethod,
+)
 from broast_pos.core.services.audit_service import AuditService
 from broast_pos.core.services.driver_settlement_service import DriverSettlementService
-from broast_pos.core.services.delivery_service import DeliveryService
+from broast_pos.core.services.order_service import OrderService
 
 
 def _order(order_id=1, status=OrderStatus.NEW, order_type=OrderType.TAKEAWAY, payment=PaymentMethod.CASH, is_paid=False, total=100.0, shift_id=1):

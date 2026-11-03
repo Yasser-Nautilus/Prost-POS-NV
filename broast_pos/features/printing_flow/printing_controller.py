@@ -16,10 +16,11 @@ All 5 print types:
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
-from broast_pos.infrastructure.printing.printer_manager import PrinterManager
 from broast_pos.infrastructure.printing.print_triggers import PrintTriggers
+from broast_pos.infrastructure.printing.printer_manager import PrinterManager
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ class PrintingFlowController:
         self._triggers = print_triggers
         self._failure_count: int = 0
         self._last_error: str = ""
-        self._on_print_failure: Optional[Callable[[str], None]] = None
+        self._on_print_failure: Callable[[str], None] | None = None
 
     # ------------------------------------------------------------------
     # Callback registration
@@ -56,7 +57,7 @@ class PrintingFlowController:
     # 1. Kitchen Ticket
     # ------------------------------------------------------------------
 
-    def print_kitchen_ticket(self, order_dict: Dict[str, Any]) -> bool:
+    def print_kitchen_ticket(self, order_dict: dict[str, Any]) -> bool:
         """Print kitchen ticket for a new or amended order.
 
         Routes to shared kitchen printer. Silent — never blocks.
@@ -71,8 +72,8 @@ class PrintingFlowController:
 
     def print_amendment_ticket(
         self,
-        order_dict: Dict[str, Any],
-        changes: List[Dict[str, Any]],
+        order_dict: dict[str, Any],
+        changes: list[dict[str, Any]],
     ) -> bool:
         """Print amendment (تابع) kitchen ticket.
 
@@ -92,7 +93,7 @@ class PrintingFlowController:
 
     def print_customer_receipt(
         self,
-        order_dict: Dict[str, Any],
+        order_dict: dict[str, Any],
         cashier_slot: int = 1,
     ) -> bool:
         """Print customer receipt on cashier-specific printer.
@@ -118,9 +119,9 @@ class PrintingFlowController:
 
     def print_daily_summary(
         self,
-        summary_data: Dict[str, Any],
+        summary_data: dict[str, Any],
         cashier_slot: int = 1,
-        shift_period: Optional[Dict[str, str]] = None,
+        shift_period: dict[str, str] | None = None,
     ) -> bool:
         """Print end-of-shift summary receipt.
 
@@ -140,7 +141,7 @@ class PrintingFlowController:
 
     def print_settlement_receipt(
         self,
-        settlement_data: Dict[str, Any],
+        settlement_data: dict[str, Any],
         cashier_slot: int = 1,
     ) -> bool:
         """Print per-trip settlement receipt for driver accountability.
@@ -159,7 +160,7 @@ class PrintingFlowController:
     # 5. Failure Handling
     # ------------------------------------------------------------------
 
-    def check_printer_health(self) -> Dict[str, bool]:
+    def check_printer_health(self) -> dict[str, bool]:
         """Test all printer connections on startup.
 
         Returns:
@@ -205,7 +206,7 @@ class PrintingFlowController:
 
     def reprint_receipt(
         self,
-        order_dict: Dict[str, Any],
+        order_dict: dict[str, Any],
         cashier_slot: int = 1,
     ) -> bool:
         """Reprint a customer receipt (e.g. customer lost their copy)."""

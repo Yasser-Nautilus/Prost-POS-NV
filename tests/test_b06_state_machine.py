@@ -11,15 +11,15 @@ Covers:
 """
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
-import sqlite3
-from unittest.mock import MagicMock, patch
 
 from broast_pos.core.models.order import Order, OrderItem, OrderStatus, OrderType
 from broast_pos.core.services.order_service import (
-    OrderService, _allowed_targets, _ALLOWED_TRANSITIONS, _DELIVERY_EXTRA
+    OrderService,
+    _allowed_targets,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -90,10 +90,9 @@ class TestTransactionContextManager:
         db = DatabaseConnection.get_instance(":memory:")
         db.execute("CREATE TABLE t (v INTEGER)")
 
-        with pytest.raises(RuntimeError, match="boom"):
-            with db.transaction():
-                db.execute("INSERT INTO t VALUES (99)")
-                raise RuntimeError("boom")
+        with pytest.raises(RuntimeError, match="boom"), db.transaction():
+            db.execute("INSERT INTO t VALUES (99)")
+            raise RuntimeError("boom")
 
         row = db.fetch_one("SELECT v FROM t")
         assert row is None  # rolled back
@@ -124,12 +123,11 @@ class TestTransactionContextManager:
         db = DatabaseConnection.get_instance(":memory:")
         db.execute("CREATE TABLE t (v INTEGER)")
 
-        with pytest.raises(ValueError):
+        with pytest.raises(ValueError), db.transaction():
+            db.execute("INSERT INTO t VALUES (10)")
             with db.transaction():
-                db.execute("INSERT INTO t VALUES (10)")
-                with db.transaction():
-                    db.execute("INSERT INTO t VALUES (20)")
-                    raise ValueError("inner fail")
+                db.execute("INSERT INTO t VALUES (20)")
+                raise ValueError("inner fail")
 
         rows = db.fetch_all("SELECT v FROM t")
         assert len(rows) == 0
@@ -142,11 +140,10 @@ class TestTransactionContextManager:
         db = DatabaseConnection.get_instance(":memory:")
         db.execute("CREATE TABLE t (v INTEGER)")
 
-        with pytest.raises(RuntimeError):
-            with db.transaction():
-                db.execute("INSERT INTO t VALUES (7)")
-                db.commit()   # must be a no-op — should NOT commit
-                raise RuntimeError("abort")
+        with pytest.raises(RuntimeError), db.transaction():
+            db.execute("INSERT INTO t VALUES (7)")
+            db.commit()   # must be a no-op — should NOT commit
+            raise RuntimeError("abort")
 
         row = db.fetch_one("SELECT v FROM t")
         assert row is None   # rolled back, proving commit() was a no-op
@@ -314,7 +311,6 @@ class TestDeliveryServiceNoSilentErrors:
 
     def test_change_order_status_raises_without_order_svc(self):
         """B-06: _change_order_status must raise RuntimeError if no OrderService."""
-        from broast_pos.core.services.delivery_service import DeliveryService
         svc = self._delivery_svc_no_order_svc()
         with pytest.raises(RuntimeError, match="OrderService not injected"):
             svc._change_order_status(1, OrderStatus.OUT_FOR_DELIVERY)

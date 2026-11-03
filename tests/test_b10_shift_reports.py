@@ -19,13 +19,18 @@ Tests verify:
 """
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import MagicMock, call
-from datetime import date
 
-from broast_pos.core.models.order import Order, OrderItem, OrderStatus, OrderType, PaymentMethod
+from broast_pos.core.models.order import (
+    Order,
+    OrderItem,
+    OrderStatus,
+    OrderType,
+    PaymentMethod,
+)
 from broast_pos.core.services.report_service import ReportService
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -343,7 +348,9 @@ class TestRepositoryShiftQueries:
 class TestReportAndSummaryErrorPropagation:
 
     def test_financial_controller_get_shift_summary_raises_error(self):
-        from broast_pos.features.financial.financial_controller import FinancialController
+        from broast_pos.features.financial.financial_controller import (
+            FinancialController,
+        )
         ctrl = FinancialController.__new__(FinancialController)
         ctrl._financial_svc = MagicMock()
         ctrl._financial_svc.get_shift_summary.side_effect = RuntimeError("DB connection dropped")
@@ -362,6 +369,7 @@ class TestReportAndSummaryErrorPropagation:
 
     def test_bridge_print_shift_summary_returns_error_when_print_fails(self):
         import json
+
         from broast_pos.infrastructure.web_bridge.bridge import POSBridge
         bridge = POSBridge.__new__(POSBridge)
         bridge._reports_ctrl = MagicMock()
@@ -377,6 +385,7 @@ class TestReportAndSummaryErrorPropagation:
 
     def test_bridge_print_shift_summary_returns_success_when_print_succeeds(self):
         import json
+
         from broast_pos.infrastructure.web_bridge.bridge import POSBridge
         bridge = POSBridge.__new__(POSBridge)
         bridge._reports_ctrl = MagicMock()

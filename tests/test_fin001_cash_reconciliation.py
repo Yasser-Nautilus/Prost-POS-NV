@@ -5,6 +5,7 @@ These tests verify that expected_cash uses cash_sales (not total_sales) so
 Visa/online orders do not inflate the drawer reconciliation figure.
 """
 import pytest
+
 from broast_pos.core.models.financial import ShiftSummary
 
 

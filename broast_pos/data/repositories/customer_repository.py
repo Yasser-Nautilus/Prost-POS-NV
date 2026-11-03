@@ -11,7 +11,7 @@ tables are needed since customers are always linked to orders by customer_id.
 from __future__ import annotations
 
 import sqlite3
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from broast_pos.core.models.customer import Customer, CustomerAddress, Zone
 from broast_pos.data.repositories.base_repository import BaseRepository
@@ -24,7 +24,7 @@ class CustomerRepository(BaseRepository[Customer]):
     # Core contract (for Customer)
     # ------------------------------------------------------------------
 
-    def get_by_id(self, entity_id: int) -> Optional[Customer]:
+    def get_by_id(self, entity_id: int) -> Customer | None:
         row = self._db.fetch_one("SELECT * FROM customers WHERE id = ?", (entity_id,))
         if row is None:
             return None
@@ -37,13 +37,13 @@ class CustomerRepository(BaseRepository[Customer]):
 
     def delete(self, entity_id: int) -> None:
         """Customers are never deleted — they are historical records."""
-        pass  # No-op: customers don't have is_active
+        # No-op: customers don't have is_active
 
     # ------------------------------------------------------------------
     # Customer queries
     # ------------------------------------------------------------------
 
-    def find_by_phone(self, phone: str) -> Optional[Customer]:
+    def find_by_phone(self, phone: str) -> Customer | None:
         """Exact phone match — return customer with all addresses, or None."""
         row = self._db.fetch_one(
             "SELECT * FROM customers WHERE phone = ?", (phone,)
@@ -74,7 +74,7 @@ class CustomerRepository(BaseRepository[Customer]):
     # Address queries
     # ------------------------------------------------------------------
 
-    def get_addresses(self, customer_id: int) -> List[CustomerAddress]:
+    def get_addresses(self, customer_id: int) -> list[CustomerAddress]:
         """All saved addresses for a customer."""
         rows = self._db.fetch_all(
             "SELECT * FROM customer_addresses WHERE customer_id = ?",
@@ -117,7 +117,7 @@ class CustomerRepository(BaseRepository[Customer]):
         customer_id: int,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Order history for a customer (newest first).
 
         Returns lightweight dicts (not full Order objects) to keep the
@@ -152,7 +152,7 @@ class CustomerRepository(BaseRepository[Customer]):
             for r in rows
         ]
 
-    def get_customer_statistics(self, customer_id: int) -> Dict[str, Any]:
+    def get_customer_statistics(self, customer_id: int) -> dict[str, Any]:
         """Aggregate stats for a customer (single query, no Python loop)."""
         row = self._db.fetch_one(
             """SELECT
@@ -191,21 +191,21 @@ class CustomerRepository(BaseRepository[Customer]):
     # Zone queries (manager only)
     # ------------------------------------------------------------------
 
-    def get_all_active_zones(self) -> List[Zone]:
+    def get_all_active_zones(self) -> list[Zone]:
         """All active zones — for dropdown in customer panel."""
         rows = self._db.fetch_all(
             "SELECT * FROM zones WHERE is_active = 1 ORDER BY name"
         )
         return [self._row_to_zone(r) for r in rows]
 
-    def get_zones(self) -> List[Zone]:
+    def get_zones(self) -> list[Zone]:
         """All zones (active and inactive) — for zone management screen."""
         rows = self._db.fetch_all(
             "SELECT * FROM zones ORDER BY name"
         )
         return [self._row_to_zone(r) for r in rows]
 
-    def get_zone_by_id(self, zone_id: int) -> Optional[Zone]:
+    def get_zone_by_id(self, zone_id: int) -> Zone | None:
         """Fetch a single zone."""
         row = self._db.fetch_one("SELECT * FROM zones WHERE id = ?", (zone_id,))
         return self._row_to_zone(row) if row else None

@@ -12,7 +12,6 @@ never calls the database.
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -49,11 +48,11 @@ class ProductGrid(QWidget):
 
     product_clicked = pyqtSignal(object)   # Product dataclass
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._products: List[Product] = []
+        self._products: list[Product] = []
         self._category_color: str = get_color("accent_blue")
-        self._buttons: List[QPushButton] = []
+        self._buttons: list[QPushButton] = []
         self._setup_ui()
 
     # ------------------------------------------------------------------
@@ -99,8 +98,8 @@ class ProductGrid(QWidget):
 
     def set_products(
         self,
-        products: List[Product],
-        category_color: Optional[str] = None,
+        products: list[Product],
+        category_color: str | None = None,
     ) -> None:
         """Replace the grid contents with *products*.
 

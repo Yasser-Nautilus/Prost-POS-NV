@@ -9,7 +9,8 @@ and end-of-day driver summary.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from collections.abc import Callable
+from typing import Any
 
 from broast_pos.core.services.delivery_service import DeliveryService
 from broast_pos.core.services.order_service import OrderService
@@ -49,8 +50,8 @@ class DeliveryController:
             delivery_service._settlement_svc = settlement_service
 
         # UI callbacks
-        self._on_drivers_changed: Optional[Callable] = None
-        self._on_trips_changed: Optional[Callable] = None
+        self._on_drivers_changed: Callable | None = None
+        self._on_trips_changed: Callable | None = None
 
     # ------------------------------------------------------------------
     # Callback registration
@@ -66,7 +67,7 @@ class DeliveryController:
     # 1. Driver Management
     # ------------------------------------------------------------------
 
-    def check_in_driver(self, driver_id: int) -> Tuple[bool, str]:
+    def check_in_driver(self, driver_id: int) -> tuple[bool, str]:
         """Activate driver for current shift."""
         try:
             self._delivery_svc.check_in_driver(driver_id)
@@ -75,7 +76,7 @@ class DeliveryController:
         except Exception as exc:
             return False, str(exc)
 
-    def check_out_driver(self, driver_id: int) -> Tuple[bool, str]:
+    def check_out_driver(self, driver_id: int) -> tuple[bool, str]:
         """Deactivate driver at end of shift."""
         try:
             self._delivery_svc.check_out_driver(driver_id)
@@ -84,7 +85,7 @@ class DeliveryController:
         except Exception as exc:
             return False, str(exc)
 
-    def get_available_drivers(self) -> List[Dict[str, Any]]:
+    def get_available_drivers(self) -> list[dict[str, Any]]:
         """Return all active drivers with their check-in status."""
         try:
             all_drivers = self._delivery_svc.get_all_drivers()
@@ -106,7 +107,7 @@ class DeliveryController:
         except Exception:
             return []
 
-    def get_active_drivers(self) -> List[Dict[str, Any]]:
+    def get_active_drivers(self) -> list[dict[str, Any]]:
         """Return list of checked-in drivers for the dispatch list."""
         return self.get_available_drivers()
 
@@ -128,7 +129,7 @@ class DeliveryController:
     # 2. Unassigned Orders
     # ------------------------------------------------------------------
 
-    def get_unassigned_deliveries(self) -> List[Dict[str, Any]]:
+    def get_unassigned_deliveries(self) -> list[dict[str, Any]]:
         """Return delivery orders not yet assigned to a driver."""
         try:
             orders = self._order_svc.get_unassigned_deliveries()
@@ -156,8 +157,8 @@ class DeliveryController:
     def create_trip(
         self,
         driver_id: int,
-        order_ids: List[int],
-    ) -> Tuple[bool, Any]:
+        order_ids: list[int],
+    ) -> tuple[bool, Any]:
         """Create a delivery trip with selected orders.
 
         The backend (DeliveryService.create_trip) is the authoritative
@@ -176,7 +177,7 @@ class DeliveryController:
         except Exception as exc:
             return False, str(exc)
 
-    def dispatch_trip(self, trip_id: int) -> Tuple[bool, str]:
+    def dispatch_trip(self, trip_id: int) -> tuple[bool, str]:
         """Mark trip as dispatched (driver physically left)."""
         try:
             self._delivery_svc.mark_dispatched(trip_id)
@@ -190,7 +191,7 @@ class DeliveryController:
     # 4. Mark Returned
     # ------------------------------------------------------------------
 
-    def mark_returned(self, trip_id: int) -> Tuple[bool, str]:
+    def mark_returned(self, trip_id: int) -> tuple[bool, str]:
         """Mark trip as returned (driver back at restaurant)."""
         try:
             self._delivery_svc.mark_returned(trip_id)
@@ -200,7 +201,7 @@ class DeliveryController:
         except Exception as exc:
             return False, str(exc)
 
-    def return_trip(self, trip_id: int) -> Tuple[bool, str]:
+    def return_trip(self, trip_id: int) -> tuple[bool, str]:
         """Alias for mark_returned to align with bridge naming."""
         return self.mark_returned(trip_id)
 
@@ -208,7 +209,7 @@ class DeliveryController:
     # 5. Settlement
     # ------------------------------------------------------------------
 
-    def get_settlement_details(self, trip_id: int) -> Optional[Dict[str, Any]]:
+    def get_settlement_details(self, trip_id: int) -> dict[str, Any] | None:
         """Return the canonical service settlement payload."""
         return self.get_trip_details(trip_id)
 
@@ -218,7 +219,7 @@ class DeliveryController:
         print_receipt: bool = False,
         settled_by_id: int = 0,
         settled_by_name: str = "نظام تسوية",
-    ) -> Tuple[bool, str]:
+    ) -> tuple[bool, str]:
         """Confirm settlement — driver hands over cash.
 
         Args:
@@ -245,7 +246,7 @@ class DeliveryController:
         self._notify_trips()
         return True, "تم تسوية الرحلة"
 
-    def get_unsettled_trips(self, driver_id: Optional[int] = None) -> List[Dict[str, Any]]:
+    def get_unsettled_trips(self, driver_id: int | None = None) -> list[dict[str, Any]]:
         """Get all returned but unsettled trips."""
         try:
             trips = self._delivery_svc.get_unsettled_trips(driver_id)
@@ -268,7 +269,7 @@ class DeliveryController:
     # 7. End-of-Day Driver Summary
     # ------------------------------------------------------------------
 
-    def get_trip_details(self, trip_id: int) -> Optional[Dict[str, Any]]:
+    def get_trip_details(self, trip_id: int) -> dict[str, Any] | None:
         """Public passthrough to DeliveryService.get_trip_details.
 
         Provides the full per-order breakdown for the settlement dialog.
@@ -280,7 +281,7 @@ class DeliveryController:
         except Exception:
             return None
 
-    def get_driver_attendance_today(self) -> List[Dict[str, Any]]:
+    def get_driver_attendance_today(self) -> list[dict[str, Any]]:
         """Public passthrough to DeliveryService.get_driver_attendance_today.
 
         Bridge must call this method instead of reaching into
@@ -291,7 +292,7 @@ class DeliveryController:
         except Exception:
             return []
 
-    def get_all_drivers_daily_summary(self) -> List[Dict[str, Any]]:
+    def get_all_drivers_daily_summary(self) -> list[dict[str, Any]]:
         """Public passthrough to DeliveryService.get_all_drivers_daily_summary.
 
         Bridge must call this method instead of reaching into
@@ -302,7 +303,7 @@ class DeliveryController:
         except Exception:
             return []
 
-    def get_daily_summary(self) -> List[Dict[str, Any]]:
+    def get_daily_summary(self) -> list[dict[str, Any]]:
         """Get end-of-day summary for all drivers.
 
         Returns:
@@ -313,7 +314,7 @@ class DeliveryController:
         except Exception:
             return []
 
-    def get_driver_summary(self, driver_id: int) -> Optional[Dict[str, Any]]:
+    def get_driver_summary(self, driver_id: int) -> dict[str, Any] | None:
         """Get daily summary for a specific driver."""
         try:
             return self._delivery_svc.get_driver_daily_summary(driver_id)
@@ -335,7 +336,7 @@ class DeliveryController:
     # Active Trips (for Delivery View display)
     # ------------------------------------------------------------------
 
-    def get_active_trips(self) -> List[Dict[str, Any]]:
+    def get_active_trips(self) -> list[dict[str, Any]]:
         """Return all live trips: in-transit + returned-but-unsettled.
 
         Uses the repo directly because DeliveryService.get_unsettled_trips()
@@ -348,9 +349,9 @@ class DeliveryController:
             # Returned but not yet settled (cash handover pending)
             unsettled = repo.get_unsettled_trips()
 
-            all_trips: List[Dict[str, Any]] = []
+            all_trips: list[dict[str, Any]] = []
 
-            def _serialize(t: Any, status: str) -> Dict[str, Any]:
+            def _serialize(t: Any, status: str) -> dict[str, Any]:
                 return {
                     "id": t.id,
                     "driver_id": t.driver_id,
@@ -399,9 +400,9 @@ class DeliveryController:
     def get_driver_settlement_preview(
         self,
         driver_id: int,
-        settlement_date: Optional[str] = None,
-        trip_id: Optional[int] = None,
-    ) -> Optional[Dict[str, Any]]:
+        settlement_date: str | None = None,
+        trip_id: int | None = None,
+    ) -> dict[str, Any] | None:
         """Return settlement preview without committing.
 
         Raises ValueError if driver not found or no eligible trips.
@@ -419,10 +420,10 @@ class DeliveryController:
         driver_id: int,
         settled_by_id: int,
         settled_by_name: str,
-        settlement_date: Optional[str] = None,
-        notes: Optional[str] = None,
-        trip_id: Optional[int] = None,
-    ) -> Tuple[bool, Any]:
+        settlement_date: str | None = None,
+        notes: str | None = None,
+        trip_id: int | None = None,
+    ) -> tuple[bool, Any]:
         """Atomically settle all eligible trips for a driver on a date.
 
         Returns:
@@ -447,9 +448,9 @@ class DeliveryController:
 
     def get_driver_settlements(
         self,
-        driver_id: Optional[int] = None,
-        date_str: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        driver_id: int | None = None,
+        date_str: str | None = None,
+    ) -> list[dict[str, Any]]:
         """Return settlement history records."""
         if self._settlement_svc is None:
             return []

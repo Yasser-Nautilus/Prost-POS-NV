@@ -21,14 +21,18 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Optional, List, Dict
+from datetime import UTC, datetime
 
 from broast_pos.core.models.cashier_session import (
-    CashierSession, CashLedgerEntry, LedgerEntryType, Station,
+    CashierSession,
+    CashLedgerEntry,
+    LedgerEntryType,
+    Station,
 )
-from broast_pos.data.repositories.cashier_session_repository import CashierSessionRepository
 from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
+from broast_pos.data.repositories.cashier_session_repository import (
+    CashierSessionRepository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,21 +49,21 @@ class SessionSnapshot:
     station: str                 # Station.value string
     is_open: bool
     opened_at: str
-    closed_at: Optional[str]
+    closed_at: str | None
 
     opening_float_pt: int        # from cashier_sessions.opening_float_pt
     expected_cash_pt: int        # SUM(cash_ledger.amount_pt) — ADR-1
-    counted_cash_pt: Optional[int]  # blind count (None if session still open)
-    variance_pt: Optional[int]      # counted - expected (None if open)
+    counted_cash_pt: int | None  # blind count (None if session still open)
+    variance_pt: int | None      # counted - expected (None if open)
 
-    breakdown: Dict[str, int]    # {entry_type: SUM(amount_pt)}
+    breakdown: dict[str, int]    # {entry_type: SUM(amount_pt)}
 
     @property
     def expected_cash_egp(self) -> float:
         return self.expected_cash_pt / 100
 
     @property
-    def variance_egp(self) -> Optional[float]:
+    def variance_egp(self) -> float | None:
         return self.variance_pt / 100 if self.variance_pt is not None else None
 
 
@@ -71,7 +75,7 @@ class XReport:
     """
     day_id: int
     generated_at: str
-    sessions: List[SessionSnapshot]
+    sessions: list[SessionSnapshot]
 
     @property
     def total_expected_cash_pt(self) -> int:
@@ -121,8 +125,8 @@ class BusinessDayService:
     def __init__(
         self,
         financial_service=None,      # FinancialService
-        session_repo: Optional[CashierSessionRepository] = None,
-        ledger_repo: Optional[CashLedgerRepository] = None,
+        session_repo: CashierSessionRepository | None = None,
+        ledger_repo: CashLedgerRepository | None = None,
         auth_service=None,
     ) -> None:
         self._financial = financial_service
@@ -146,7 +150,7 @@ class BusinessDayService:
 
         return XReport(
             day_id=day_id,
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
             sessions=snapshots,
         )
 
@@ -157,7 +161,7 @@ class BusinessDayService:
     def close_business_day(
         self,
         day_id: int,
-        manager_pin: Optional[str] = None,
+        manager_pin: str | None = None,
     ) -> ZReport:
         """
         Close the business day with v2 pre-checks, DRIVER_FEE_PAYOUT batch,
@@ -185,9 +189,9 @@ class BusinessDayService:
                 shift_id=day_id,
                 manager_pin=manager_pin,
             )
-            closed_at = closed_shift.closed_at or datetime.now(timezone.utc).isoformat()
+            closed_at = closed_shift.closed_at or datetime.now(UTC).isoformat()
         else:
-            closed_at = datetime.now(timezone.utc).isoformat()
+            closed_at = datetime.now(UTC).isoformat()
 
         # FR-DAY-3: Build Z-Report from final ledger state
         sessions = self._sessions.get_sessions_for_day(day_id)
@@ -199,7 +203,7 @@ class BusinessDayService:
 
         z_report = ZReport(
             day_id=day_id,
-            generated_at=datetime.now(timezone.utc).isoformat(),
+            generated_at=datetime.now(UTC).isoformat(),
             sessions=snapshots,
             day_closed_at=closed_at,
             total_variance_pt=total_variance,
@@ -290,7 +294,7 @@ class BusinessDayService:
         )
 
         count = 0
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         # Resolve a real actor_id for the ledger FK (actor_id cannot be 0 or NULL).
         # Use whoever opened the shift (shifts.opened_by).
