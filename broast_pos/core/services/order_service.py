@@ -230,6 +230,15 @@ class OrderService:
             )
 
         order.status = new_status
+        # If moving to COMPLETED, ensure is_paid is set (e.g. delivery settlement)
+        if new_status == OrderStatus.COMPLETED and not order.is_paid:
+            import datetime as _dt
+            order.is_paid = True
+            if not order.amount_paid:
+                order.amount_paid = order.total
+            if not order.paid_at:
+                order.paid_at = _dt.datetime.now().isoformat()
+
         saved = self._orders.save(order)
 
         # Record history — log on failure, never silently ignore

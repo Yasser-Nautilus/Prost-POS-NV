@@ -555,9 +555,15 @@ class POSBridge(QObject):
             elif action == "print_shift_summary":
                 if not self._reports_ctrl or not self._current_user:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
+                # Auto-resolve shift_id if not provided (mirrors other shift actions)
+                shift_id = payload.get("shift_id")
+                if shift_id is None and self._financial:
+                    active = self._financial.get_active_shift()
+                    if active:
+                        shift_id = active.id
                 # Correct method name: print_daily_summary (not print_shift_report)
                 printed = self._reports_ctrl.print_daily_summary(
-                    shift_id=payload.get("shift_id"),
+                    shift_id=shift_id,
                     cashier_slot=self._current_user.cashier_slot or 1
                 )
                 if not printed:
