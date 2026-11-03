@@ -459,7 +459,10 @@ class POSBridge(QObject):
                     if active is None:
                         return json.dumps({"success": True, "data": {"total_sales": 0, "cash_sales": 0, "total_expenses": 0, "pending_delivery": 0, "pending_dinein": 0, "pending_kitchen": 0, "expected_cash": 0}})
                     shift_id = active.id
-                summary = self._financial_ctrl.get_shift_summary(shift_id)
+                try:
+                    summary = self._financial_ctrl.get_shift_summary(shift_id)
+                except ValueError as e:
+                    return json.dumps({"success": False, "error": str(e)})
                 return json.dumps({"success": True, "data": summary})
 
             elif action == "get_expenses":
@@ -535,9 +538,12 @@ class POSBridge(QObject):
                 if not self._reports_ctrl:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
                 # Correct method: generate_daily_summary on ReportsController
-                data = self._reports_ctrl.generate_daily_summary(
-                    target_date=None, shift_id=payload.get("shift_id")
-                )
+                try:
+                    data = self._reports_ctrl.generate_daily_summary(
+                        target_date=None, shift_id=payload.get("shift_id")
+                    )
+                except ValueError as e:
+                    return json.dumps({"success": False, "error": str(e)})
                 return json.dumps({"success": True, "data": data})
 
             elif action == "get_report_product_sales":
@@ -548,12 +554,15 @@ class POSBridge(QObject):
                 return json.dumps({"success": True, "data": data})
 
             elif action == "print_shift_summary":
-                if self._reports_ctrl and self._current_user:
-                    # Correct method name: print_daily_summary (not print_shift_report)
-                    self._reports_ctrl.print_daily_summary(
-                        shift_id=payload.get("shift_id"),
-                        cashier_slot=self._current_user.cashier_slot or 1
-                    )
+                if not self._reports_ctrl or not self._current_user:
+                    return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
+                # Correct method name: print_daily_summary (not print_shift_report)
+                printed = self._reports_ctrl.print_daily_summary(
+                    shift_id=payload.get("shift_id"),
+                    cashier_slot=self._current_user.cashier_slot or 1
+                )
+                if not printed:
+                    return json.dumps({"success": False, "error": "فشل في طباعة تقرير الوردية"})
                 return json.dumps({"success": True})
 
             # ── Order Workspace ───────────────────────────────────────────────

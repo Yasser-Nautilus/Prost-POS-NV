@@ -28,6 +28,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLayout,
     QListWidget,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSizePolicy,
@@ -622,7 +623,12 @@ class ReportsView(QWidget):
         target = date(qdate.year(), qdate.month(), qdate.day())
 
         # Generate summary
-        summary = self._ctrl.generate_daily_summary(target)
+        try:
+            summary = self._ctrl.generate_daily_summary(target)
+        except ValueError as exc:
+            logger.error("Failed to generate daily summary: %s", exc)
+            QMessageBox.warning(self, "خطأ", str(exc))
+            return
 
         # Set metrics
         self._daily_rev_card.set_value(f"{summary['gross_revenue']:,.2f} ج.م")

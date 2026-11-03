@@ -99,18 +99,8 @@ class FinancialController:
 
             return payload
         except Exception as e:
-            logger.error("Error getting shift summary: %s", e)
-            return {
-                "total_sales": 0.0,
-                "cash_sales": 0.0,
-                "total_expenses": 0.0,
-                "pending_delivery": 0.0,
-                "pending_dinein": 0.0,
-                "pending_kitchen": 0.0,
-                "expected_cash": 0.0,
-                "order_count": 0,
-                "order_breakdown": {},
-            }
+            logger.error("Error getting shift summary: %s", e, exc_info=True)
+            raise ValueError(f"خطأ في تحميل ملخص الوردية: {e}")
 
     def get_expenses(self, shift_id: int) -> List[Dict[str, Any]]:
         """Get list of expenses in a shift."""

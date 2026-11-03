@@ -394,7 +394,13 @@ class FinancialView(QWidget):
             self._header.setText(f"الوردية النشطة: #{shift_id} 🏪")
 
             # Update Metrics
-            summary = self._ctrl.get_shift_summary(shift_id)
+            try:
+                summary = self._ctrl.get_shift_summary(shift_id)
+            except ValueError as exc:
+                logger.error("Failed to load shift summary: %s", exc)
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.warning(self, "خطأ", str(exc))
+                return
             self._sales_card.set_value(f"{summary['total_sales']:,.2f} ج.م")
             self._expenses_card.set_value(f"{summary['total_expenses']:,.2f} ج.م")
             self._expected_cash_card.set_value(f"{summary['expected_cash']:,.2f} ج.م")

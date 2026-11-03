@@ -245,20 +245,8 @@ class ReportsController:
             }
 
         except Exception as exc:
-            logger.error("Failed to generate daily summary: %s", exc)
-            return {
-                "date": d.isoformat(),
-                "generated_at": datetime.now().isoformat(),
-                "sales_by_type": {"breakdown": [], "grand_total": {"count": 0, "revenue": 0.0}},
-                "payment_breakdown": {"payments": [], "total": 0.0},
-                "gross_revenue": 0.0,
-                "restaurant_revenue": 0.0,
-                "total_delivery_fees": 0.0,
-                "cancelled": {"count": 0, "orders": []},
-                "bestsellers": [],
-                "driver_summary": [],
-                "shift_summary": None,
-            }
+            logger.error("Failed to generate daily summary: %s", exc, exc_info=True)
+            raise ValueError(f"خطأ في إنشاء التقرير اليومي: {exc}")
 
     # ------------------------------------------------------------------
     # Task 3: Print Integration

@@ -334,3 +334,57 @@ class TestRepositoryShiftQueries:
         assert captured
         sql = captured[0]
         assert "is_paid = 1" in sql, f"Must filter is_paid=1. Got: {sql!r}"
+
+
+# ===========================================================================
+# Part C: Error Propagation & Print Success Checks
+# ===========================================================================
+
+class TestReportAndSummaryErrorPropagation:
+
+    def test_financial_controller_get_shift_summary_raises_error(self):
+        from broast_pos.features.financial.financial_controller import FinancialController
+        ctrl = FinancialController.__new__(FinancialController)
+        ctrl._financial_svc = MagicMock()
+        ctrl._financial_svc.get_shift_summary.side_effect = RuntimeError("DB connection dropped")
+        ctrl._auth_svc = MagicMock()
+
+        with pytest.raises(ValueError, match="خطأ في تحميل ملخص الوردية"):
+            ctrl.get_shift_summary(1)
+
+    def test_reports_controller_generate_daily_summary_raises_error(self):
+        from broast_pos.features.reports.reports_controller import ReportsController
+        ctrl = ReportsController.__new__(ReportsController)
+        ctrl.get_sales_by_type = MagicMock(side_effect=RuntimeError("Sales query failed"))
+
+        with pytest.raises(ValueError, match="خطأ في إنشاء التقرير اليومي"):
+            ctrl.generate_daily_summary()
+
+    def test_bridge_print_shift_summary_returns_error_when_print_fails(self):
+        import json
+        from broast_pos.infrastructure.web_bridge.bridge import POSBridge
+        bridge = POSBridge.__new__(POSBridge)
+        bridge._reports_ctrl = MagicMock()
+        bridge._reports_ctrl.print_daily_summary.return_value = False
+        user = MagicMock()
+        user.cashier_slot = 1
+        bridge._current_user = user
+
+        res_raw = POSBridge.dispatch(bridge, "print_shift_summary", json.dumps({"shift_id": 1}))
+        res = json.loads(res_raw)
+        assert res["success"] is False
+        assert "فشل في طباعة تقرير الوردية" in res["error"]
+
+    def test_bridge_print_shift_summary_returns_success_when_print_succeeds(self):
+        import json
+        from broast_pos.infrastructure.web_bridge.bridge import POSBridge
+        bridge = POSBridge.__new__(POSBridge)
+        bridge._reports_ctrl = MagicMock()
+        bridge._reports_ctrl.print_daily_summary.return_value = True
+        user = MagicMock()
+        user.cashier_slot = 1
+        bridge._current_user = user
+
+        res_raw = POSBridge.dispatch(bridge, "print_shift_summary", json.dumps({"shift_id": 1}))
+        res = json.loads(res_raw)
+        assert res["success"] is True
