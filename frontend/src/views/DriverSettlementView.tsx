@@ -503,6 +503,34 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                   </div>
                 );
               })}
+
+              {/* CHANGED: daily delivery-fee total for the driver — the cash to
+                  hand over at the end of the day ("take 35 today"). Sums the
+                  رسوم of every trip (settled or not) for the selected driver. */}
+              {allTripsPreview?.trips?.length > 0 && (() => {
+                const totalDriverFees = allTripsPreview.trips.reduce(
+                  (sum: number, t: any) => sum + (t.fees || 0),
+                  0
+                );
+                return (
+                  <div className="mt-6 rounded-2xl border-2 border-brand-gold/40 bg-brand-gold/10 p-5 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="h-11 w-11 rounded-xl bg-brand-gold/20 flex items-center justify-center">
+                        <TruckIcon className="text-brand-gold" size={20} />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-white">إجمالي توصيل السائق اليوم</p>
+                        <p className="text-xs text-gray-400">
+                          مستحق التسليم للسائق — {allTripsPreview.trips.length} رحلة
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-2xl font-black text-brand-gold font-mono">
+                      {fmtEGP(totalDriverFees)}
+                    </span>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
