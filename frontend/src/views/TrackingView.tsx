@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Eye, RefreshCw, Loader2, X,
-  UtensilsCrossed, Truck, Package, ShoppingBag, PlusCircle, History, Archive, Clock
+  UtensilsCrossed, Truck, Package, ShoppingBag, History, Archive, Clock, HandCoins
 } from "lucide-react";
 
 // Takeaway stays on the live board this long after payment, then auto-archives.
@@ -13,6 +13,8 @@ import { CustomerHistoryModal } from "../components/CustomerHistoryModal";
 interface TrackingViewProps {
   currentUser: any;
   onResumeOrder?: (order: any) => void;
+  // CHANGED: hand a pickup order to POS for payment on handover ("تسليم").
+  onHandoverOrder?: (order: any) => void;
 }
 
 const ORDER_TYPE_LABELS: Record<string, { label: string; icon: any; color: string }> = {
@@ -97,8 +99,8 @@ const CountdownTimer: React.FC<{ since: string | null; windowSecs: number }> = (
 // Dine-in rows are fully clickable: tapping a table opens it in the POS so the
 // cashier can add items, settle & close, or move it to another table. No inline
 // action column — the whole row is the affordance.
-const DineInTable: React.FC<{ orders: any[]; onResume: (o: any) => void }> =
-  ({ orders, onResume }) => (
+const DineInTable: React.FC<{ orders: any[]; onResume: (o: any) => void; onCancel: (id: number) => void; canCancel: boolean }> =
+  ({ orders, onResume, onCancel, canCancel }) => (
     <table className="w-full text-sm">
       <thead>
         <tr className="bg-brand-card/80 text-gray-400 text-xs">
@@ -108,6 +110,7 @@ const DineInTable: React.FC<{ orders: any[]; onResume: (o: any) => void }> =
           <th className="py-2.5 px-3 text-center">الحالة</th>
           <th className="py-2.5 px-3 text-center">المنقضي</th>
           <th className="py-2.5 px-3 text-center font-mono">الإجمالي</th>
+          <th className="py-2.5 px-3 text-center">إجراء</th>
         </tr>
       </thead>
       <tbody>
@@ -139,6 +142,19 @@ const DineInTable: React.FC<{ orders: any[]; onResume: (o: any) => void }> =
               <td className="py-2.5 px-3 text-center text-brand-gold font-black font-mono text-sm">
                 {(order.total || 0).toFixed(2)} ج.م
               </td>
+              {/* CHANGED: cancel (x) now available on dine-in too. stopPropagation
+                  keeps the row's click (open table) from firing. */}
+              <td className="py-2.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                {canCancel && order.status !== "completed" && order.status !== "cancelled" && (
+                  <button
+                    onClick={() => onCancel(order.id)}
+                    className="py-1 px-2 bg-red-950/20 text-red-400 border border-red-900/30 hover:bg-red-950/40 rounded-lg text-[10px] font-bold transition-all"
+                    title="إلغاء الطلب"
+                  >
+                    <X size={11} />
+                  </button>
+                )}
+              </td>
             </tr>
           );
         })}
@@ -146,8 +162,8 @@ const DineInTable: React.FC<{ orders: any[]; onResume: (o: any) => void }> =
     </table>
   );
 
-const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; onResume: (o: any) => void; canCancel: boolean; onViewCustomer?: (order: any) => void }> =
-  ({ orders, onCancel, onResume, canCancel, onViewCustomer }) => (
+const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; onResume: (o: any) => void; canCancel: boolean; onViewCustomer?: (order: any) => void; onHandover?: (o: any) => void }> =
+  ({ orders, onCancel, onResume, canCancel, onViewCustomer, onHandover }) => (
     <table className="w-full text-sm">
       <thead>
         <tr className="bg-brand-card/80 text-gray-400 text-xs">
@@ -170,12 +186,18 @@ const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => v
             order.status !== "completed" &&
             order.status !== "cancelled";
           return (
-            <tr key={order.id} className={`border-t border-brand-border/20 ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}>
+            // CHANGED: whole row is now clickable → opens the order in POS, like dine-in.
+            <tr
+              key={order.id}
+              onClick={() => canAddItems && onResume(order)}
+              title={canAddItems ? "افتح الطلب" : undefined}
+              className={`border-t border-brand-border/20 transition-colors ${canAddItems ? "cursor-pointer hover:bg-brand-gold/5" : ""} ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}
+            >
               <td className="py-2.5 px-3 text-gray-400 font-mono text-xs">#{order.invoice_no || order.id}</td>
               <td className="py-2.5 px-3">
                 {onViewCustomer && order.customer_id ? (
                   <button
-                    onClick={() => onViewCustomer(order)}
+                    onClick={(e) => { e.stopPropagation(); onViewCustomer(order); }}
                     className="text-right group"
                     title="عرض تاريخ العميل"
                   >
@@ -217,21 +239,25 @@ const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => v
               <td className="py-2.5 px-3 text-center text-brand-gold font-black font-mono text-sm">
                 {(order.total || 0).toFixed(2)} ج.م
               </td>
-              <td className="py-2.5 px-3">
+              {/* CHANGED: "إضافة" removed (row click opens the order now). Keep the
+                  pickup handover + cancel actions. stopPropagation so these buttons
+                  don't also trigger the row's open-in-POS click. */}
+              <td className="py-2.5 px-3" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center gap-1.5 justify-center">
-                  {canAddItems && (
+                  {onHandover && order.order_type === "pickup" && canAddItems && (
                     <button
-                      onClick={() => onResume(order)}
-                      className="py-1 px-2 bg-brand-gold/10 text-brand-gold border border-brand-gold/30 hover:bg-brand-gold/20 rounded-lg text-[10px] font-bold flex items-center gap-0.5 transition-all"
-                      title="إضافة أصناف للطلب"
+                      onClick={() => onHandover(order)}
+                      className="py-1 px-2 bg-green-900/20 text-green-400 border border-green-800/40 hover:bg-green-900/40 rounded-lg text-[10px] font-bold flex items-center gap-0.5 transition-all"
+                      title="تسليم العميل وتحصيل الدفع"
                     >
-                      <PlusCircle size={11} /> إضافة
+                      <HandCoins size={11} /> تسليم
                     </button>
                   )}
                   {canCancel && order.status !== "completed" && order.status !== "cancelled" && order.status !== "out_for_delivery" && (
                     <button
                       onClick={() => onCancel(order.id)}
                       className="py-1 px-2 bg-red-950/20 text-red-400 border border-red-900/30 hover:bg-red-950/40 rounded-lg text-[10px] font-bold transition-all"
+                      title="إلغاء الطلب"
                     >
                       <X size={11} />
                     </button>
@@ -261,8 +287,15 @@ const TakeawayTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; o
       <tbody>
         {orders.map((order, i) => {
           const status = STATUS_LABELS[order.status] || { label: order.status, color: "text-gray-400" };
+          const canAddItems = order.status !== "completed" && order.status !== "cancelled";
           return (
-            <tr key={order.id} className={`border-t border-brand-border/20 ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}>
+            // CHANGED: whole row is now clickable → opens the order in POS, like dine-in.
+            <tr
+              key={order.id}
+              onClick={() => canAddItems && onResume(order)}
+              title={canAddItems ? "افتح الطلب" : undefined}
+              className={`border-t border-brand-border/20 transition-colors ${canAddItems ? "cursor-pointer hover:bg-brand-gold/5" : ""} ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}
+            >
               <td className="py-2.5 px-3 text-gray-400 font-mono text-xs">#{order.invoice_no || order.id}</td>
               <td className="py-2.5 px-3 text-gray-400 text-xs">
                 {(order.items || []).slice(0, 3).map((it: any, j: number) => (
@@ -279,23 +312,18 @@ const TakeawayTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; o
               <td className="py-2.5 px-3 text-center text-brand-gold font-black font-mono text-sm">
                 {(order.total || 0).toFixed(2)} ج.م
               </td>
-              <td className="py-2.5 px-3 text-center">
-                <div className="flex items-center gap-1.5 justify-center">
+              {/* CHANGED: "إضافة" removed (row click opens the order). Keep cancel.
+                  stopPropagation so the button doesn't trigger the row click. */}
+              <td className="py-2.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                {canCancel && order.status !== "completed" && order.status !== "cancelled" && (
                   <button
-                    onClick={() => onResume(order)}
-                    className="py-1 px-2 bg-brand-gold/10 text-brand-gold border border-brand-gold/30 hover:bg-brand-gold/20 rounded-lg text-[10px] font-bold flex items-center gap-0.5 transition-all"
+                    onClick={() => onCancel(order.id)}
+                    className="py-1 px-2 bg-red-950/20 text-red-400 border border-red-900/30 hover:bg-red-950/40 rounded-lg text-[10px] font-bold transition-all"
+                    title="إلغاء الطلب"
                   >
-                    <PlusCircle size={11} /> إضافة
+                    <X size={11} />
                   </button>
-                  {canCancel && order.status !== "completed" && order.status !== "cancelled" && (
-                    <button
-                      onClick={() => onCancel(order.id)}
-                      className="py-1 px-2 bg-red-950/20 text-red-400 border border-red-900/30 hover:bg-red-950/40 rounded-lg text-[10px] font-bold transition-all"
-                    >
-                      <X size={11} />
-                    </button>
-                  )}
-                </div>
+                )}
               </td>
             </tr>
           );
@@ -363,7 +391,7 @@ const HistoryTable: React.FC<{ orders: any[] }> = ({ orders }) => (
 
 // ─── Main View ────────────────────────────────────────────────────────────────
 
-export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResumeOrder }) => {
+export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResumeOrder, onHandoverOrder }) => {
   const [orders, setOrders] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -571,6 +599,8 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
                 <DineInTable
                   orders={typeOrders}
                   onResume={handleResume}
+                  onCancel={handleCancelClick}
+                  canCancel={isManagerOrAbove}
                 />
               )}
               {(type === "delivery" || type === "pickup") && (
@@ -579,6 +609,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
                   onCancel={handleCancelClick}
                   onResume={handleResume}
                   canCancel={isManagerOrAbove}
+                  onHandover={onHandoverOrder}
                   onViewCustomer={(order: any) => {
                     setHistoryCustomerId(order.customer_id || null);
                     setHistoryCustomerName(order.customer_name || undefined);

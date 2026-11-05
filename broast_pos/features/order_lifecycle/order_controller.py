@@ -381,11 +381,12 @@ class OrderController:
 
         return True, ConfirmResult(
             invoice_no=saved.invoice_no,
-            # Dine-in now confirms without collecting payment: the table stays
-            # open and is settled later from the tracking view ("دفع وإغلاق
-            # الفاتورة"). Takeaway/pickup still pay immediately at confirm time.
+            # CHANGED: pickup now confirms WITHOUT collecting payment. The
+            # customer pays on handover ("تسليم") from the tracking view, same
+            # as dine-in is settled there. Only takeaway still pays immediately
+            # at confirm time.
             needs_immediate_payment=(
-                saved.order_type in (OrderType.TAKEAWAY, OrderType.PICKUP)
+                saved.order_type == OrderType.TAKEAWAY
             ),
             order_id=saved.id,
         )

@@ -32,6 +32,16 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      // CHANGED: reset the lookup every time the dialog opens, so a previous
+      // order's phone/customer/forms don't linger when it's reopened.
+      setPhone("");
+      setCustomer(null);
+      setSearched(false);
+      setIsRegistering(false);
+      setRegName("");
+      setIsAddingAddress(false);
+      setStreet("");
+
       // Load active delivery zones
       bridge.call("get_active_zones")
         .then((res) => {

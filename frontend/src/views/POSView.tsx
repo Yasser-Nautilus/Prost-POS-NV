@@ -12,9 +12,13 @@ import { TableGrid } from "../components/TableGrid";
 
 interface POSViewProps {
   currentUser: any;
+  // CHANGED: a pickup order sent from the tracking view for handover ("تسليم").
+  // When set, POS opens the payment dialog for it. Parent clears it afterwards.
+  handoverOrder?: any | null;
+  onHandoverConsumed?: () => void;
 }
 
-export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
+export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, onHandoverConsumed }) => {
   // POS States
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
@@ -96,6 +100,19 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
       fetchProducts(selectedCatId);
     }
   }, [selectedCatId]);
+
+  // CHANGED: handover ("تسليم") from the tracking view — the pickup order was
+  // already loaded by the parent via load_order, so just open the payment
+  // dialog for it. pendingOrderType stays null-of-takeaway → finalize=true, so
+  // paying closes the order (same path as the old immediate-pay pickup flow).
+  useEffect(() => {
+    if (!handoverOrder) return;
+    setPendingOrderId(handoverOrder.id);
+    setPendingTotal(handoverOrder.total || 0);
+    setPendingOrderType(handoverOrder.order_type || "pickup");
+    setIsPaymentOpen(true);
+    onHandoverConsumed?.();
+  }, [handoverOrder]);
 
   const fetchCategories = async () => {
     try {
@@ -343,7 +360,14 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
         await bridge.call("save_amendment");
         setIsAmending(false);
         setSelectedTable(null);
+        // CHANGED: start a fresh empty order instead of re-fetching the just-saved
+        // one. fetchCurrentOrder() would reload the saved order (with invoice_no),
+        // keeping its items in the cart and staying in amending mode. new_order
+        // resets the workspace so the cashier sees a clean "new order".
+        await bridge.call("new_order", { order_type: "dine_in" });
         await fetchCurrentOrder();
+        fetchParkedCount();
+        fetchTableState();
         alert("تم حفظ تعديلات الطلب بنجاح!");
       } catch (e: any) {
         alert("فشل حفظ التعديلات: " + e.message);
@@ -776,7 +800,9 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser }) => {
               <CreditCard size={20} />
               {isAmending
                 ? "حفظ التعديلات"
-                : currentOrder?.order_type === "dine_in"
+                : (currentOrder?.order_type === "dine_in" ||
+                   currentOrder?.order_type === "pickup")
+                /* CHANGED: pickup confirms only (pays later on handover) */
                 ? "تأكيد الطلب"
                 : "تأكيد ودفع الفاتورة"}
             </button>
