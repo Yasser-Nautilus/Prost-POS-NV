@@ -506,15 +506,25 @@ class DriverSettlementService:
             return
 
         open_sessions = self._cashier_sessions.get_open_sessions_for_day(day_id)
-        # Prefer DELIVERY session, fall back to ALL
-        session = next(
-            (s for s in open_sessions if s.station == Station.DELIVERY), None
-        ) or next(
-            (s for s in open_sessions if s.station == Station.ALL), None
+        # CHANGED: prefer DELIVERY, then ALL, then any other open session
+        # (e.g. COUNTER at night) so trip cash can be deposited into whatever
+        # drawer is open.
+        session = (
+            next((s for s in open_sessions if s.station == Station.DELIVERY), None)
+            or next((s for s in open_sessions if s.station == Station.ALL), None)
+            or (open_sessions[0] if open_sessions else None)
         )
 
+        # CHANGED: when NO cashier session is open at all, don't block the trip
+        # settlement — skip the ledger booking (legacy / no-session mode) and log.
         if session is None:
-            raise ValueError("لا توجد جلسة كاشير نشطة (توصيل أو عامة) لتوريد نقدية الرحلة")
+            logger.warning(
+                "No open cashier session for day %d — settling trip %d "
+                "without a ledger remittance entry.",
+                day_id,
+                trip_id,
+            )
+            return
 
         amount_pt = round(trip_cash * 100)
         try:
