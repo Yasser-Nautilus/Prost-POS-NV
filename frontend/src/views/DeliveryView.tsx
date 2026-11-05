@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Truck, Users, UserCheck, UserMinus, Plus, MapPin, CheckCircle,
-  Loader2, RotateCcw, RefreshCw, Clock, Search, BarChart3, X
+  Loader2, RotateCcw, RefreshCw, Clock, Search, X
 } from "lucide-react";
 import { bridge } from "../bridge";
 
@@ -193,7 +193,6 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
   const [trips, setTrips] = useState<any[]>([]);
   const [unassignedOrders, setUnassignedOrders] = useState<any[]>([]);
   const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
-  const [dailySummary, setDailySummary] = useState<any[]>([]);
   const [selectedOrders, setSelectedOrders] = useState<number[]>([]);
   const [selectedDriverId, setSelectedDriverId] = useState<string>("");
   const [loading, setLoading] = useState(false);
@@ -204,18 +203,16 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [drvs, trps, orders, att, summary] = await Promise.all([
+      const [drvs, trps, orders, att] = await Promise.all([
         bridge.call("get_available_drivers"),
         bridge.call("get_active_trips"),
         bridge.call("get_active_orders"),
         bridge.call("get_driver_attendance_today"),
-        bridge.call("get_daily_driver_summary"),
       ]);
       setDrivers(drvs || []);
       setTrips(trps || []);
       setUnassignedOrders((orders || []).filter((o: any) => o.order_type === "delivery" && o.status === "new"));
       setAttendanceRecords(att || []);
-      setDailySummary(summary || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -284,7 +281,6 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
     (r.display_name || "").toLowerCase().includes(attendanceSearch.toLowerCase())
   );
 
-  const totalDayFees = dailySummary.reduce((sum: number, d: any) => sum + (d.fees_earned || 0), 0);
 
   if (loading && drivers.length === 0) {
     return (
