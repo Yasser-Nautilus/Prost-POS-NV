@@ -375,7 +375,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
         {([
           { id: "dispatch", label: "إرسال رحلة", icon: Truck },
           { id: "attendance", label: "حضور الطيارين", icon: Users },
-          { id: "summary", label: "ملخص اليوم", icon: BarChart3 },
+          // CHANGED: removed "ملخص اليوم" (today summary) tab per request
         ] as const).map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -427,9 +427,13 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
                       <thead>
                         <tr className="bg-brand-card/60 text-gray-500">
                           <th className="py-1.5 px-2 text-right">✓</th>
+                          {/* CHANGED: added invoice-number column */}
+                          <th className="py-1.5 px-2 text-right font-mono">الفاتورة</th>
                           <th className="py-1.5 px-2 text-right">العميل</th>
                           <th className="py-1.5 px-2 text-right">المنطقة</th>
+                          {/* CHANGED: split amount into base amount + delivery fee */}
                           <th className="py-1.5 px-2 text-right font-mono">المبلغ</th>
+                          <th className="py-1.5 px-2 text-right font-mono">التوصيل</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -448,11 +452,15 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
                                   {isSel && <span className="text-[8px] text-brand-dark font-black">✓</span>}
                                 </div>
                               </td>
+                              {/* CHANGED: invoice number */}
+                              <td className="py-2 px-2 text-gray-400 font-mono">#{o.invoice_no || o.id}</td>
                               <td className="py-2 px-2 text-white font-bold">{o.customer_name || "—"}</td>
                               <td className="py-2 px-2 text-gray-400 flex items-center gap-0.5">
                                 <MapPin size={9} />{o.customer_zone || "—"}
                               </td>
-                              <td className="py-2 px-2 text-brand-gold font-bold font-mono">{(o.total || 0).toFixed(0)} ج.م</td>
+                              {/* CHANGED: base amount (total minus delivery fee) + delivery fee separately */}
+                              <td className="py-2 px-2 text-brand-gold font-bold font-mono">{((o.total || 0) - (o.delivery_fee || 0)).toFixed(0)} ج.م</td>
+                              <td className="py-2 px-2 text-amber-400 font-bold font-mono">{(o.delivery_fee || 0).toFixed(0)} ج.م</td>
                             </tr>
                           );
                         })}
@@ -591,53 +599,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
           </div>
         )}
 
-        {/* ── DAILY SUMMARY TAB ───────────────────────────────────── */}
-        {activeTab === "summary" && (
-          <div className="p-4 space-y-3">
-            <div className="text-xs text-gray-400 mb-2">ملخص رسوم التوصيل لليوم</div>
-            <div className="rounded-2xl border border-brand-border/40 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-brand-card/80 text-gray-400 text-xs">
-                    <th className="py-2.5 px-3 text-right">الطيار</th>
-                    <th className="py-2.5 px-3 text-center">رحلات</th>
-                    <th className="py-2.5 px-3 text-center">طلبات</th>
-                    <th className="py-2.5 px-3 text-center font-mono">إجمالي التوصيل</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dailySummary.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="py-8 text-center text-gray-500 text-xs">
-                        <BarChart3 size={24} className="mx-auto mb-1.5 text-brand-border/40" />
-                        لا توجد رحلات مكتملة اليوم بعد
-                      </td>
-                    </tr>
-                  ) : (
-                    dailySummary.map((drv: any, i: number) => (
-                      <tr key={drv.driver_id} className={`border-t border-brand-border/20 ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}>
-                        <td className="py-2.5 px-3 text-white font-bold">{drv.driver_name}</td>
-                        <td className="py-2.5 px-3 text-center text-gray-400">{drv.trip_count || 0}</td>
-                        <td className="py-2.5 px-3 text-center text-gray-400">{drv.order_count || 0}</td>
-                        <td className="py-2.5 px-3 text-center text-brand-gold font-black font-mono">
-                          {(drv.fees_earned || 0).toFixed(2)} ج.م
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                  {dailySummary.length > 0 && (
-                    <tr className="border-t-2 border-brand-gold/30 bg-brand-gold/5">
-                      <td colSpan={3} className="py-2.5 px-3 text-brand-gold font-black text-right text-sm">إجمالي التوصيل لليوم</td>
-                      <td className="py-2.5 px-3 text-center text-brand-gold font-black text-lg font-mono">
-                        {totalDayFees.toFixed(2)} ج.م
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+        {/* CHANGED: "ملخص اليوم" (daily summary) tab removed per request */}
 
       </div>
 
