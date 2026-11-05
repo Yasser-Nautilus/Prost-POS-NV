@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Package, Plus, Edit3, EyeOff, RefreshCw, Loader2, AlertCircle, X, Check } from "lucide-react";
+import { Package, Plus, Edit3, EyeOff, RefreshCw, Loader2, AlertCircle, X, Check, GripVertical } from "lucide-react";
 import { bridge } from "../bridge";
 
 interface ProductsViewProps {
@@ -11,6 +11,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
   const [products, setProducts] = useState<any[]>([]);
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
+  // CHANGED: drag & drop reordering of categories
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
 
   // Product form state
   const [showProductForm, setShowProductForm] = useState(false);
@@ -127,6 +130,43 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
     }
   };
 
+  // ── Category drag & drop reordering ───────────────────────────────────────
+
+  const handleCatDrop = async () => {
+    if (dragIndex === null || overIndex === null || dragIndex === overIndex) {
+      setDragIndex(null);
+      setOverIndex(null);
+      return;
+    }
+    // reorder locally for instant feedback
+    const reordered = [...categories];
+    const [moved] = reordered.splice(dragIndex, 1);
+    reordered.splice(overIndex, 0, moved);
+    setCategories(reordered);
+    setDragIndex(null);
+    setOverIndex(null);
+    await persistCategoryOrder(reordered);
+  };
+
+  // Persist the new order to the backend. `ordered` is the categories array in
+  // its new visual order. Each category must get a sort_order matching its new
+  // index so the order survives the next fetchAll().
+  const persistCategoryOrder = async (ordered: any[]) => {
+    try {
+      // CHANGED: persist new order as sort_order for every category
+      for (const [index, cat] of ordered.entries()) {
+        await bridge.call("update_category", {
+          category_id: cat.id,
+          name: cat.name,
+          sort_order: index,
+        });
+      }
+    } catch (err: any) {
+      alert("فشل حفظ الترتيب: " + err.message);
+      fetchAll(); // revert to server state on failure
+    }
+  };
+
   // ── Category form handlers ────────────────────────────────────────────────
 
   const openNewCategory = () => {
@@ -224,17 +264,38 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
         {/* Category sidebar */}
         <div className="w-48 flex-shrink-0 space-y-2 overflow-y-auto">
           <h4 className="text-xs font-bold text-gray-500 mb-3">الفئات</h4>
-          {categories.map((cat) => (
+          {categories.map((cat, index) => (
             <div
               key={cat.id}
-              className={`flex justify-between items-center p-3 rounded-xl border cursor-pointer transition-all group ${
+              draggable
+              onDragStart={() => setDragIndex(index)}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (overIndex !== index) setOverIndex(index);
+              }}
+              onDragEnd={() => {
+                setDragIndex(null);
+                setOverIndex(null);
+              }}
+              onDrop={handleCatDrop}
+              className={`flex justify-between items-center gap-2 p-3 rounded-xl border cursor-grab active:cursor-grabbing transition-all group ${
                 selectedCatId === cat.id
                   ? "bg-brand-gold/10 border-brand-gold text-brand-gold"
                   : "bg-brand-card/40 border-brand-border/30 text-gray-300 hover:border-brand-border"
-              } ${!cat.is_active ? "opacity-50" : ""}`}
+              } ${!cat.is_active ? "opacity-50" : ""} ${
+                dragIndex === index ? "opacity-40" : ""
+              } ${
+                overIndex === index && dragIndex !== null && dragIndex !== index
+                  ? "border-brand-gold border-dashed"
+                  : ""
+              }`}
               onClick={() => setSelectedCatId(cat.id)}
             >
-              <span className="text-sm font-bold truncate">{cat.name}</span>
+              <GripVertical
+                size={14}
+                className="flex-shrink-0 text-gray-600 group-hover:text-gray-400 transition-colors"
+              />
+              <span className="text-sm font-bold truncate flex-1">{cat.name}</span>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
