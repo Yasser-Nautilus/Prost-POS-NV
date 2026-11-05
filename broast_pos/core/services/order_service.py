@@ -836,7 +836,7 @@ class OrderService:
             actor_id=actor_id,
             approved_by=actor_id,
             reason=f"الغاء طلب #{order.invoice_no}: {reason}",
-            created_at=_dt.datetime.now(_dt.UTC).isoformat(),
+            created_at=_dt.datetime.now().isoformat(),
         ))
 
     def _create_sale_cash_entry(
@@ -889,5 +889,5 @@ class OrderService:
             amount_pt=amount_pt,
             order_id=order.id,
             actor_id=actor_id or cashier_id or 0,
-            created_at=_dt.datetime.now(_dt.UTC).isoformat(),
+            created_at=_dt.datetime.now().isoformat(),
         ))

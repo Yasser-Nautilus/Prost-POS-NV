@@ -106,7 +106,7 @@ class OrderRepository(BaseRepository[Order]):
     def get_today_orders(self) -> list[Order]:
         """All orders created today (current shift)."""
         rows = self._db.fetch_all(
-            "SELECT * FROM orders WHERE DATE(created_at) = DATE('now') ORDER BY created_at"
+            "SELECT * FROM orders WHERE DATE(created_at) = DATE('now', 'localtime') ORDER BY created_at"
         )
         return [self._row_to_order_with_items(r) for r in rows]
 
@@ -470,7 +470,7 @@ class OrderRepository(BaseRepository[Order]):
                    is_paid = ?, paid_at = ?,
                    cancelled_by_id = ?, cancelled_by_name = ?,
                    cancel_reason = ?, cancelled_at = ?,
-                   updated_at = datetime('now')
+                   updated_at = datetime('now', 'localtime')
                WHERE id = ?""",
             (
                 order.order_type.value, order.status.value, order.table_no,

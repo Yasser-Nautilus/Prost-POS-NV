@@ -60,7 +60,7 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
         """Update the latest open attendance record with check_out_at."""
         self._db.execute(
             """UPDATE driver_attendance
-               SET check_out_at = datetime('now')
+               SET check_out_at = datetime('now', 'localtime')
                WHERE driver_id = ? AND check_out_at IS NULL""",
             (driver_id,),
         )
@@ -191,7 +191,7 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
             )
         self._db.execute(
             """UPDATE orders
-               SET driver_id = ?, driver_name = ?, updated_at = datetime('now')
+               SET driver_id = ?, driver_name = ?, updated_at = datetime('now', 'localtime')
                WHERE id IN ({})""".format(",".join("?" for _ in order_ids)),
             (driver_id, driver_name, *order_ids),
         )
@@ -205,7 +205,7 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
     def mark_dispatched(self, trip_id: int) -> None:
         """Set dispatched_at timestamp."""
         self._db.execute(
-            "UPDATE delivery_trips SET dispatched_at = datetime('now') WHERE id = ?",
+            "UPDATE delivery_trips SET dispatched_at = datetime('now', 'localtime') WHERE id = ?",
             (trip_id,),
         )
         self._db.commit()
@@ -213,7 +213,7 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
     def mark_returned(self, trip_id: int) -> None:
         """Set returned_at timestamp."""
         self._db.execute(
-            "UPDATE delivery_trips SET returned_at = datetime('now') WHERE id = ?",
+            "UPDATE delivery_trips SET returned_at = datetime('now', 'localtime') WHERE id = ?",
             (trip_id,),
         )
         self._db.commit()
@@ -223,7 +223,7 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
         """Set settled_at timestamp and financial snapshots."""
         self._db.execute(
             """UPDATE delivery_trips SET
-                   settled_at = datetime('now'), is_settled = 1,
+                   settled_at = datetime('now', 'localtime'), is_settled = 1,
                    cash_collected = ?, total_delivery_fees = ?
                WHERE id = ?""",
             (cash_collected, total_delivery_fees, trip_id),
