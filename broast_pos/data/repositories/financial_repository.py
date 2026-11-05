@@ -68,7 +68,7 @@ class FinancialRepository(BaseRepository[Shift]):
         """Set closed_at, is_active = false."""
         self._db.execute(
             """UPDATE shifts SET
-                   closed_by = ?, closed_at = datetime('now'), is_active = 0
+                   closed_by = ?, closed_at = datetime('now', 'localtime'), is_active = 0
                WHERE id = ?""",
             (closed_by, shift_id),
         )
@@ -318,7 +318,7 @@ class FinancialRepository(BaseRepository[Shift]):
     def mark_summary_printed(self, shift_id: int) -> None:
         """Set summary_printed_at = NOW() — called when daily summary is first printed."""
         self._db.execute(
-            "UPDATE shifts SET summary_printed_at = datetime('now') WHERE id = ?",
+            "UPDATE shifts SET summary_printed_at = datetime('now', 'localtime') WHERE id = ?",
             (shift_id,),
         )
         self._db.commit()

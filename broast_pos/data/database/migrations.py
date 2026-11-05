@@ -89,7 +89,7 @@ def _get_current_version(db: DatabaseConnection) -> int:
 
 def _set_version(db: DatabaseConnection, version: int) -> None:
     db.execute(
-        "UPDATE schema_version SET version = ?, applied_at = datetime('now')",
+        "UPDATE schema_version SET version = ?, applied_at = datetime('now', 'localtime')",
         (version,),
     )
     db.commit()
@@ -142,7 +142,7 @@ def _migrate_v1_to_v2(db: DatabaseConnection) -> None:
             changed_by_id    INTEGER,
             changed_by_name  TEXT,
             reason           TEXT,
-            changed_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+            changed_at       TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
         )
     """)
     db.execute("""
@@ -199,7 +199,7 @@ def _migrate_v3_to_v4(db: DatabaseConnection) -> None:
             settled_by_id       INTEGER NOT NULL,
             settled_by_name     TEXT    NOT NULL,
             notes               TEXT,
-            settled_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+            settled_at          TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
         )
     """)
     db.execute("""

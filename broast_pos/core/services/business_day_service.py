@@ -150,7 +150,7 @@ class BusinessDayService:
 
         return XReport(
             day_id=day_id,
-            generated_at=datetime.now(UTC).isoformat(),
+            generated_at=datetime.now().isoformat(),
             sessions=snapshots,
         )
 
@@ -189,9 +189,9 @@ class BusinessDayService:
                 shift_id=day_id,
                 manager_pin=manager_pin,
             )
-            closed_at = closed_shift.closed_at or datetime.now(UTC).isoformat()
+            closed_at = closed_shift.closed_at or datetime.now().isoformat()
         else:
-            closed_at = datetime.now(UTC).isoformat()
+            closed_at = datetime.now().isoformat()
 
         # FR-DAY-3: Build Z-Report from final ledger state
         sessions = self._sessions.get_sessions_for_day(day_id)
@@ -203,7 +203,7 @@ class BusinessDayService:
 
         z_report = ZReport(
             day_id=day_id,
-            generated_at=datetime.now(UTC).isoformat(),
+            generated_at=datetime.now().isoformat(),
             sessions=snapshots,
             day_closed_at=closed_at,
             total_variance_pt=total_variance,
@@ -294,7 +294,7 @@ class BusinessDayService:
         )
 
         count = 0
-        now = datetime.now(UTC).isoformat()
+        now = datetime.now().isoformat()
 
         # Resolve a real actor_id for the ledger FK (actor_id cannot be 0 or NULL).
         # Use whoever opened the shift (shifts.opened_by).

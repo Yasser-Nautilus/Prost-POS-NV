@@ -258,7 +258,7 @@ class DriverSettlementService:
 
                     db.execute(
                         """UPDATE delivery_trips
-                           SET is_settled = 1, settled_at = datetime('now'),
+                           SET is_settled = 1, settled_at = datetime('now', 'localtime'),
                                cash_collected = ?, total_delivery_fees = ?
                            WHERE id = ?""",
                         (trip_cash, trip_fees, trip.id),
@@ -536,7 +536,7 @@ class DriverSettlementService:
                 amount_pt=amount_pt,
                 trip_id=trip_id,
                 actor_id=actor_id,
-                created_at=_dt.datetime.now(_dt.UTC).isoformat(),
+                created_at=_dt.datetime.now().isoformat(),
             ))
         except Exception as exc:
             # uq_ledger_remit: already recorded (idempotency). Log and continue.

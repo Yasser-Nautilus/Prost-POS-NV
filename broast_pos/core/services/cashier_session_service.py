@@ -86,7 +86,7 @@ class CashierSessionService:
         # FR-SES-2: station conflict check
         self._check_station_conflict(day_id, station)
 
-        now = datetime.now(UTC).isoformat()
+        now = datetime.now().isoformat()
         session = CashierSession(
             id=None,
             day_id=day_id,
@@ -265,7 +265,7 @@ class CashierSessionService:
                 # Checkup-Fix: manager lookup is optional here, but log failures.
                 logger.debug("Manager-by-PIN lookup failed (session close)", exc_info=True)
 
-        now = datetime.now(UTC).isoformat()
+        now = datetime.now().isoformat()
         actor = actor_id or to_user_id
 
         # ADJUSTMENT if variance != 0

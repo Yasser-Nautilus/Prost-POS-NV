@@ -18,7 +18,7 @@
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS schema_version (
     version     INTEGER NOT NULL DEFAULT 1,
-    applied_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    applied_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS users (
     role          TEXT    NOT NULL CHECK (role IN ('cashier', 'manager', 'admin')),
     cashier_slot  INTEGER CHECK (cashier_slot IN (1, 2) OR cashier_slot IS NULL),  -- NULL for drivers
     is_active     INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
-    created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+    created_at    TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 
@@ -71,7 +71,7 @@ CREATE TABLE IF NOT EXISTS customers (
     name        TEXT    NOT NULL,
     phone       TEXT    NOT NULL UNIQUE,  -- 11-digit Egyptian (starts with 01)
     notes       TEXT,
-    created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 
@@ -105,7 +105,7 @@ CREATE TABLE IF NOT EXISTS customer_addresses (
 CREATE TABLE IF NOT EXISTS shifts (
     id                 INTEGER PRIMARY KEY AUTOINCREMENT,
     opened_by          INTEGER NOT NULL REFERENCES users(id),
-    opened_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+    opened_at          TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
     closed_by          INTEGER REFERENCES users(id),
     closed_at          TEXT,
     next_invoice_no    INTEGER NOT NULL DEFAULT 1,
@@ -171,8 +171,8 @@ CREATE TABLE IF NOT EXISTS orders (
     cancelled_at      TEXT,
 
     -- Timestamps
-    created_at        TEXT    NOT NULL DEFAULT (datetime('now')),
-    updated_at        TEXT    NOT NULL DEFAULT (datetime('now')),
+    created_at        TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
+    updated_at        TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
 
     -- Table constraints
     UNIQUE(invoice_no, shift_id)                           -- unique per shift
@@ -201,7 +201,7 @@ CREATE TABLE IF NOT EXISTS delivery_trips (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     driver_id           INTEGER NOT NULL REFERENCES users(id),
     driver_name         TEXT    NOT NULL,
-    created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+    created_at          TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
     dispatched_at       TEXT,
     returned_at         TEXT,
     settled_at          TEXT,
@@ -227,7 +227,7 @@ CREATE TABLE IF NOT EXISTS delivery_trip_orders (
 CREATE TABLE IF NOT EXISTS driver_attendance (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     driver_id     INTEGER NOT NULL REFERENCES users(id),
-    check_in_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+    check_in_at   TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
     check_out_at  TEXT                  -- NULL = still checked in
 );
 
@@ -240,7 +240,7 @@ CREATE TABLE IF NOT EXISTS shift_transfers (
     shift_id          INTEGER NOT NULL REFERENCES shifts(id),
     from_user_id      INTEGER NOT NULL REFERENCES users(id),
     to_user_id        INTEGER NOT NULL REFERENCES users(id),
-    timestamp         TEXT    NOT NULL DEFAULT (datetime('now')),
+    timestamp         TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
     summary_snapshot  TEXT    NOT NULL   -- JSON: sales, expenses, pending at transfer time
 );
 
@@ -255,7 +255,7 @@ CREATE TABLE IF NOT EXISTS cash_transactions (
     amount        REAL    NOT NULL CHECK (amount > 0),
     description   TEXT    NOT NULL,
     category      TEXT    NOT NULL CHECK (category IN ('delivery_fees', 'supplies', 'other')),
-    timestamp     TEXT    NOT NULL DEFAULT (datetime('now')),
+    timestamp     TEXT    NOT NULL DEFAULT (datetime('now', 'localtime')),
     user_id       INTEGER NOT NULL REFERENCES users(id)
     -- IMMUTABLE: application layer enforces no UPDATE / DELETE
 );
@@ -278,7 +278,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
     reason       TEXT,                            -- why this action was performed
     before_data  TEXT,                            -- JSON snapshot before change
     after_data   TEXT,                            -- JSON snapshot after change
-    timestamp    TEXT    NOT NULL DEFAULT (datetime('now'))
+    timestamp    TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 
@@ -345,7 +345,7 @@ CREATE TABLE IF NOT EXISTS order_status_history (
     changed_by_id    INTEGER,
     changed_by_name  TEXT,
     reason           TEXT,                            -- optional (e.g. cancellation reason)
-    changed_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+    changed_at       TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_order_status_history_order
@@ -382,7 +382,7 @@ CREATE TABLE IF NOT EXISTS driver_settlements (
 
     notes               TEXT,
 
-    settled_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+    settled_at          TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_driver_settlements_driver_date

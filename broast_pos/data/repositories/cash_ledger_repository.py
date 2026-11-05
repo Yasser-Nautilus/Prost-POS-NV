@@ -89,7 +89,7 @@ class CashLedgerRepository:
             sqlite3.OperationalError: if the table triggers fire (should not
                 happen through this repo).
         """
-        now = datetime.now(UTC).isoformat()
+        now = datetime.now().isoformat()
         self._db.execute(
             """INSERT INTO cash_ledger
                (day_id, session_id, entry_type, amount_pt,

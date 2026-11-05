@@ -89,7 +89,7 @@ class CashierSessionRepository:
 
     def create(self, session: CashierSession) -> CashierSession:
         """Insert a new session. Returns the session with its id filled in."""
-        now = datetime.now(UTC).isoformat()
+        now = datetime.now().isoformat()
         self._db.execute(
             """INSERT INTO cashier_sessions
                (day_id, user_id, station, is_open, opened_at,
@@ -117,7 +117,7 @@ class CashierSessionRepository:
         handover_to_session: int | None = None,
     ) -> None:
         """Mark the session as closed with financial snapshot."""
-        now = datetime.now(UTC).isoformat()
+        now = datetime.now().isoformat()
         self._db.execute(
             """UPDATE cashier_sessions SET
                is_open = 0,
