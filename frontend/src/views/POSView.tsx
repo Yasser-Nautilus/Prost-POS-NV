@@ -278,18 +278,23 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
         if (!choice) return;
       }
 
+      // CHANGED: open the table picker instantly for dine-in, BEFORE the
+      // new_order backend round-trip, so pressing "صالة" shows it immediately
+      // instead of only after the async call (or after touching the table box).
+      if (type === "dine_in") {
+        setSelectedTable(null);
+        setIsTableGridOpen(true);
+      }
+
       await bridge.call("new_order", { order_type: type });
       setSelectedTable(null);
       setIsAmending(false);
-
-      // For dine-in: open table picker immediately
-      if (type === "dine_in") {
-        setIsTableGridOpen(true);
-      }
       // B-02: reset delivery payment mode whenever order type changes
       setDeliveryPaymentMode("cash");
       // Delivery/pickup: add items first, customer info prompted at checkout
     } catch (e: any) {
+      // Roll back the optimistic picker if the order could not be created
+      if (type === "dine_in") setIsTableGridOpen(false);
       alert(e.message);
     }
   };
