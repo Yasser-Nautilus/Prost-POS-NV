@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Check, Wallet, CreditCard, Globe } from "lucide-react";
+import { X, Check, Wallet, CreditCard, Globe, CornerDownLeft } from "lucide-react";
 import { Numpad } from "./Numpad";
 
 interface PaymentDialogProps {
@@ -42,8 +42,6 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
-
   const handleQuickCash = (amt: number) => {
     setCashReceived(amt.toString());
   };
@@ -57,6 +55,22 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
     const finalChange = method === "cash" ? (received - total) : 0;
     onConfirm(method, received, finalChange);
   };
+
+  // CHANGED: press Enter to confirm the payment
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handlePayConfirm();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, method, cashReceived, total]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md">
@@ -161,6 +175,10 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             >
               <Check size={24} />
               إنهاء وتأكيد الدفع ({total.toFixed(2)} ج.م)
+              <span className="flex items-center gap-1 text-sm font-semibold opacity-80 bg-white/15 px-2 py-1 rounded-lg">
+                <CornerDownLeft size={16} />
+                Enter
+              </span>
             </button>
           </div>
         </div>
