@@ -506,15 +506,16 @@ class DriverSettlementService:
             return
 
         open_sessions = self._cashier_sessions.get_open_sessions_for_day(day_id)
-        # Prefer DELIVERY session, fall back to ALL
-        session = next(
-            (s for s in open_sessions if s.station == Station.DELIVERY), None
-        ) or next(
-            (s for s in open_sessions if s.station == Station.ALL), None
+        # CHANGED: prefer DELIVERY, then ALL, then fall back to any open session
+        # (e.g. a COUNTER session at night) so trip cash can always be deposited.
+        session = (
+            next((s for s in open_sessions if s.station == Station.DELIVERY), None)
+            or next((s for s in open_sessions if s.station == Station.ALL), None)
+            or (open_sessions[0] if open_sessions else None)
         )
 
         if session is None:
-            raise ValueError("لا توجد جلسة كاشير نشطة (توصيل أو عامة) لتوريد نقدية الرحلة")
+            raise ValueError("لا توجد جلسة كاشير نشطة لتوريد نقدية الرحلة")
 
         amount_pt = round(trip_cash * 100)
         try:
