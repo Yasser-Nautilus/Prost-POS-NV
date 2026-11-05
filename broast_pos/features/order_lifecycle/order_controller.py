@@ -190,6 +190,9 @@ class OrderController:
         """Set special instructions for an item."""
         if self._current_order and 0 <= index < len(self._current_order.items):
             self._current_order.items[index].notes = note
+            # CHANGED: notify so the cart UI reflects the note immediately
+            # (the mock bridge already does this; the real backend did not).
+            self._notify_order_changed()
 
     def set_table(self, table_number: int) -> None:
         """Set table number for dine-in orders."""

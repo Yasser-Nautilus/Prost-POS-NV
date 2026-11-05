@@ -18,13 +18,13 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
   const [formName, setFormName] = useState("");
   const [formPrice, setFormPrice] = useState("");
   const [formCatId, setFormCatId] = useState<number | null>(null);
-  const [formSortOrder, setFormSortOrder] = useState("0");
+  const [formSortOrder, setFormSortOrder] = useState("1");
 
   // Category form state
   const [showCatForm, setShowCatForm] = useState(false);
   const [editingCat, setEditingCat] = useState<any | null>(null);
   const [catFormName, setCatFormName] = useState("");
-  const [catFormSortOrder, setCatFormSortOrder] = useState("0");
+  const [catFormSortOrder, setCatFormSortOrder] = useState("1");
 
   const isManagerOrAbove =
     currentUser?.role === "manager" || currentUser?.role === "admin";
@@ -72,7 +72,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
     setFormName("");
     setFormPrice("");
     setFormCatId(selectedCatId);
-    setFormSortOrder("0");
+    // CHANGED: sort-order (الترتيب) default starts at 1 for the user, not 0.
+    setFormSortOrder("1");
     setShowProductForm(true);
   };
 
@@ -131,7 +132,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
   const openNewCategory = () => {
     setEditingCat(null);
     setCatFormName("");
-    setCatFormSortOrder("0");
+    // CHANGED: sort-order (الترتيب) default starts at 1 for the user, not 0.
+    setCatFormSortOrder("1");
     setShowCatForm(true);
   };
 
@@ -348,7 +350,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                   <label className="text-gray-400 text-xs block mb-1">الترتيب</label>
                   <input
                     type="number"
-                    min="0"
+                    min="1"
                     value={formSortOrder}
                     onChange={(e) => setFormSortOrder(e.target.value)}
                     className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-3 text-white focus:outline-none focus:border-brand-gold text-center font-mono"
@@ -425,7 +427,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                 <label className="text-gray-400 text-xs block mb-1">الترتيب</label>
                 <input
                   type="number"
-                  min="0"
+                  min="1"
                   value={catFormSortOrder}
                   onChange={(e) => setCatFormSortOrder(e.target.value)}
                   className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-3 text-white focus:outline-none focus:border-brand-gold text-center font-mono"

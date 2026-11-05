@@ -186,6 +186,7 @@ function App() {
             currentUser={currentUser}
             handoverOrder={handoverOrder}
             onHandoverConsumed={() => setHandoverOrder(null)}
+            isActive={activeTab === "pos"}
           />
         </div>
         {activeTab === "delivery" && <DeliveryView currentUser={currentUser} />}
