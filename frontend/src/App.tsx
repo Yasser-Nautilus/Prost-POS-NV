@@ -23,6 +23,8 @@ function App() {
   const [isShiftOpen, setIsShiftOpen] = useState(false);
   const [activeShift, setActiveShift] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  // CHANGED: pickup order handed to POS for payment on handover ("تسليم").
+  const [handoverOrder, setHandoverOrder] = useState<any | null>(null);
 
   const checkAuth = async () => {
     try {
@@ -180,13 +182,23 @@ function App() {
       {/* Main View Display — POSView always mounted to preserve state */}
       <main className="flex-1 overflow-hidden">
         <div className={activeTab === "pos" ? "flex flex-col h-full" : "hidden"}>
-          <POSView currentUser={currentUser} />
+          <POSView
+            currentUser={currentUser}
+            handoverOrder={handoverOrder}
+            onHandoverConsumed={() => setHandoverOrder(null)}
+          />
         </div>
         {activeTab === "delivery" && <DeliveryView currentUser={currentUser} />}
         {activeTab === "tracking" && (
           <TrackingView
             currentUser={currentUser}
             onResumeOrder={(_order) => setActiveTab("pos")}
+            // CHANGED: handover a pickup order — load it, switch to POS, open payment.
+            onHandoverOrder={async (order) => {
+              await bridge.call("load_order", { order_id: order.id });
+              setActiveTab("pos");
+              setHandoverOrder(order);
+            }}
           />
         )}
         {activeTab === "reports"    && isManagerOrAbove && <ReportsView key={activeShift?.id ?? "closed"} currentUser={currentUser} />}
