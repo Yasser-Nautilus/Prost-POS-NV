@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   ShoppingBag, Search, Tag, CreditCard, RotateCcw,
-  Plus, Minus, Trash2, AlertCircle, Archive, X, Save
+  Plus, Minus, Trash2, AlertCircle, Archive, X, Save, Pencil
 } from "lucide-react";
 import { bridge } from "../bridge";
 import { DiscountDialog } from "../components/DiscountDialog";
@@ -16,9 +16,12 @@ interface POSViewProps {
   // When set, POS opens the payment dialog for it. Parent clears it afterwards.
   handoverOrder?: any | null;
   onHandoverConsumed?: () => void;
+  // CHANGED: true while the POS tab is visible — used to refresh categories/
+  // products when the cashier returns from the products-management screen.
+  isActive?: boolean;
 }
 
-export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, onHandoverConsumed }) => {
+export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, onHandoverConsumed, isActive }) => {
   // POS States
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
@@ -44,6 +47,10 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
   const [isParkedPanelOpen, setIsParkedPanelOpen] = useState(false);
   const [showPinGate, setShowPinGate] = useState(false);
   const [pendingDeleteIdx, setPendingDeleteIdx] = useState<number | null>(null);
+
+  // CHANGED: per-item comment editor — which line is being edited + its draft text.
+  const [commentIdx, setCommentIdx] = useState<number | null>(null);
+  const [commentDraft, setCommentDraft] = useState("");
 
   // Table occupancy state (table_no -> invoice label)
   const [occupiedTables, setOccupiedTables] = useState<Record<number, string>>({});
@@ -101,6 +108,15 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
     }
   }, [selectedCatId]);
 
+  // CHANGED: when the POS tab becomes active, refresh categories + products so
+  // a category/item just added in "إدارة المنتجات" shows up without a restart.
+  useEffect(() => {
+    if (isActive) {
+      fetchCategories();
+      if (selectedCatId !== null) fetchProducts(selectedCatId);
+    }
+  }, [isActive]);
+
   // CHANGED: handover ("تسليم") from the tracking view — the pickup order was
   // already loaded by the parent via load_order, so just open the payment
   // dialog for it. pendingOrderType stays null-of-takeaway → finalize=true, so
@@ -119,7 +135,12 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
       const res = await bridge.call("get_active_categories");
       setCategories(res || []);
       if (res && res.length > 0) {
-        setSelectedCatId(res[0].id);
+        // CHANGED: keep the current category selected on refresh if it still
+        // exists (so returning to POS doesn't jump back to the first tab);
+        // only fall back to the first category when none is selected.
+        setSelectedCatId((prev) =>
+          prev != null && res.some((c: any) => c.id === prev) ? prev : res[0].id
+        );
       }
     } catch (e) {
       console.error(e);
@@ -203,6 +224,23 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
   const handleQtyChange = async (idx: number, delta: number) => {
     try {
       await bridge.call("change_item_quantity", { index: idx, delta });
+    } catch (e: any) {
+      alert(e.message);
+    }
+  };
+
+  // CHANGED: per-item comment (ملاحظة). Open the inline editor prefilled with the
+  // item's current note; save persists it via set_item_note.
+  const handleOpenComment = (idx: number, currentNote: string) => {
+    setCommentIdx(idx);
+    setCommentDraft(currentNote || "");
+  };
+
+  const handleSaveComment = async (idx: number) => {
+    try {
+      await bridge.call("set_item_note", { index: idx, note: commentDraft.trim() });
+      setCommentIdx(null);
+      setCommentDraft("");
     } catch (e: any) {
       alert(e.message);
     }
@@ -654,46 +692,85 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
             currentOrder.items.map((item: any, idx: number) => (
               <div
                 key={idx}
-                className="p-3 bg-brand-card/40 border border-brand-border/30 rounded-xl flex justify-between items-center hover:bg-brand-card/60 transition-all"
+                className="p-3 bg-brand-card/40 border border-brand-border/30 rounded-xl hover:bg-brand-card/60 transition-all"
               >
-                {/* Product Name & Qty */}
-                <div className="flex-1">
-                  <span className="text-white font-bold text-sm block">{item.product_name}</span>
-                  <span className="text-xs text-brand-gold font-bold mt-1 inline-block">
-                    {item.unit_price} ج.م
-                  </span>
-                  {item.notes && (
-                    <span className="text-[10px] text-gray-500 block mt-0.5 bg-brand-dark/20 p-1 rounded">
-                      ملاحظة: {item.notes}
+                <div className="flex justify-between items-center">
+                  {/* Product Name & Qty */}
+                  <div className="flex-1">
+                    <span className="text-white font-bold text-sm block">{item.product_name}</span>
+                    <span className="text-xs text-brand-gold font-bold mt-1 inline-block">
+                      {item.unit_price} ج.م
                     </span>
-                  )}
-                </div>
-
-                {/* Controls */}
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center bg-brand-card border border-brand-border/40 rounded-xl p-1">
-                    <button
-                      onClick={() => handleQtyChange(idx, 1)}
-                      className="h-8 w-8 text-white hover:text-brand-gold flex items-center justify-center rounded-lg active:scale-95"
-                    >
-                      <Plus size={16} />
-                    </button>
-                    <span className="w-8 text-center text-white font-bold font-mono">{item.quantity}</span>
-                    <button
-                      onClick={() => handleQtyChange(idx, -1)}
-                      className="h-8 w-8 text-white hover:text-brand-gold flex items-center justify-center rounded-lg active:scale-95"
-                    >
-                      <Minus size={16} />
-                    </button>
+                    {item.notes && commentIdx !== idx && (
+                      <span className="text-[10px] text-gray-500 block mt-0.5 bg-brand-dark/20 p-1 rounded">
+                        ملاحظة: {item.notes}
+                      </span>
+                    )}
                   </div>
 
-                  <button
-                    onClick={() => handleDeleteItemClick(idx)}
-                    className="h-9 w-9 text-red-400 hover:text-red-300 bg-red-950/20 hover:bg-red-950/50 border border-red-900/30 rounded-xl flex items-center justify-center"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  {/* Controls */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center bg-brand-card border border-brand-border/40 rounded-xl p-1">
+                      <button
+                        onClick={() => handleQtyChange(idx, 1)}
+                        className="h-8 w-8 text-white hover:text-brand-gold flex items-center justify-center rounded-lg active:scale-95"
+                      >
+                        <Plus size={16} />
+                      </button>
+                      <span className="w-8 text-center text-white font-bold font-mono">{item.quantity}</span>
+                      <button
+                        onClick={() => handleQtyChange(idx, -1)}
+                        className="h-8 w-8 text-white hover:text-brand-gold flex items-center justify-center rounded-lg active:scale-95"
+                      >
+                        <Minus size={16} />
+                      </button>
+                    </div>
+
+                    {/* CHANGED: per-item comment (pen) button */}
+                    <button
+                      onClick={() => (commentIdx === idx ? setCommentIdx(null) : handleOpenComment(idx, item.notes))}
+                      title="إضافة ملاحظة للصنف"
+                      className={`h-9 w-9 rounded-xl flex items-center justify-center border transition-all ${
+                        item.notes || commentIdx === idx
+                          ? "text-brand-gold bg-brand-gold/10 border-brand-gold/40"
+                          : "text-gray-400 hover:text-brand-gold bg-brand-card border-brand-border/40"
+                      }`}
+                    >
+                      <Pencil size={15} />
+                    </button>
+
+                    <button
+                      onClick={() => handleDeleteItemClick(idx)}
+                      className="h-9 w-9 text-red-400 hover:text-red-300 bg-red-950/20 hover:bg-red-950/50 border border-red-900/30 rounded-xl flex items-center justify-center"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
+
+                {/* CHANGED: inline comment editor, shown for the item being edited */}
+                {commentIdx === idx && (
+                  <div className="mt-2 flex items-center gap-2 animate-in slide-in-from-top-1 duration-150">
+                    <input
+                      type="text"
+                      autoFocus
+                      value={commentDraft}
+                      onChange={(e) => setCommentDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSaveComment(idx);
+                        if (e.key === "Escape") { setCommentIdx(null); setCommentDraft(""); }
+                      }}
+                      placeholder="ملاحظة للصنف (مثلاً: بدون بصل)..."
+                      className="flex-1 bg-brand-dark border border-brand-border/50 rounded-lg py-2 px-3 text-white text-xs placeholder-gray-500 focus:outline-none focus:border-brand-gold text-right"
+                    />
+                    <button
+                      onClick={() => handleSaveComment(idx)}
+                      className="py-2 px-3 bg-brand-gold text-brand-dark hover:bg-opacity-90 rounded-lg text-xs font-bold active:translate-y-0.5"
+                    >
+                      حفظ
+                    </button>
+                  </div>
+                )}
               </div>
             ))
           ) : (
