@@ -19,8 +19,7 @@ import sys
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QApplication
 
-from broast_pos.config import config as config
-from broast_pos.config.config import get_app_name
+from broast_pos.config.config import LOGS_PATH, get_app_name
 from broast_pos.core.services.audit_service import AuditService
 from broast_pos.core.services.auth_service import AuthService
 from broast_pos.core.services.business_day_service import BusinessDayService
@@ -68,7 +67,7 @@ def _setup_logging() -> None:
     from logging.handlers import RotatingFileHandler
     from pathlib import Path
 
-    log_dir = Path(config.LOGS_PATH)
+    log_dir = Path(LOGS_PATH)
     log_dir.mkdir(parents=True, exist_ok=True)
 
     root = logging.getLogger()
