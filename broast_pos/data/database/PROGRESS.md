@@ -1,119 +1,162 @@
-# 📁 data/database — PROGRESS
+# Database — Progress
 
-## 🎯 Goal
-
-Set up the **SQLite database layer** — connection management, schema definition, migrations, and seed data. This is the foundation that every repository sits on top of.
-
----
-
-## ✅ Tasks
-
-### 1. Create Database Connection (`connection.py`)
-
-- **What**: Singleton database connection with WAL mode and proper configuration
-- **Details**:
-  - Singleton pattern — one connection for the entire application
-  - Enable WAL (Write-Ahead Logging) mode for concurrent read/write safety
-  - `check_same_thread=False` for Qt compatibility
-  - Enable foreign keys enforcement
-  - Row factory set to `sqlite3.Row` for dict-like access
-  - Methods: `execute()`, `fetch_one()`, `fetch_all()`, `executescript()`
-  - Transaction support: `begin()`, `commit()`, `rollback()`
-- **Why**: Two cashiers on the same machine need concurrent access. WAL mode prevents lock contention.
-- **Critical**: Invoice numbering must be race-safe — use atomic `UPDATE shifts SET next_invoice_no = next_invoice_no + 1 WHERE id = ? RETURNING next_invoice_no` inside a transaction. Do NOT use SELECT then UPDATE separately.
-- **Status**: `Done`
-
-### 2. Define Schema (`schema.sql`)
-
-- **What**: Complete table definitions matching all core models
-- **Details**:
-  - `users` — id, username, display_name, avatar_path, pin_hash (UNIQUE), role, cashier_slot, is_active, created_at
-  - `categories` — id, name, sort_order, is_active
-  - `products` — id, name, price, category_id (FK), is_active, sort_order
-  - `customers` — id, name, phone (UNIQUE, 11-digit), notes, created_at
-  - `zones` — id, name, delivery_fee, is_active
-  - `customer_addresses` — id, customer_id (FK), street_name, zone_id (FK), zone_name (denormalized), delivery_fee (copied from zone)
-  - `orders` — id, invoice_no (UNIQUE per shift), order_type, status, table_no, customer_id, customer_name, customer_phone, customer_address, customer_zone, delivery_fee, driver_id, driver_name, subtotal, discount_amount, discount_type (flat|percent), service_amount, total, payment_method, amount_paid, change_given, is_paid, paid_at, created_by_id, created_by_name, cashier_slot, cancelled_by_id, cancelled_by_name, cancel_reason, cancelled_at, shift_id, created_at, updated_at
-  - `order_items` — id, order_id (FK), product_id, product_name, quantity (**INTEGER**), unit_price, total_price, notes (TEXT)
-  - `delivery_trips` — id, driver_id, driver_name, created_at, dispatched_at, returned_at, settled_at, cash_collected (**stored at settlement**), total_delivery_fees (**stored at settlement**), is_settled
-  - `delivery_trip_orders` — trip_id, order_id (join table)
-  - `driver_attendance` — id, driver_id, check_in_at, check_out_at
-  - `shifts` — id, opened_by, opened_at, closed_by (nullable), closed_at (nullable), next_invoice_no (resets to 1), is_active, **summary_printed_at (nullable TIMESTAMP — set when daily summary is first printed, prerequisite for shift close)**
-  - `shift_transfers` — id, shift_id, from_user_id, to_user_id, timestamp, summary_snapshot (JSON)
-  - `cash_transactions` — id, shift_id, type (`expense` only), amount, description, category, timestamp, user_id, **immutable**
-  - `audit_log` — id, event_type, user_id, user_name, order_id, details (JSON), timestamp
-  - ~~`modifiers`~~ — **REMOVED** (product variations are separate products)
-  - ~~`product_modifiers`~~ — **REMOVED**
-  - ~~`order_item_modifiers`~~ — **REMOVED**
-- **Why**: Schema must mirror the models exactly. No modifier tables needed — simplifies the database significantly.
-- **Status**: `Done`
-
-### 3. Index Definitions (inside `schema.sql`)
-
-- **What**: Performance indexes for common queries
-- **Details**:
-  - `idx_orders_status` — fast filtering by order status
-  - `idx_orders_type` — fast filtering by order type
-  - `idx_orders_created_at` — fast date range queries
-  - `idx_orders_driver` — fast driver lookup
-  - `idx_orders_table_no` — fast table lookup for dine-in pay/edit flow
-  - `idx_customers_phone` — fast phone search (exact match)
-  - `idx_addresses_customer` — fast address lookup by customer
-  - `idx_products_category` — fast category filtering
-  - `idx_trips_driver` — fast driver trip lookup
-  - `idx_trips_settled` — fast unsettled trip filtering
-  - `idx_attendance_driver` — fast check-in status
-- **Why**: At 300+ orders/day, unindexed queries slow down within weeks.
-- **Status**: `Done`
-
-### 4. Migrations System (`migrations.py`)
-
-- **What**: Safe schema update mechanism for future changes
-- **Details**:
-  - Version tracking table: `schema_version`
-  - `migrate()` function checks current version and applies pending migrations
-  - Each migration is a function: `migrate_v1_to_v2()`, etc.
-  - Uses `ALTER TABLE` for adding columns, never drops existing data
-  - Runs automatically at app startup
-- **Status**: `Done`
-
-### 5. Seed Data (`seed.py`)
-
-- **What**: Sample data for fresh installations and testing
-- **Details**:
-  - Default admin user (username: admin, PIN: hashed "1234")
-  - Sample categories (e.g., "بروست", "مشروبات", "إضافات")
-  - Sample products per category — each variation is a separate product:
-    - "تشيكن فرايز حار" (price: 70)
-    - "تشيكن فرايز عادي" (price: 70)
-    - "2 قطعة دجاج حار" (price: 110)
-    - "2 قطعة دجاج عادي" (price: 110)
-  - **Sample zones** (required for delivery orders to work on fresh install):
-    - "مدينة فاقوس" (delivery_fee: 20)
-    - "شارع الانتاج" (delivery_fee: 15)
-    - "الغابة" (delivery_fee: 80)
-  - Only runs if tables are empty (idempotent)
-- **Status**: `Done`
+> **Last Updated:** 2026-11-20
+> **Source of Truth:** `schema.sql`, `connection.py`, `migrations.py`, `seed.py`
 
 ---
 
-## 📝 Notes
+## Overview
 
-- Schema must be kept **perfectly aligned** with `core/models/`
-- **No modifier tables** — removed entirely (3 tables eliminated)
-- `order_items.quantity` is **INTEGER**, not REAL/FLOAT
-- `order_items.notes` is **TEXT** — per-item special instructions
-- All timestamps stored as ISO 8601 strings
-- PIN is stored as SHA-256 hash, never plain text
-- **PIN hash is UNIQUE** — enables user identification by PIN alone (manager override)
-- `shifts.next_invoice_no` resets to 1 when a new shift is opened (daily)
-- `delivery_trips.cash_collected` = sum of order totals WHERE payment = كاش (**calculated and stored at settlement time — snapshot**)
-- `delivery_trips.total_delivery_fees` = sum of delivery fees for ALL orders (**calculated and stored at settlement time — snapshot**)
-- `cash_transactions` are **expense-only** and **immutable** (no edit/delete after creation)
-- `cash_transactions.category` supports: delivery_fees, supplies, other
-- `shifts` have NO `opening_cash` — shift just opens with no cash amount
-- `shifts.summary_printed_at` tracks whether the daily summary was printed (prerequisite for shift close)
-- `shift_transfers` record mid-day cashier handovers with state snapshots
-- **Shift is shared** across both devices — one active shift at a time
-- **Orders blocked** if no active shift exists
-- **Multi-device**: ⚠️ **DEFERRED to v2**. V1 is single-PC only. Future: main PC holds the database, secondary PC connects over local network via lightweight REST API. Repository pattern enables transparent switching when this is implemented.
+The database layer uses **SQLite** with a singleton connection, WAL mode, foreign key enforcement, and a versioned migration system. The current schema defines **19 tables** at **version 6**.
+
+---
+
+## Connection (`connection.py` — 244 lines)
+
+**Status:** Implemented
+
+### Configuration
+
+| Setting | Value | Purpose |
+|---|---|---|
+| `journal_mode` | WAL | Write-Ahead Logging for concurrent reads |
+| `foreign_keys` | ON | Enforce referential integrity |
+| `busy_timeout` | 5,000 ms | Wait before raising SQLITE_BUSY |
+
+### Behavior
+
+- **Singleton pattern:** `DatabaseConnection.get_instance()` returns a single shared connection.
+- **Transaction context manager:** `with db.transaction():` provides automatic commit/rollback.
+- **Nested transactions:** Uses `SAVEPOINT` / `RELEASE` for nested `with db.transaction():` blocks.
+- **Row factory:** `sqlite3.Row` for dict-like row access.
+
+---
+
+## Schema (`schema.sql` — 475 lines)
+
+**Status:** Implemented
+
+### Tables (19)
+
+| # | Table | Purpose |
+|---|---|---|
+| 1 | `categories` | Product categories |
+| 2 | `products` | Product catalog |
+| 3 | `customers` | Customer records |
+| 4 | `customer_addresses` | Delivery addresses per customer |
+| 5 | `zones` | Delivery zones with fees |
+| 6 | `users` | User accounts with PIN hashes |
+| 7 | `orders` | Order headers |
+| 8 | `order_items` | Line items per order |
+| 9 | `delivery_trips` | Delivery trip tracking |
+| 10 | `driver_attendance` | Driver clock-in/out records |
+| 11 | `shifts` | Cashier shift records |
+| 12 | `shift_transfers` | Cash transfers between shifts |
+| 13 | `cash_transactions` | Shift-level cash transactions |
+| 14 | `audit_log` | Centralized audit trail |
+| 15 | `order_status_history` | Immutable order status transitions |
+| 16 | `driver_settlements` | Driver settlement records |
+| 17 | `cashier_sessions` | Station-based cashier sessions |
+| 18 | `cash_ledger` | Append-only cash movement ledger |
+| 19 | `schema_version` | Migration version tracking |
+
+### Cash Ledger Table
+
+> [!IMPORTANT]
+> The `cash_ledger` table has special database-level protections:
+
+- **Append-only design:** `BEFORE UPDATE` and `BEFORE DELETE` triggers raise errors, preventing any modification of existing entries.
+- **Integer piaster storage:** `amount_piasters INTEGER NOT NULL` — avoids floating-point precision errors.
+- **Signed cash movements:** Positive = cash inflow, Negative = cash outflow.
+- **Unique idempotency indexes:** Prevent duplicate entries for the same order, trip, expense, or session event.
+- **Foreign key references:** `session_id`, `order_id`, `trip_id`, `expense_id`, `actor_user_id`, `approval_user_id`.
+
+### Cashier Sessions Table
+
+| Column | Type | Purpose |
+|---|---|---|
+| `id` | INTEGER PK | Auto-increment |
+| `user_id` | INTEGER FK | Cashier user |
+| `station` | TEXT | `ALL`, `COUNTER`, or `DELIVERY` |
+| `opening_float` | REAL | Starting cash amount |
+| `closing_float` | REAL | Counted cash at close |
+| `expected_cash` | REAL | Calculated expected cash |
+| `variance` | REAL | `closing_float - expected_cash` |
+| `status` | TEXT | `open` or `closed` |
+| `opened_at` | TEXT | ISO timestamp |
+| `closed_at` | TEXT | ISO timestamp |
+| `closed_by` | INTEGER FK | User who closed |
+| `notes` | TEXT | Optional notes |
+| `handover_to_session_id` | INTEGER FK | Linked successor session |
+
+### Additional Schema Details
+
+- `users.pin_salt` — `TEXT` column, `NULL` for legacy SHA-256 users, populated with random salt for PBKDF2 users.
+- `orders.is_paid` — `INTEGER DEFAULT 0`, boolean flag for payment status.
+- `audit_log` — Extended fields: `old_value`, `new_value` for before/after snapshots.
+- `driver_settlements` — All monetary fields stored as integer piasters.
+
+---
+
+## Migrations (`migrations.py` — 364 lines)
+
+**Status:** Implemented
+
+### Current Version: 6
+
+| Migration | Version | Responsibility |
+|---|---|---|
+| v1 → v2 | 2 | Add `order_status_history` table |
+| v2 → v3 | 3 | Extend `audit_log` with `old_value` and `new_value` columns |
+| v3 → v4 | 4 | Add `driver_settlements` table |
+| v4 → v5 | 5 | Add `cashier_sessions` and `cash_ledger` tables with triggers and indexes |
+| v5 → v6 | 6 | Add `users.pin_salt` column |
+
+### Migration Safety
+
+> [!CAUTION]
+> **Do not reuse migration version 6.** Migration v6 (`add_pin_salt`) is already deployed and adds the `users.pin_salt` column. Any future schema changes must use **version 7 or higher**.
+
+### Migration Runner
+
+- `run_migrations(conn)` — Checks current version from `schema_version` table, applies all pending migrations in order.
+- Each migration runs in a transaction.
+- `LATEST_VERSION = 6` constant in `migrations.py`.
+
+---
+
+## Seed Data (`seed.py` — 164 lines)
+
+**Status:** Implemented
+
+Seeds the database with a default admin user on first run.
+
+- **Username:** Configured via constants.
+- **Default PIN:** Hashed with legacy SHA-256 (no salt, `pin_salt=NULL`).
+- **Role:** Admin.
+- **Auto-upgrade:** On first login, `AuthService` detects the missing salt and upgrades to PBKDF2.
+
+> [!WARNING]
+> The seed admin uses a legacy SHA-256 hash without salt. This is by design for backward compatibility — the hash is automatically upgraded to PBKDF2-HMAC-SHA256 on first successful login.
+
+---
+
+## Summary
+
+| Component | File | Lines | Status |
+|---|---|---|---|
+| Connection | `connection.py` | 244 | Implemented |
+| Schema | `schema.sql` | 475 | Implemented |
+| Migrations | `migrations.py` | 364 | Implemented |
+| Seed | `seed.py` | 164 | Implemented |
+| **Total** | **4 files** | **1,247** | |
+
+| Metric | Value |
+|---|---|
+| Schema Version | 6 |
+| Total Tables | 19 |
+| Applied Migrations | 5 |
+| Connection Mode | WAL |
+| Foreign Keys | Enforced |
+| Busy Timeout | 5,000 ms |
+| Cash Ledger Protection | UPDATE/DELETE triggers |

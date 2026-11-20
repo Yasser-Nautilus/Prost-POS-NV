@@ -1,153 +1,223 @@
-# 📁 data/repositories — PROGRESS
+# Repositories — Progress
 
-## 🎯 Goal
-
-Abstract **all database access** behind a clean repository interface. Services call repositories — never SQLite directly. This is the key layer that enables future Google Sheets sync without touching any service code.
-
----
-
-## ✅ Tasks
-
-### 1. Base Repository (`base_repository.py`)
-
-- **What**: Abstract base class defining the CRUD contract
-- **Details**:
-  - Generic class `BaseRepository[T]` using Python's `ABC` and `Generic`
-  - Abstract methods: `get_by_id(id)`, `save(entity)`, `delete(id)`
-  - `save()` handles both insert (when id is None) and update (when id exists)
-  - `delete()` performs soft-delete (status change), never hard-delete
-- **Why**: This is the contract that both SQLite and future Google Sheets implementations must fulfill.
-- **Status**: `Done`
-
-### 2. Order Repository (`order_repository.py`)
-
-- **What**: All order-related database queries in one place
-- **Details**:
-  - `get_by_id(order_id)` → fetch order with items
-  - `get_by_invoice(invoice_no)` → lookup by invoice number
-  - `get_by_table(table_number)` → load active order for a dine-in table
-  - `save(order)` → insert or update order + items
-  - `get_active_orders()` → all non-completed, non-cancelled orders
-  - `get_active_by_type(order_type)` → filtered by type (for tracking view)
-  - `get_unassigned_deliveries()` → delivery orders not yet assigned to a driver (from both cashiers)
-  - `get_today_orders()` → all orders created today (current shift)
-  - `get_orders_for_report(date_str)` → non-cancelled orders for a specific date
-  - `get_next_invoice_number()` → next sequential int for current shift
-  - Private helpers: `_row_to_order()`, `_load_items()`, `_insert()`, `_update()`, `_save_items()`
-- **Why**: Simplified without modifiers. Each item is just product_id, name, qty (int), price, notes.
-- **Status**: `Done`
-
-### 3. User Repository (`user_repository.py`)
-
-- **What**: All user/authentication database queries
-- **Details**:
-  - `get_by_id(user_id)` → fetch user
-  - `get_by_username(username)` → login lookup
-  - `get_by_pin(pin_hash)` → PIN verification for manager overrides
-  - `save(user)` → create or update user
-  - `get_all_active()` → for user management screen
-  - `get_drivers()` → users with driver role (for delivery assignment)
-- **Status**: `Done`
-
-### 4. Product Repository (`product_repository.py`)
-
-- **What**: Product and category database queries
-- **Details**:
-  - `get_categories()` → sorted list of active categories
-  - `get_products_by_category(category_id)` → sorted products for POS grid
-  - `search_products(query)` → text search across product names
-  - `save_product(product)`, `save_category(category)`
-  - ~~`get_modifiers_for_product()`~~ — **REMOVED** (no modifiers)
-  - ~~`save_modifier()`~~ — **REMOVED**
-- **Why**: Simplified — no modifier queries, no join tables. Products are self-contained.
-- **Status**: `Done`
-
-### 5. Customer Repository (`customer_repository.py`)
-
-- **What**: Customer, address, and zone database queries
-- **Details**:
-  - **Customer**:
-    - `find_by_phone(phone)` → exact match (11-digit) → return customer with all addresses, or None
-    - `save_customer(customer)` → create or update
-  - **Address**:
-    - `get_addresses(customer_id)` → all saved addresses for this customer
-    - `save_address(address)` → create new address (street_name + zone_id + copied fee)
-  - **Zone** (manager only):
-    - `get_all_active_zones()` → for dropdown in customer panel
-    - `save_zone(zone)` → create or update zone (name + delivery_fee)
-    - `deactivate_zone(zone_id)` → soft delete
-- **Status**: `Done`
-
-### 6. Delivery Repository (`delivery_repository.py`)
-
-- **What**: Delivery trip, driver attendance, and settlement queries
-- **Details**:
-  - **Driver attendance**:
-    - `check_in(driver_id)` → create attendance record with check_in_at timestamp
-    - `check_out(driver_id)` → update attendance record with check_out_at
-    - `get_checked_in_drivers()` → all currently active drivers
-    - `get_driver_status(driver_id)` → CHECKED_OUT / AVAILABLE / OUT
-  - **Trip lifecycle**:
-    - `create_trip(driver_id, order_ids)` → new trip record
-    - `mark_dispatched(trip_id)` → set dispatched_at timestamp
-    - `mark_returned(trip_id)` → set returned_at timestamp
-    - `mark_settled(trip_id)` → set settled_at timestamp
-  - **Trip queries**:
-    - `get_active_trips()` → trips dispatched but not yet returned
-    - `get_unsettled_trips(driver_id=None)` → returned but not settled (optional driver filter)
-    - `get_trip_with_orders(trip_id)` → full trip detail including order list
-  - **End-of-day**:
-    - `get_all_drivers_daily_summary(date)` → per-driver: trip count, order count, fees earned
-    - `get_driver_daily_trips(driver_id, date)` → all trips for one driver on a date
-- **Status**: `Done`
-
-### 7. Financial Repository (`financial_repository.py`)
-
-- **What**: Shift lifecycle, expense tracking, and reconciliation queries
-- **Details**:
-  - **Shift**:
-    - `open_shift(user_id)` → create shift record, reset invoice counter to 1
-    - `close_shift(shift_id, closed_by)` → set closed_at, is_active = false
-    - `get_active_shift()` → currently open shift (or None)
-    - `get_shift_history()` → past closed shifts
-  - **Shift transfer**:
-    - `save_transfer(shift_id, from_user, to_user, snapshot)` → record transfer checkpoint
-    - `get_transfers_for_shift(shift_id)` → all transfers in this shift
-  - **Expenses**:
-    - `add_expense(transaction)` → insert cash-out entry (immutable, no update/delete)
-    - `get_shift_expenses(shift_id)` → all expenses for this shift
-    - `get_expenses_for_date(date)` → for export to Excel/Sheets
-  - **Reporting queries**:
-    - `get_shift_order_summary(shift_id)` → aggregate orders by type (count + revenue)
-    - `get_pending_delivery_total(shift_id)` → unsettled driver orders total
-    - `get_pending_dinein_total(shift_id)` → unpaid dine-in tables total
-    - `get_pending_kitchen_total(shift_id)` → orders still in preparation total
-    - `has_unsettled_trips()` → bool — prerequisite check for close
-    - `has_printed_daily_summary(shift_id)` → checks `shifts.summary_printed_at IS NOT NULL`
-    - `mark_summary_printed(shift_id)` → sets `shifts.summary_printed_at = NOW()` (called when daily summary is first printed)
-  - **Invoice**:
-    - `get_next_invoice_no(shift_id)` → atomic `UPDATE shifts SET next_invoice_no = next_invoice_no + 1 WHERE id = ? RETURNING next_invoice_no` (race-safe for 2 cashiers)
-- **Why**: Pending calculations are critical for expected cash. Close prerequisites prevent data loss.
-- **Status**: `Done`
-
-### 8. Audit Repository (`audit_repository.py`)
-
-- **What**: Centralized audit trail logging
-- **Details**:
-  - `log(event_type, user_id, user_name, order_id=None, details=None)` → insert audit_log entry
-  - `get_logs_for_date(date)` → all audit entries for a given date
-  - `get_logs_for_order(order_id)` → audit trail for a specific order
-  - Event types: `order_cancelled`, `discount_applied`, `item_removed`, `shift_opened`, `shift_closed`, `shift_transferred`, `user_created`, `user_updated`
-  - Details stored as JSON (e.g., cancel reason, discount amount, removed item info)
-- **Why**: The `audit_log` table is defined in the schema but needs a repository to actually write/query it. Without this, audit logging will be implemented inconsistently across services.
-- **Status**: `Done`
+> **Last Updated:** 2026-11-20
+> **Source of Truth:** Actual implementation files in `broast_pos/data/repositories/`
 
 ---
 
-## 📝 Notes
+## Overview
 
-- **This layer enables future Google Sheets sync**
-- All SQL lives ONLY in repository files — nowhere else
-- Use parameterized queries (`?` placeholders) — never string concatenation
-- **No modifier-related queries** — removed entirely (simpler joins, faster queries)
-- Order item loading: just `SELECT * FROM order_items WHERE order_id = ?` (no modifier joins)
+The repository layer contains **12 repository files** (plus `base_repository.py`) providing persistence for all domain models. All repositories extend `BaseRepository`, which provides access to the shared `DatabaseConnection` singleton.
+
+---
+
+## Repositories
+
+### 1. OrderRepository (`order_repository.py` — 509 lines)
+
+**Status:** Implemented
+
+The largest repository, handling full order persistence.
+
+**Key responsibilities:**
+- Full CRUD for orders and order items.
+- **Batch item loading:** `_load_items_for_orders()` loads items for multiple orders in a single query, avoiding N+1 queries.
+- **Shift-based report queries:** Queries filtered by shift open/close timestamps rather than calendar dates.
+- **Business-date handling:** Date-range queries for reporting.
+- **Status filtering** and pagination.
+- **Order number generation.**
+
+**Key methods:**
+- `create(order) → Order`
+- `update(order) → Order`
+- `get_by_id(order_id) → Order`
+- `get_all(filters) → List[Order]`
+- `get_orders_for_shift(shift_id, opened_at, closed_at) → List[Order]`
+- `get_orders_by_date_range(start, end) → List[Order]`
+- `get_next_order_number() → int`
+
+---
+
+### 2. ProductRepository (`product_repository.py`)
+
+**Status:** Implemented
+
+**Key responsibilities:**
+- Product and category CRUD.
+- Product search by name (English and Arabic).
+- Sort order management.
+- Availability toggling.
+
+---
+
+### 3. CustomerRepository (`customer_repository.py`)
+
+**Status:** Implemented
+
+**Key responsibilities:**
+- Customer CRUD.
+- Phone-based lookup.
+- Address management (create, update, delete, set default).
+- Zone CRUD.
+
+---
+
+### 4. UserRepository (`user_repository.py`)
+
+**Status:** Implemented
+
+**Key responsibilities:**
+- User CRUD.
+- Username-based lookup for authentication.
+- PIN hash and salt updates.
+- Active/inactive user filtering.
+
+---
+
+### 5. DeliveryRepository (`delivery_repository.py`)
+
+**Status:** Implemented
+
+**Key responsibilities:**
+- Delivery trip CRUD.
+- Driver attendance (clock in/out) records.
+- Trip status updates.
+- Unsettled trip queries.
+- Driver availability queries.
+
+---
+
+### 6. FinancialRepository (`financial_repository.py`)
+
+**Status:** Implemented
+
+**Key responsibilities:**
+- Shift CRUD.
+- Shift transfer records.
+- Cash transaction persistence.
+- Active shift queries.
+
+---
+
+### 7. ReportRepository (`report_repository.py`)
+
+**Status:** Implemented
+
+**Key responsibilities:**
+- Aggregated sales queries by date, shift, month, and year.
+- Order count and revenue summaries.
+- Payment method breakdowns.
+
+---
+
+### 8. AuditRepository (`audit_repository.py`)
+
+**Status:** Implemented
+
+**Key responsibilities:**
+- Audit log entry persistence.
+- Filtered queries by event type, date range, and entity.
+- Order-specific audit trail queries.
+
+---
+
+### 9. CashLedgerRepository (`cash_ledger_repository.py` — 204 lines)
+
+**Status:** Implemented
+
+**Key responsibilities:**
+- **Append-only insertion:** Only INSERT operations; UPDATE and DELETE are blocked by database triggers.
+- **Balance calculations:** Sum ledger entries by session, actor, or date range.
+- **Idempotency queries:** Check for existing entries before creating duplicates.
+- **Entry type filtering:** Query by `LedgerEntryType`.
+- **Session-scoped queries:** Get all entries for a specific cashier session.
+
+**Key methods:**
+- `create(entry) → CashLedgerEntry`
+- `get_balance_for_session(session_id) → int`
+- `get_entries_for_session(session_id) → List[CashLedgerEntry]`
+- `exists_for_order(order_id, entry_type) → bool`
+- `exists_for_trip(trip_id, entry_type) → bool`
+- `get_entries_by_date_range(start, end) → List[CashLedgerEntry]`
+
+---
+
+### 10. CashierSessionRepository (`cashier_session_repository.py` — 164 lines)
+
+**Status:** Implemented
+
+**Key responsibilities:**
+- Cashier session CRUD.
+- **Station-aware queries:** Find active sessions by station type.
+- **Active session lookup** by user or station.
+- **Session close** with cash count and variance recording.
+- **Handover** linking sessions via `handover_to_session_id`.
+
+**Key methods:**
+- `create(session) → CashierSession`
+- `update(session) → CashierSession`
+- `get_by_id(session_id) → CashierSession`
+- `get_active_sessions() → List[CashierSession]`
+- `get_active_session_for_station(station) → CashierSession`
+- `get_active_session_for_user(user_id) → CashierSession`
+
+---
+
+### 11. DriverSettlementRepository (`driver_settlement_repository.py` — 131 lines)
+
+**Status:** Implemented
+
+**Key responsibilities:**
+- **INSERT-only persistence** for settlement records.
+- Settlement queries by driver, date, or trip.
+- Settlement history retrieval.
+
+**Key methods:**
+- `create(settlement) → DriverSettlement`
+- `get_by_trip_id(trip_id) → DriverSettlement`
+- `get_by_driver_id(driver_id) → List[DriverSettlement]`
+- `get_settlements_for_date(date) → List[DriverSettlement]`
+
+---
+
+### 12. OrderStatusHistoryRepository (`order_status_history_repository.py` — 121 lines)
+
+**Status:** Implemented
+
+**Key responsibilities:**
+- **INSERT-only persistence** for status transition records.
+- History retrieval by order ID.
+- Provides an immutable audit trail of all order status changes.
+
+**Key methods:**
+- `create(entry) → OrderStatusHistory`
+- `get_by_order_id(order_id) → List[OrderStatusHistory]`
+
+---
+
+## Base Repository (`base_repository.py`)
+
+All repositories extend `BaseRepository`, which provides:
+- Access to `DatabaseConnection.get_instance()`.
+- Shared connection reference via `self._conn` or `self._db`.
+- Transaction support through the connection's context manager.
+
+---
+
+## Summary
+
+| Repository | File | Lines | Status | Notes |
+|---|---|---|---|---|
+| OrderRepository | `order_repository.py` | 509 | Implemented | Batch loading, shift queries |
+| ProductRepository | `product_repository.py` | — | Implemented | |
+| CustomerRepository | `customer_repository.py` | — | Implemented | |
+| UserRepository | `user_repository.py` | — | Implemented | |
+| DeliveryRepository | `delivery_repository.py` | — | Implemented | |
+| FinancialRepository | `financial_repository.py` | — | Implemented | |
+| ReportRepository | `report_repository.py` | — | Implemented | |
+| AuditRepository | `audit_repository.py` | — | Implemented | |
+| CashLedgerRepository | `cash_ledger_repository.py` | 204 | Implemented | Append-only |
+| CashierSessionRepository | `cashier_session_repository.py` | 164 | Implemented | Station-aware |
+| DriverSettlementRepository | `driver_settlement_repository.py` | 131 | Implemented | INSERT-only |
+| OrderStatusHistoryRepository | `order_status_history_repository.py` | 121 | Implemented | INSERT-only |
+| **Total** | **12 files** | | |

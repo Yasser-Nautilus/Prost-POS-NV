@@ -1,117 +1,220 @@
-# 🏗️ Prost POS — Project Structure
+# Prost POS — Repository Structure
 
-> **Tech Stack**: Python 3 · PyQt6 · SQLite (WAL) · ESC/POS Thermal Printing
-> **Target**: 1920×1080 · RTL Arabic-first · Dark Navy Theme · White-Label Ready
-> **Status**: 🔴 Architecture & planning complete — zero implementation code yet
+> **Last Updated:** 2026-11-20
+> **Generated from:** Actual file tree on branch `dev`
 
-```
-broast_pos/
-│
-├── main.py                          # Entry point only — no logic here
-│
-├── config/                          # ⚙️ Configuration — no business logic
-│   ├── restaurant.json              # 🏷️ WHITE-LABEL: one file = new restaurant identity
-│   ├── config.py                    # APP_NAME, VERSION, ENVIRONMENT, DEBUG, LANGUAGE
-│   ├── printers.json                # Printer role → device mapping (USB/Network)
-│   └── business_rules.py           # TAX, MAX_DISCOUNT, AUTO_PRINT, timers
-│
-├── core/                            # 🧠 Pure business logic — NO UI, NO database
-│   ├── models/                      # Data classes — what things ARE
-│   │   ├── order.py                 # Order, OrderItem, OrderStatus, OrderType, PaymentMethod
-│   │   ├── user.py                  # User, UserRole (CASHIER / MANAGER / ADMIN)
-│   │   ├── product.py               # Product, Category — NO Modifier model
-│   │   ├── customer.py              # Customer, CustomerAddress, Zone
-│   │   ├── delivery.py              # DeliveryTrip, DriverAttendance, DriverStatus
-│   │   └── financial.py             # Shift, ShiftTransfer, CashTransaction, ShiftSummary
-│   │
-│   └── services/                    # Business rules — what things DO
-│       ├── order_service.py         # Create, amend, complete, cancel (with PIN)
-│       ├── auth_service.py          # Login, session, manager override
-│       ├── delivery_service.py      # Check-in/out, trip dispatch, settlement
-│       ├── product_service.py       # Product/category CRUD, search
-│       ├── customer_service.py      # Phone lookup, address management, zone CRUD
-│       ├── financial_service.py     # Shift open/close/transfer, expenses (immutable)
-│       └── report_service.py        # Daily/monthly/yearly reports
-│
-├── data/                            # 💾 Everything about storage
-│   ├── database/
-│   │   ├── connection.py            # SQLite singleton (WAL mode)
-│   │   ├── schema.sql               # 14 tables (NO modifier tables)
-│   │   ├── migrations.py            # Version-tracked ALTER TABLE runner
-│   │   └── seed.py                  # Default admin + sample products
-│   │
-│   └── repositories/                # 🔑 KEY LAYER — services → repos → SQLite
-│       ├── base_repository.py       # Abstract base: get_by_id, save, delete
-│       ├── order_repository.py      # Orders + items queries
-│       ├── user_repository.py       # Auth queries, PIN lookup
-│       ├── product_repository.py    # Products/categories queries
-│       ├── customer_repository.py   # Phone lookup, addresses, zones
-│       ├── delivery_repository.py   # Trips, attendance, settlement
-│       ├── financial_repository.py  # Shifts, expenses, pending calculations
-│       └── audit_repository.py      # Audit trail logging + queries
-│
-├── infrastructure/                  # 🔌 External systems
-│   ├── printing/
-│   │   ├── printer_manager.py       # Routes: KITCHEN / CASHIER_1 / CASHIER_2
-│   │   ├── escpos_printer.py        # USB/Network thermal (python-escpos)
-│   │   ├── receipt_templates.py     # 10 print layouts in one file
-│   │   └── printer_config.py        # JSON printer → device mapping
-│   │
-│   └── sync/                        # 🔮 Future Google Sheets integration
-│       ├── sync_interface.py        # Abstract contract (stub)
-│       └── sheets_sync.py           # No-op placeholder
-│
-└── ui/                              # 🖥️ PyQt6 — presentation only
-    ├── app.py                       # QApplication setup
-    ├── styles/
-    │   └── theme.py                 # Global QSS dark navy theme
-    │
-    ├── windows/
-    │   ├── main_window.py           # Navigation shell (role-based sidebar)
-    │   └── login_window.py          # Avatar tiles + PIN entry
-    │
-    ├── views/                       # Each screen = one QWidget
-    │   ├── login_view.py            # Avatar tiles → PIN → session
-    │   ├── pos_view.py              # 🔥 3-column order creation (MOST IMPORTANT)
-    │   ├── tracking_view.py         # Active orders, live timers
-    │   ├── delivery_view.py         # 3-panel driver/trip/settlement
-    │   ├── reports_view.py          # Daily/monthly/yearly reports
-    │   ├── products_view.py         # Product/category/zone management
-    │   ├── users_view.py            # User management + drivers
-    │   └── financial_view.py        # Shift lifecycle, expenses
-    │
-    └── components/                  # 6 reusable widgets
-        ├── product_grid.py          # Tap = add directly (NO popup)
-        ├── order_panel.py           # Live items, +/-, per-item notes
-        ├── payment_dialog.py        # كاش / فيزا / اونلاين
-        ├── pin_dialog.py            # Manager override numpad
-        ├── table_grid.py            # Green=free / Red=occupied
-        └── customer_panel.py        # Phone lookup → address cards
-```
+## Overview
+
+The repository contains a Python backend (`broast_pos/`), a React + TypeScript frontend (`frontend/`), test suites (`tests/`), and project documentation at the root level. Legacy PyQt6 UI files are retained under `broast_pos/ui/` but are not used by the active runtime.
 
 ---
 
-## ❌ REMOVED from Original Design
+## Root
 
-| Item | Reason |
-|------|--------|
-| `modifier_dialog.py` | No modifier system — each variation is a separate product |
-| `modifiers` table | Removed from schema |
-| `product_modifiers` table | Removed from schema |
-| `order_item_modifiers` table | Removed from schema |
-| Expenses View (dedicated) | Deferred to v2 — lives inside Financial View |
+```
+Prost-POS-NV/
+├── broast_pos/                      # Python backend (Clean Architecture)
+├── frontend/                        # React + TypeScript frontend
+├── tests/                           # Test suites (23 files)
+├── docs/                            # Technical documentation
+│   └── TECHNICAL_AUDIT_REPORT.md
+├── main.py                          # (Convenience entry — actual entry is broast_pos/main.py)
+├── requirements.txt                 # Python dependencies
+├── .env.example                     # Environment variable template
+├── .gitignore
+├── Pos Project Structure + Progress.md   # Project overview and progress
+├── README.md                        # Project readme
+└── Structure.md                     # This file
+```
 
-## 📌 Key Design Decisions
+## Backend — `broast_pos/`
 
-| Decision | Detail |
-|----------|--------|
-| No modifiers | Variations = separate products |
-| 3 payments only | كاش / فيزا / اونلاين — Visa NOT for delivery |
-| Quantity = int | No fractional quantities |
-| PIN = unique | Identifies WHO by PIN alone |
-| Invoice resets daily | Resets to #1 on open_shift() |
-| Expenses immutable | Cannot edit/delete after creation |
-| No draft system | Unsaved orders = memory only |
-| Zero print dialogs | All ESC/POS, all silent |
-| White-label | Single restaurant.json swap |
-| Offline-first | SQLite local, Google Sheets = future |
+```
+broast_pos/
+├── __init__.py
+├── main.py                              # Application entry point (225 lines)
+│                                        #   → DB init → Repos → Services → Bridge → WebShell
+│
+├── config/
+│   ├── __init__.py
+│   ├── config.py                        # Environment-driven config via os.getenv (140 lines)
+│   └── PROGRESS.md
+│
+├── core/
+│   ├── __init__.py
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── order.py                     # Order, OrderItem, OrderType, OrderStatus, PaymentMethod
+│   │   ├── user.py                      # User, UserRole (with pin_salt)
+│   │   ├── product.py                   # Product, Category
+│   │   ├── customer.py                  # Customer, CustomerAddress, Zone
+│   │   ├── delivery.py                  # DeliveryTrip, DriverAttendance, DriverStatus
+│   │   ├── financial.py                 # Shift, ShiftTransfer, CashTransaction, ShiftSummary
+│   │   ├── audit.py                     # AuditEventType constants class
+│   │   ├── cashier_session.py           # Station, CashierSession, LedgerEntryType, CashLedgerEntry
+│   │   ├── driver_settlement.py         # DriverSettlement dataclass
+│   │   ├── order_status_history.py      # OrderStatusHistory dataclass
+│   │   └── PROGRESS.md
+│   ├── policies/
+│   │   ├── __init__.py
+│   │   └── discount.py                  # compute_discount (Decimal precision)
+│   └── services/
+│       ├── __init__.py
+│       ├── order_service.py             # Order state machine, CRUD, ledger (893 lines)
+│       ├── auth_service.py              # PBKDF2 auth, throttle, legacy upgrade (514 lines)
+│       ├── delivery_service.py          # Driver lifecycle, trips (604 lines)
+│       ├── driver_settlement_service.py # Settlement, ledger entries (543 lines)
+│       ├── report_service.py            # Daily/shift/monthly/yearly reports (451 lines)
+│       ├── cashier_session_service.py   # Session lifecycle, ledger (398 lines)
+│       ├── business_day_service.py      # X/Z reports, business-day close (358 lines)
+│       ├── financial_service.py         # Shift lifecycle, expenses (320 lines)
+│       ├── customer_service.py          # Customer/address/zone management (251 lines)
+│       ├── product_service.py           # Product/category CRUD (195 lines)
+│       ├── audit_service.py             # Audit logging and queries (168 lines)
+│       └── PROGRESS.md
+│
+├── data/
+│   ├── __init__.py
+│   ├── database/
+│   │   ├── __init__.py
+│   │   ├── schema.sql                   # 19 tables, triggers, indexes (475 lines)
+│   │   ├── connection.py                # Singleton, WAL, FK ON, busy_timeout (244 lines)
+│   │   ├── migrations.py               # LATEST_VERSION=6, 5 migrations (364 lines)
+│   │   ├── seed.py                      # Default admin seeding (164 lines)
+│   │   └── PROGRESS.md
+│   └── repositories/
+│       ├── __init__.py
+│       ├── base_repository.py           # Abstract base with connection access
+│       ├── order_repository.py          # Full CRUD, batch items, shift queries (509 lines)
+│       ├── product_repository.py        # Product/category persistence
+│       ├── customer_repository.py       # Customer/address/zone persistence
+│       ├── user_repository.py           # User CRUD
+│       ├── delivery_repository.py       # Trip/driver persistence
+│       ├── financial_repository.py      # Shift/transaction persistence
+│       ├── report_repository.py         # Report queries
+│       ├── audit_repository.py          # Audit log persistence
+│       ├── cash_ledger_repository.py    # Append-only ledger, balance queries (204 lines)
+│       ├── cashier_session_repository.py    # Session CRUD, station queries (164 lines)
+│       ├── driver_settlement_repository.py  # Settlement persistence (131 lines)
+│       ├── order_status_history_repository.py  # Status history persistence (121 lines)
+│       └── PROGRESS.md
+│
+├── features/                            # Feature-level documentation
+│   ├── delivery_system/
+│   │   └── PROGRESS.md
+│   ├── financial/
+│   │   └── PROGRESS.md
+│   ├── order_lifecycle/
+│   │   └── PROGRESS.md
+│   ├── printing_flow/
+│   │   └── PROGRESS.md
+│   ├── reports/
+│   │   └── PROGRESS.md
+│   └── user_permissions/
+│       └── PROGRESS.md
+│
+├── infrastructure/
+│   ├── __init__.py
+│   ├── printing/
+│   │   ├── __init__.py
+│   │   ├── printer_manager.py           # Central routing, 3 roles, thread-safe (223 lines)
+│   │   ├── print_triggers.py            # Event-driven silent printing (159 lines)
+│   │   ├── escpos_printer.py            # ESC/POS hardware interface
+│   │   ├── receipt_templates.py         # Arabic/English receipt formatting
+│   │   ├── printer_config.py            # Printer configuration loader
+│   │   └── PROGRESS.md
+│   ├── web_bridge/
+│   │   ├── __init__.py
+│   │   └── bridge.py                    # POSBridge dispatch, 6 controllers (1016 lines)
+│   └── sync/
+│       ├── __init__.py
+│       └── PROGRESS.md                  # All Deferred
+│
+└── ui/
+    ├── __init__.py
+    ├── web_shell.py                     # QWebEngineView + QWebChannel (170 lines)
+    ├── components/                      # Legacy PyQt6 components (retained, unused)
+    │   └── PROGRESS.md
+    ├── views/                           # Legacy PyQt6 views (retained, unused)
+    │   └── PROGRESS.md
+    ├── styles/                          # Legacy PyQt6 theme (retained, unused)
+    │   └── PROGRESS.md
+    └── windows/                         # Legacy PyQt6 windows (retained, unused)
+        └── PROGRESS.md
+```
+
+## Frontend — `frontend/`
+
+```
+frontend/
+├── index.html
+├── package.json
+├── tsconfig.json
+├── vite.config.ts
+├── tailwind.config.js
+├── PROGRESS.md
+└── src/
+    ├── main.tsx                          # React entry point
+    ├── App.tsx                           # App shell, role-based nav (224 lines)
+    ├── bridge.ts                         # POSBridgeClient, QWebChannel, mock (1330 lines)
+    ├── index.css                         # Tailwind imports
+    ├── views/
+    │   ├── POSView.tsx                   # Order entry and management
+    │   ├── DeliveryView.tsx              # Delivery and driver management
+    │   ├── TrackingView.tsx              # Order tracking board
+    │   ├── ReportsView.tsx              # Report display
+    │   ├── ProductsView.tsx             # Product/category management
+    │   ├── DriverSettlementView.tsx     # Per-trip settlement (640 lines)
+    │   ├── AuditLogView.tsx             # Audit trail viewer (308 lines)
+    │   ├── UsersView.tsx                # User management (admin)
+    │   ├── LoginView.tsx                # PIN-based login
+    │   └── SessionsView.tsx             # Cashier sessions (693 lines) ⚠️ NOT MOUNTED
+    └── components/
+        ├── CustomerHistoryModal.tsx
+        ├── CustomerLookup.tsx
+        ├── DiscountDialog.tsx
+        ├── Numpad.tsx
+        ├── PaymentDialog.tsx
+        ├── PinDialog.tsx
+        ├── ShiftDialog.tsx              # Legacy shift dialog (still active)
+        └── TableGrid.tsx
+```
+
+## Tests — `tests/`
+
+```
+tests/
+├── 23 test files (6,369 total lines)
+├── test_b01_order_service.py
+├── test_b02_financial_service.py
+├── test_b03_delivery_service.py
+├── test_b04_customer_service.py
+├── test_b05_auth_service.py
+├── test_b06_product_service.py
+├── test_b07_integration.py
+├── test_b08_order_completion.py
+├── test_b09_report_service.py
+├── test_b10_shift_reports.py
+├── test_b11_cashier_session.py
+├── test_b12_cash_ledger.py
+├── test_b13_business_day.py
+├── test_b14_driver_settlement.py
+├── test_b15_audit.py
+├── test_b16_session_controller.py
+├── test_b17_reports_controller.py
+├── test_b18_order_lifecycle.py
+├── test_b19_permissions.py
+├── test_v2_phase1.py
+├── test_v2_phase2.py
+├── test_v2_phase3.py
+├── test_v2_phase4.py
+├── test_v2_phase5.py
+└── PROGRESS.md
+```
+
+## Documentation — `docs/`
+
+```
+docs/
+└── TECHNICAL_AUDIT_REPORT.md            # Technical debt, bugs, and security findings
+```
