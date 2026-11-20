@@ -155,7 +155,7 @@ class SessionController:
 
     def get_all_sessions(self, day_id: int) -> list[dict[str, Any]]:
         """All sessions (open + closed) for a business day."""
-        sessions = self._svc._sessions.get_sessions_for_day(day_id)
+        sessions = self._svc.get_all_sessions_for_day(day_id)
         return [self._session_to_dict(s) for s in sessions]
 
     def get_session_balance(self, session_id: int) -> dict[str, Any]:
