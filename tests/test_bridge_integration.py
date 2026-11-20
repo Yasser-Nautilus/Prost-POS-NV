@@ -8,29 +8,32 @@ reassign_order method, and error paths.
 from __future__ import annotations
 
 import json
+
 import pytest
 
-from broast_pos.data.database.connection import DatabaseConnection
-from broast_pos.data.database.migrations import initialise_database
-from broast_pos.data.database import seed_database
-from broast_pos.data.repositories.user_repository import UserRepository
-from broast_pos.data.repositories.financial_repository import FinancialRepository
-from broast_pos.data.repositories.order_repository import OrderRepository
-from broast_pos.data.repositories.delivery_repository import DeliveryRepository
-from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
-from broast_pos.data.repositories.cashier_session_repository import CashierSessionRepository
-from broast_pos.data.repositories.product_repository import ProductRepository
-from broast_pos.data.repositories.customer_repository import CustomerRepository
 from broast_pos.core.services.auth_service import AuthService
+from broast_pos.core.services.business_day_service import BusinessDayService
+from broast_pos.core.services.cashier_session_service import CashierSessionService
+from broast_pos.core.services.customer_service import CustomerService
+from broast_pos.core.services.delivery_service import DeliveryService
 from broast_pos.core.services.financial_service import FinancialService
 from broast_pos.core.services.order_service import OrderService
-from broast_pos.core.services.delivery_service import DeliveryService
 from broast_pos.core.services.product_service import ProductService
-from broast_pos.core.services.customer_service import CustomerService
-from broast_pos.core.services.cashier_session_service import CashierSessionService
-from broast_pos.core.services.business_day_service import BusinessDayService
-from broast_pos.infrastructure.web_bridge.bridge import POSBridge
+from broast_pos.data.database import seed_database
+from broast_pos.data.database.connection import DatabaseConnection
+from broast_pos.data.database.migrations import initialise_database
+from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
+from broast_pos.data.repositories.cashier_session_repository import (
+    CashierSessionRepository,
+)
+from broast_pos.data.repositories.customer_repository import CustomerRepository
+from broast_pos.data.repositories.delivery_repository import DeliveryRepository
+from broast_pos.data.repositories.financial_repository import FinancialRepository
+from broast_pos.data.repositories.order_repository import OrderRepository
+from broast_pos.data.repositories.product_repository import ProductRepository
+from broast_pos.data.repositories.user_repository import UserRepository
 from broast_pos.features.delivery_system.delivery_controller import DeliveryController
+from broast_pos.infrastructure.web_bridge.bridge import POSBridge
 
 
 @pytest.fixture

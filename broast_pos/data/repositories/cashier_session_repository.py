@@ -15,7 +15,7 @@ Business rules enforced here in Python (better error messages):
 from __future__ import annotations
 
 import sqlite3
-from datetime import UTC, datetime
+from datetime import datetime
 
 from broast_pos.core.models.cashier_session import CashierSession, Station
 
