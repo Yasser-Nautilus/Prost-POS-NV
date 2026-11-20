@@ -4,6 +4,7 @@ import {
   Plus, Minus, Trash2, AlertCircle, Archive, X, Save, Pencil
 } from "lucide-react";
 import { bridge } from "../bridge";
+import { useConfirm } from "../components/ConfirmDialog";
 import { DiscountDialog } from "../components/DiscountDialog";
 import { PaymentDialog } from "../components/PaymentDialog";
 import { CustomerLookup } from "../components/CustomerLookup";
@@ -22,6 +23,8 @@ interface POSViewProps {
 }
 
 export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, onHandoverConsumed, isActive }) => {
+  const { confirm: showConfirm, ConfirmUI } = useConfirm();
+
   // POS States
   const [categories, setCategories] = useState<any[]>([]);
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
@@ -271,9 +274,8 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
     try {
       // Guard: if items already exist, confirm before switching (clears cart)
       if (currentOrder && currentOrder.items.length > 0) {
-        const choice = window.confirm(
-          "تحويل نوع الطلب سيمسح العناصر الحالية. هل تريد المتابعة؟\n\n" +
-          "اضغط OK للمتابعة، أو Cancel لإلغاء."
+        const choice = await showConfirm(
+          "تحويل نوع الطلب سيمسح العناصر الحالية. هل تريد المتابعة؟"
         );
         if (!choice) return;
       }
@@ -315,9 +317,10 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
       }
       // Occupied table: open its order so the cashier can add to it
       if (tableNo in occupiedTables) {
-        if (currentOrder?.items?.length > 0 && !window.confirm(
-          "فتح طلب هذه الطاولة سيمسح العناصر الحالية. هل تريد المتابعة؟"
-        )) return;
+        if (
+          currentOrder?.items?.length > 0 &&
+          !(await showConfirm("فتح طلب هذه الطاولة سيمسح العناصر الحالية. هل تريد المتابعة؟"))
+        ) return;
         await bridge.call("load_order_by_table", { table_number: tableNo });
         setSelectedTable(tableNo);
         setIsTableGridOpen(false);
@@ -516,7 +519,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
   };
 
   const handleClearOrder = async () => {
-    if (!window.confirm("هل أنت متأكد من رغبتك في مسح الطلب الحالي بالكامل؟")) return;
+    if (!(await showConfirm("هل أنت متأكد من رغبتك في مسح الطلب الحالي بالكامل؟"))) return;
     try {
       await bridge.call("new_order", { order_type: currentOrder?.order_type || "dine_in" });
     } catch (e: any) {
@@ -525,6 +528,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
   };
 
   return (
+    <>
     <div className="flex-1 flex flex-col md:flex-row h-[calc(100vh-64px)] overflow-hidden">
       
       {/* Right Column: Order Cart Workspace (40% width) */}
@@ -1069,5 +1073,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
       )}
 
     </div>
+    {ConfirmUI}
+    </>
   );
 };
