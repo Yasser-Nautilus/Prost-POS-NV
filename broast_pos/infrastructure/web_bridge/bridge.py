@@ -20,6 +20,7 @@ _PUBLIC_ACTIONS = frozenset({
     "login",
     "get_all_users",      # used by LoginView user tiles
     "get_current_user",   # used by App.tsx checkAuth on load
+    "get_config",         # used by App.tsx for white-label branding on load
 })
 
 
@@ -679,6 +680,17 @@ class POSBridge(QObject):
             elif action.startswith("session."):
                 return self._dispatch_session(action[len("session."):], payload)
 
+            # ── Config ─────────────────────────────────────────────────────────
+            elif action == "get_config":
+                from broast_pos.config.config import get_restaurant_info
+                info = get_restaurant_info()
+                return json.dumps({"success": True, "data": {
+                    "restaurant_name_ar": info.get("name_ar", "Prost POS"),
+                    "restaurant_name_en": info.get("name_en", "Prost POS"),
+                    "slogan_ar": info.get("slogan_ar", ""),
+                    "receipt_footer": info.get("receipt_footer", ""),
+                }})
+
             return json.dumps({"success": False, "error": f"إجراء غير معروف: {action}"})
 
         except Exception as e:
@@ -875,6 +887,17 @@ class POSBridge(QObject):
             # ARCH-001: call public controller method, not private _delivery_svc
             summary = ctrl.get_all_drivers_daily_summary()
             return json.dumps({"success": True, "data": summary})
+        elif action == "reassign_order":
+            if not self._current_user:
+                return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
+            ok, result = ctrl.reassign_order(
+                order_id=payload.get("order_id"),
+                new_driver_id=payload.get("new_driver_id"),
+                new_driver_name=payload.get("new_driver_name", ""),
+            )
+            if ok:
+                return json.dumps({"success": True, "data": result})
+            return json.dumps({"success": False, "error": result})
         elif action == "get_unassigned_deliveries":
             orders = ctrl.get_unassigned_deliveries()
             return json.dumps({"success": True, "data": orders})

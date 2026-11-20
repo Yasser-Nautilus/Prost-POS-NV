@@ -33,6 +33,7 @@ from broast_pos.data.repositories.cash_ledger_repository import CashLedgerReposi
 from broast_pos.data.repositories.cashier_session_repository import (
     CashierSessionRepository,
 )
+from broast_pos.data.repositories.delivery_repository import DeliveryRepository
 
 # ---------------------------------------------------------------------------
 # Singleton isolation
@@ -71,6 +72,7 @@ def _make_svc(db: DatabaseConnection, financial_svc=None) -> BusinessDayService:
         session_repo=CashierSessionRepository(db=db),
         ledger_repo=CashLedgerRepository(db=db),
         auth_service=None,
+        delivery_repo=DeliveryRepository(db=db),
     )
 
 

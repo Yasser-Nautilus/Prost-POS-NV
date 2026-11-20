@@ -49,6 +49,13 @@ class DeliveryService:
         self._order_svc = order_service    # Used for status transitions + history
         self._settlement_svc = settlement_svc  # B-07: creates driver_settlements record
 
+    def set_order_service(self, order_service) -> None:
+        """Inject OrderService after construction to break circular dependency.
+
+        Called from main.py instead of direct private attribute assignment.
+        """
+        self._order_svc = order_service
+
     # ------------------------------------------------------------------
     # Internal helper: change order status (with history recording)
     # ------------------------------------------------------------------

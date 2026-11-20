@@ -12,10 +12,45 @@ import { ProductsView } from "./views/ProductsView";
 import { UsersView } from "./views/UsersView";
 import { DriverSettlementView } from "./views/DriverSettlementView";
 import { AuditLogView } from "./views/AuditLogView";
+import { SessionsView } from "./views/SessionsView";
 import { ShiftDialog } from "./components/ShiftDialog";
 import { bridge } from "./bridge";
 
-type Tab = "pos" | "delivery" | "tracking" | "reports" | "products" | "users" | "settlement" | "audit";
+type Tab = "pos" | "delivery" | "tracking" | "reports" | "products" | "users" | "settlement" | "audit" | "sessions";
+
+// ── Confirm Dialog (replaces window.confirm) ────────────────────────────────
+
+const ConfirmDialog: React.FC<{
+  isOpen: boolean;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}> = ({ isOpen, message, onConfirm, onCancel }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="bg-brand-surface border border-brand-border/60 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-5" dir="rtl">
+        <p className="text-white font-bold text-sm text-center">{message}</p>
+        <div className="flex gap-3">
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-2.5 bg-gradient-to-l from-red-600 to-red-700 text-white font-bold rounded-xl hover:brightness-110 active:scale-[0.98] transition-all"
+          >
+            تأكيد
+          </button>
+          <button
+            onClick={onCancel}
+            className="flex-1 py-2.5 bg-brand-card border border-brand-border/40 text-gray-300 font-bold rounded-xl hover:bg-brand-border/20 transition-all"
+          >
+            إلغاء
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -25,9 +60,29 @@ function App() {
   const [loading, setLoading] = useState(true);
   // CHANGED: pickup order handed to POS for payment on handover ("تسليم").
   const [handoverOrder, setHandoverOrder] = useState<any | null>(null);
+  // White-label branding loaded from backend config
+  const [brandName, setBrandName] = useState<string>("");
+  // Confirm dialog state (replaces window.confirm)
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    message: string;
+    resolve: ((v: boolean) => void) | null;
+  }>({ isOpen: false, message: "", resolve: null });
+
+  const showConfirm = (message: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      setConfirmDialog({ isOpen: true, message, resolve });
+    });
+  };
 
   const checkAuth = async () => {
     try {
+      // Load config (white-label branding) on startup
+      try {
+        const cfg = await bridge.call("get_config");
+        if (cfg?.restaurant_name_ar) setBrandName(cfg.restaurant_name_ar);
+      } catch { /* fallback to default */ }
+
       const user = await bridge.call("get_current_user");
       setCurrentUser(user);
       if (user) {
@@ -53,7 +108,8 @@ function App() {
   };
 
   const handleLogout = async () => {
-    if (!window.confirm("هل أنت متأكد من تسجيل الخروج؟")) return;
+    const confirmed = await showConfirm("هل أنت متأكد من تسجيل الخروج؟");
+    if (!confirmed) return;
     try {
       await bridge.call("logout");
       setCurrentUser(null);
@@ -90,12 +146,19 @@ function App() {
     { id: "pos",        label: "شاشة البيع (POS)",    icon: ShoppingBag, visible: true },
     { id: "delivery",  label: "توصيل الطلبات",       icon: Truck,       visible: true },
     { id: "tracking",  label: "متابعة الطلبات",      icon: Eye,         visible: true },
+    { id: "sessions",  label: "ورديات الصندوق",      icon: Wallet,      visible: true },
     { id: "settlement",label: "تسوية السائقين",      icon: Wallet,      visible: isManagerOrAbove },
     { id: "reports",   label: "التقارير المالية",    icon: BarChart3,   visible: isManagerOrAbove },
     { id: "products",  label: "إدارة المنتجات",      icon: Package,     visible: isManagerOrAbove },
     { id: "audit",     label: "سجل التدقيق",         icon: Shield,      visible: isManagerOrAbove },
     { id: "users",     label: "إدارة المستخدمين",    icon: Users,       visible: isAdmin },
   ];
+
+  // Derive brand display — first word as icon, rest as highlight
+  const brandParts = brandName ? brandName.split(" ") : [];
+  const brandIcon = brandParts[0]?.[0] || "P";
+  const brandFirst = brandParts[0] || "Prost";
+  const brandRest = brandParts.slice(1).join(" ") || "POS";
 
   return (
     <div className="h-screen bg-brand-dark flex flex-col overflow-hidden text-white font-cairo">
@@ -108,10 +171,10 @@ function App() {
           {/* Logo */}
           <div className="flex items-center gap-2">
             <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-brand-gold to-yellow-500 flex items-center justify-center text-brand-dark font-black text-lg shadow-lg">
-              ب
+              {brandIcon}
             </div>
             <span className="font-extrabold text-lg text-white">
-              بروستد <span className="gold-gradient-text">البروست</span>
+              {brandFirst} <span className="gold-gradient-text">{brandRest}</span>
             </span>
           </div>
 
@@ -202,6 +265,7 @@ function App() {
             }}
           />
         )}
+        {activeTab === "sessions"   && <SessionsView currentUser={currentUser} />}
         {activeTab === "reports"    && isManagerOrAbove && <ReportsView key={activeShift?.id ?? "closed"} currentUser={currentUser} />}
         {activeTab === "products"   && isManagerOrAbove && <ProductsView currentUser={currentUser} />}
         {activeTab === "settlement" && isManagerOrAbove && <DriverSettlementView currentUser={currentUser} />}
@@ -215,6 +279,18 @@ function App() {
         onClose={() => setIsShiftOpen(false)}
         currentUser={currentUser}
         onShiftStatusChange={handleShiftChange}
+      />
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        message={confirmDialog.message}
+        onConfirm={() => {
+          confirmDialog.resolve?.(true);
+          setConfirmDialog({ isOpen: false, message: "", resolve: null });
+        }}
+        onCancel={() => {
+          confirmDialog.resolve?.(false);
+          setConfirmDialog({ isOpen: false, message: "", resolve: null });
+        }}
       />
 
     </div>

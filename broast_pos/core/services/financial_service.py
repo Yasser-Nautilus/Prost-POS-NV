@@ -34,11 +34,15 @@ class FinancialService:
         audit_repo: AuditRepository | None = None,
         auth_service: AuthService | None = None,
         delivery_service: DeliveryService | None = None,
+        cash_ledger_repo=None,
+        cashier_session_repo=None,
     ) -> None:
         self._financial = financial_repo or FinancialRepository()
         self._audit = audit_repo or AuditRepository()
         self._auth = auth_service
         self._delivery = delivery_service
+        self._ledger = cash_ledger_repo        # CashLedgerRepository (optional)
+        self._sessions = cashier_session_repo  # CashierSessionRepository (optional)
 
     # ------------------------------------------------------------------
     # Shift guard (called by OrderService before every order)
@@ -260,6 +264,9 @@ class FinancialService:
 
         saved = self._financial.save_expense(transaction)
 
+        # Create corresponding EXPENSE ledger entry (cash leaves drawer)
+        self._record_expense_to_ledger(saved)
+
         self._audit.log(
             event_type="expense_added",
             user_id=user_id,
@@ -300,6 +307,63 @@ class FinancialService:
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _record_expense_to_ledger(self, expense: CashTransaction) -> None:
+        """Create a negative EXPENSE entry in the cash ledger.
+
+        Matches the expense to the active cashier session for the current
+        shift. If no ledger repo is configured or no session is open, the
+        expense is still recorded in cash_transactions but won't appear
+        in the session's ledger balance.
+        """
+        if self._ledger is None or self._sessions is None:
+            return  # Legacy mode — no session-based ledger
+
+        try:
+            from broast_pos.core.models.cashier_session import (
+                CashLedgerEntry,
+                LedgerEntryType,
+                Station,
+            )
+
+            day_id = expense.shift_id
+
+            # Find an open session to attribute the expense to.
+            # Preference: ALL → COUNTER (expenses are typically counter ops).
+            session = None
+            open_sessions = self._sessions.get_open_sessions_for_day(day_id)
+            for s in open_sessions:
+                if s.station == Station.ALL:
+                    session = s
+                    break
+            if session is None:
+                for s in open_sessions:
+                    if s.station == Station.COUNTER:
+                        session = s
+                        break
+            if session is None and open_sessions:
+                session = open_sessions[0]
+
+            if session is None:
+                return  # No open session — skip ledger entry
+
+            amount_pt = round(expense.amount * 100)
+            self._ledger.append(CashLedgerEntry(
+                id=None,
+                day_id=day_id,
+                session_id=session.id,
+                entry_type=LedgerEntryType.EXPENSE,
+                amount_pt=-amount_pt,  # negative: cash leaves drawer
+                expense_id=expense.id,
+                actor_id=expense.user_id,
+                reason=f"مصروف: {expense.description}",
+            ))
+        except Exception:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to record expense %s to cash ledger", expense.id,
+                exc_info=True,
+            )
 
     def _verify_manager_pin(self, pin: str | None):
         """Verify manager/admin PIN. Returns the User.

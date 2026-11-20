@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Wallet, Plus, Power, RefreshCw, BarChart3, Lock,
-  User, Clock, AlertTriangle, CheckCircle2, FileText, Loader2, X
+  User, Clock, AlertTriangle, CheckCircle2, FileText, Loader2, X,
+  ArrowLeftRight, XCircle
 } from "lucide-react";
 import { bridge } from "../bridge";
-import type { CashierSession, XReport, SessionStation } from "../bridge";
+import type { CashierSession, XReport, ZReport, SessionStation } from "../bridge";
 import { PinDialog } from "../components/PinDialog";
 
 interface SessionsViewProps {
@@ -292,6 +293,467 @@ const CloseSessionDialog: React.FC<{
   );
 };
 
+// ── Handover Dialog ──────────────────────────────────────────────────────────
+
+const HandoverDialog: React.FC<{
+  isOpen: boolean;
+  session: CashierSession | null;
+  currentUser: any;
+  onClose: () => void;
+  onSuccess: () => void;
+}> = ({ isOpen, session, currentUser, onClose, onSuccess }) => {
+  const [users, setUsers] = useState<any[]>([]);
+  const [toUserId, setToUserId] = useState<number | null>(null);
+  const [station, setStation] = useState<SessionStation>("ALL");
+  const [countStr, setCountStr] = useState("");
+  const [cashDropStr, setCashDropStr] = useState("0");
+  const [reason, setReason] = useState("");
+  const [showPin, setShowPin] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (isOpen) {
+      bridge.call("get_users_for_transfer").then((u: any[]) => {
+        // Exclude the current user (who is handing over)
+        setUsers(u.filter((x: any) => x.id !== currentUser?.id));
+      }).catch(console.error);
+      if (session) setStation(session.station as SessionStation);
+    }
+  }, [isOpen, currentUser?.id, session]);
+
+  if (!isOpen || !session) return null;
+
+  const expectedEgp = session.expected_cash_egp ?? session.opening_float_egp;
+  const counted = parseFloat(countStr) || 0;
+  const varianceEgp = counted - expectedEgp;
+  const cashDrop = parseFloat(cashDropStr) || 0;
+  const needsApproval = Math.abs(varianceEgp) > 20;
+  const incomingFloat = Math.max(0, counted - cashDrop);
+
+  const stations: { value: SessionStation; label: string }[] = [
+    { value: "ALL", label: "الكل" },
+    { value: "COUNTER", label: "كاونتر" },
+    { value: "DELIVERY", label: "توصيل" },
+  ];
+
+  const doHandover = async (pin?: string) => {
+    if (!toUserId) {
+      setError("يجب اختيار الموظف المستلم");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      await bridge.sessionHandover({
+        from_session_id: session.id,
+        to_user_id: toUserId,
+        station,
+        counted_cash_egp: counted,
+        cash_drop_egp: cashDrop,
+        variance_reason: reason || undefined,
+        manager_pin: pin,
+      });
+      onSuccess();
+      onClose();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = () => {
+    if (!toUserId) {
+      setError("يجب اختيار الموظف المستلم");
+      return;
+    }
+    if (!countStr) {
+      setError("يجب إدخال مبلغ العدّ الفعلي");
+      return;
+    }
+    if (needsApproval && !reason.trim()) {
+      setError("يجب كتابة سبب الفرق عندما يكون أكثر من 20 ج.م");
+      return;
+    }
+    if (needsApproval) {
+      setShowPin(true);
+    } else {
+      doHandover();
+    }
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="bg-brand-surface border border-brand-border/60 rounded-3xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 space-y-4" dir="rtl">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              <ArrowLeftRight size={20} className="text-blue-400" />
+              تسليم الوردية — {session.station}
+            </h2>
+            <button onClick={onClose} className="text-gray-500 hover:text-white">
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Select target user */}
+          <div className="space-y-2">
+            <span className="text-xs text-gray-400 font-bold">الموظف المستلم</span>
+            <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+              {users.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => setToUserId(u.id)}
+                  className={`p-2.5 rounded-xl border text-sm font-bold text-right transition-all ${
+                    toUserId === u.id
+                      ? "bg-blue-900/20 border-blue-700/40 text-blue-400"
+                      : "bg-brand-card border-brand-border/30 text-gray-300 hover:text-white hover:border-brand-border"
+                  }`}
+                >
+                  <span className="block">{u.display_name}</span>
+                  <span className="text-[10px] text-gray-500">
+                    {u.role === "admin" ? "مدير النظام" : u.role === "manager" ? "مدير" : "كاشير"}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Station for new session */}
+          <div className="space-y-2">
+            <span className="text-xs text-gray-400 font-bold">محطة الوردية الجديدة</span>
+            <div className="flex gap-2">
+              {stations.map((s) => (
+                <button
+                  key={s.value}
+                  onClick={() => setStation(s.value)}
+                  className={`flex-1 py-2 rounded-xl border text-sm font-bold transition-all ${
+                    station === s.value
+                      ? "bg-brand-gold/10 border-brand-gold/40 text-brand-gold"
+                      : "bg-brand-card border-brand-border/30 text-gray-400 hover:text-white"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Expected cash */}
+          <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 flex justify-between items-center">
+            <span className="text-gray-400 text-xs">النقدية المتوقعة</span>
+            <span className="text-brand-teal font-black text-lg">{expectedEgp.toFixed(2)} ج.م</span>
+          </div>
+
+          {/* Cash count */}
+          <div className="space-y-1">
+            <span className="text-xs text-gray-400 font-bold">العدّ الفعلي (ج.م)</span>
+            <input
+              type="number"
+              value={countStr}
+              onChange={(e) => setCountStr(e.target.value)}
+              placeholder="أدخل المبلغ المعدود"
+              className="w-full bg-brand-card border border-brand-border/40 rounded-xl px-4 py-2.5 text-white text-lg font-bold text-center outline-none focus:border-brand-gold/50"
+            />
+          </div>
+
+          {/* Cash drop */}
+          <div className="space-y-1">
+            <span className="text-xs text-gray-400 font-bold">تحويل للخزينة (ج.م) — اختياري</span>
+            <input
+              type="number"
+              value={cashDropStr}
+              onChange={(e) => setCashDropStr(e.target.value)}
+              placeholder="0"
+              className="w-full bg-brand-card border border-brand-border/40 rounded-xl px-4 py-2.5 text-white font-bold text-center outline-none focus:border-brand-gold/50"
+            />
+          </div>
+
+          {/* Summary */}
+          {countStr && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 text-center">
+                <span className="text-[10px] text-gray-500 block">الفرق</span>
+                <span className={`text-sm font-bold ${
+                  Math.abs(varianceEgp) < 0.01 ? "text-brand-teal" :
+                  Math.abs(varianceEgp) <= 20 ? "text-yellow-400" : "text-red-400"
+                }`}>
+                  {varianceEgp > 0 ? "+" : ""}{varianceEgp.toFixed(2)} ج.م
+                </span>
+              </div>
+              <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 text-center">
+                <span className="text-[10px] text-gray-500 block">عهدة الوردية الجديدة</span>
+                <span className="text-sm font-bold text-brand-gold">{incomingFloat.toFixed(2)} ج.م</span>
+              </div>
+            </div>
+          )}
+
+          {/* Variance reason */}
+          {needsApproval && (
+            <div className="space-y-1">
+              <span className="text-xs text-red-400 font-bold">سبب الفرق (مطلوب)</span>
+              <textarea
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="اكتب سبب الفرق..."
+                className="w-full bg-brand-card border border-red-900/30 rounded-xl px-4 py-2 text-white text-sm outline-none resize-none h-14 focus:border-red-400/50"
+              />
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-red-950/30 border border-red-900/40 rounded-xl p-3 text-red-400 text-xs flex items-center gap-2">
+              <AlertTriangle size={14} /> {error}
+            </div>
+          )}
+
+          <button
+            onClick={handleSubmit}
+            disabled={loading || !toUserId || !countStr}
+            className="w-full py-3 bg-gradient-to-l from-blue-600 to-blue-700 text-white font-bold rounded-xl hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {loading ? <Loader2 size={18} className="animate-spin" /> : <ArrowLeftRight size={18} />}
+            تسليم الوردية
+          </button>
+        </div>
+      </div>
+      <PinDialog
+        isOpen={showPin}
+        onClose={() => setShowPin(false)}
+        onSuccess={(_managerUser, rawPin) => { setShowPin(false); doHandover(rawPin); }}
+        title="اعتماد المدير — تسليم الوردية"
+      />
+    </>
+  );
+};
+
+// ── Close Day Dialog (Z-Report) ──────────────────────────────────────────────
+
+const CloseDayDialog: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}> = ({ isOpen, onClose, onSuccess }) => {
+  const [step, setStep] = useState<"confirm" | "pin" | "result">("confirm");
+  const [xReport, setXReport] = useState<XReport | null>(null);
+  const [zReport, setZReport] = useState<ZReport | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (isOpen) {
+      setStep("confirm");
+      setZReport(null);
+      setError("");
+      setLoading(true);
+      bridge.sessionXReport()
+        .then(setXReport)
+        .catch((e) => setError(e.message))
+        .finally(() => setLoading(false));
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const hasOpenSessions = xReport?.sessions?.some((s) => s.is_open) ?? false;
+
+  const doCloseDay = async (pin: string) => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await bridge.sessionCloseDay({ manager_pin: pin });
+      setZReport(result);
+      setStep("result");
+      onSuccess();
+    } catch (e: any) {
+      setError(e.message);
+      setStep("confirm");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="bg-brand-surface border border-brand-border/60 rounded-3xl shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-6 space-y-5" dir="rtl">
+
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+              {step === "result" ? (
+                <><CheckCircle2 size={20} className="text-brand-teal" /> تقرير Z — نهاية اليوم</>
+              ) : (
+                <><XCircle size={20} className="text-red-400" /> إغلاق يوم العمل</>
+              )}
+            </h2>
+            <button onClick={onClose} className="text-gray-500 hover:text-white">
+              <X size={20} />
+            </button>
+          </div>
+
+          {loading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="animate-spin text-brand-gold" size={32} />
+            </div>
+          )}
+
+          {/* Step: Confirm (X-Report preview) */}
+          {step === "confirm" && !loading && xReport && (
+            <>
+              {/* Warning if open sessions */}
+              {hasOpenSessions && (
+                <div className="bg-red-950/30 border border-red-900/40 rounded-xl p-4 text-red-400 text-sm flex items-start gap-2">
+                  <AlertTriangle size={18} className="mt-0.5 flex-shrink-0" />
+                  <div>
+                    <span className="font-bold block">لا يمكن إغلاق اليوم</span>
+                    <span>يوجد ورديات مفتوحة يجب إغلاقها أولاً:</span>
+                    <ul className="mt-1 text-xs space-y-0.5">
+                      {xReport.sessions.filter((s) => s.is_open).map((s) => (
+                        <li key={s.session_id}>• {s.station} #{s.session_id}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {/* Totals preview */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 text-center">
+                  <span className="text-[10px] text-gray-400 block">النقدية المتوقعة</span>
+                  <span className="text-lg font-black text-brand-teal">{xReport.totals.expected_cash_egp.toFixed(2)}</span>
+                </div>
+                <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 text-center">
+                  <span className="text-[10px] text-gray-400 block">مبيعات نقدية</span>
+                  <span className="text-lg font-black text-brand-gold">{xReport.totals.cash_sales_egp.toFixed(2)}</span>
+                </div>
+                <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 text-center">
+                  <span className="text-[10px] text-gray-400 block">تحصيل سائقين</span>
+                  <span className="text-lg font-black text-blue-400">{xReport.totals.driver_remittance_egp.toFixed(2)}</span>
+                </div>
+                <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 text-center">
+                  <span className="text-[10px] text-gray-400 block">مصروفات</span>
+                  <span className="text-lg font-black text-red-400">{xReport.totals.expenses_egp.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {/* Sessions list */}
+              <div className="space-y-2">
+                <span className="text-xs text-gray-400 font-bold">ورديات اليوم ({xReport.sessions.length})</span>
+                {xReport.sessions.map((snap) => (
+                  <div key={snap.session_id} className="bg-brand-card rounded-xl border border-brand-border/30 p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className={`h-2 w-2 rounded-full ${snap.is_open ? "bg-brand-teal animate-pulse" : "bg-gray-500"}`} />
+                      <span className="text-sm font-bold text-white">{snap.station} #{snap.session_id}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${snap.is_open ? "bg-brand-teal/10 text-brand-teal" : "bg-gray-800 text-gray-400"}`}>
+                        {snap.is_open ? "مفتوحة" : "مغلقة"}
+                      </span>
+                    </div>
+                    <span className="text-sm font-bold text-brand-teal">{snap.expected_cash_egp.toFixed(2)} ج.م</span>
+                  </div>
+                ))}
+              </div>
+
+              {error && (
+                <div className="bg-red-950/30 border border-red-900/40 rounded-xl p-3 text-red-400 text-xs flex items-center gap-2">
+                  <AlertTriangle size={14} /> {error}
+                </div>
+              )}
+
+              <button
+                onClick={() => setStep("pin")}
+                disabled={hasOpenSessions}
+                className="w-full py-3 bg-gradient-to-l from-red-600 to-red-700 text-white font-bold rounded-xl hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Lock size={18} />
+                إغلاق يوم العمل (يتطلب PIN المدير)
+              </button>
+            </>
+          )}
+
+          {/* Step: Z-Report result */}
+          {step === "result" && zReport && (
+            <>
+              <div className="bg-brand-teal/10 border border-brand-teal/30 rounded-xl p-4 text-brand-teal text-sm flex items-center gap-2">
+                <CheckCircle2 size={18} />
+                <span className="font-bold">تم إغلاق يوم العمل بنجاح</span>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 text-center">
+                  <span className="text-[10px] text-gray-400 block">إجمالي النقدية</span>
+                  <span className="text-lg font-black text-brand-teal">{zReport.totals.expected_cash_egp.toFixed(2)}</span>
+                </div>
+                <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 text-center">
+                  <span className="text-[10px] text-gray-400 block">مبيعات نقدية</span>
+                  <span className="text-lg font-black text-brand-gold">{zReport.totals.cash_sales_egp.toFixed(2)}</span>
+                </div>
+                <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 text-center">
+                  <span className="text-[10px] text-gray-400 block">مصروفات</span>
+                  <span className="text-lg font-black text-red-400">{zReport.totals.expenses_egp.toFixed(2)}</span>
+                </div>
+                <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 text-center">
+                  <span className="text-[10px] text-gray-400 block">إجمالي الفرق</span>
+                  <span className={`text-lg font-black ${zReport.total_variance_egp === 0 ? "text-brand-teal" : "text-red-400"}`}>
+                    {zReport.total_variance_egp > 0 ? "+" : ""}{zReport.total_variance_egp.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Session breakdown */}
+              <div className="space-y-2">
+                <span className="text-xs text-gray-400 font-bold">تفاصيل الورديات</span>
+                {zReport.sessions.map((snap) => (
+                  <div key={snap.session_id} className="bg-brand-card rounded-xl border border-brand-border/30 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-bold text-white">{snap.station} #{snap.session_id}</span>
+                      <span className="text-xs text-gray-400">مغلقة</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                      <div>
+                        <span className="text-gray-500 block">المتوقع</span>
+                        <span className="text-brand-teal font-bold">{snap.expected_cash_egp.toFixed(2)}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block">الفعلي</span>
+                        <span className="text-white font-bold">{snap.counted_cash_egp?.toFixed(2) ?? "—"}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block">الفرق</span>
+                        <span className={`font-bold ${
+                          snap.variance_egp === null || snap.variance_egp === 0 ? "text-brand-teal" : "text-red-400"
+                        }`}>
+                          {snap.variance_egp !== null ? `${snap.variance_egp > 0 ? "+" : ""}${snap.variance_egp.toFixed(2)}` : "—"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={onClose}
+                className="w-full py-2.5 bg-brand-card border border-brand-border/40 text-gray-300 font-bold rounded-xl hover:bg-brand-border/20 transition-all"
+              >
+                إغلاق
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Manager PIN step */}
+      <PinDialog
+        isOpen={step === "pin"}
+        onClose={() => setStep("confirm")}
+        onSuccess={(_managerUser, rawPin) => { doCloseDay(rawPin); }}
+        title="PIN المدير — إغلاق اليوم"
+      />
+    </>
+  );
+};
+
 // ── X-Report Dialog ──────────────────────────────────────────────────────────
 
 const XReportDialog: React.FC<{
@@ -426,7 +888,8 @@ const XReportDialog: React.FC<{
 const SessionCard: React.FC<{
   session: CashierSession;
   onClose: (s: CashierSession) => void;
-}> = ({ session, onClose }) => {
+  onHandover: (s: CashierSession) => void;
+}> = ({ session, onClose, onHandover }) => {
   const stationColors: Record<string, string> = {
     ALL: "from-brand-gold/20 to-yellow-900/20 border-brand-gold/30",
     COUNTER: "from-blue-900/20 to-indigo-900/20 border-blue-800/30",
@@ -477,13 +940,22 @@ const SessionCard: React.FC<{
       </div>
 
       {/* Actions */}
-      <button
-        onClick={() => onClose(session)}
-        className="w-full py-2.5 bg-red-950/30 border border-red-900/30 text-red-400 font-bold rounded-xl text-sm hover:bg-red-950/50 hover:border-red-800/40 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-      >
-        <Power size={14} />
-        إغلاق الوردية
-      </button>
+      <div className="flex gap-2">
+        <button
+          onClick={() => onHandover(session)}
+          className="flex-1 py-2.5 bg-blue-950/30 border border-blue-900/30 text-blue-400 font-bold rounded-xl text-sm hover:bg-blue-950/50 hover:border-blue-800/40 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+        >
+          <ArrowLeftRight size={14} />
+          تسليم
+        </button>
+        <button
+          onClick={() => onClose(session)}
+          className="flex-1 py-2.5 bg-red-950/30 border border-red-900/30 text-red-400 font-bold rounded-xl text-sm hover:bg-red-950/50 hover:border-red-800/40 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+        >
+          <Power size={14} />
+          إغلاق
+        </button>
+      </div>
     </div>
   );
 };
@@ -500,6 +972,9 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ currentUser }) => {
   const [showClose, setShowClose] = useState(false);
   const [closeTarget, setCloseTarget] = useState<CashierSession | null>(null);
   const [showXReport, setShowXReport] = useState(false);
+  const [showHandover, setShowHandover] = useState(false);
+  const [handoverTarget, setHandoverTarget] = useState<CashierSession | null>(null);
+  const [showCloseDay, setShowCloseDay] = useState(false);
 
   const isManagerOrAbove = currentUser?.role === "manager" || currentUser?.role === "admin";
 
@@ -522,6 +997,11 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ currentUser }) => {
   const handleCloseSession = (s: CashierSession) => {
     setCloseTarget(s);
     setShowClose(true);
+  };
+
+  const handleHandover = (s: CashierSession) => {
+    setHandoverTarget(s);
+    setShowHandover(true);
   };
 
   // Quick stats
@@ -579,13 +1059,22 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ currentUser }) => {
           فتح وردية جديدة
         </button>
         {isManagerOrAbove && (
-          <button
-            onClick={() => setShowXReport(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-brand-card border border-brand-border/40 text-white font-bold rounded-xl hover:bg-brand-border/20 active:scale-[0.98] transition-all text-sm"
-          >
-            <FileText size={16} className="text-blue-400" />
-            تقرير X (لقطة لحظية)
-          </button>
+          <>
+            <button
+              onClick={() => setShowXReport(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-brand-card border border-brand-border/40 text-white font-bold rounded-xl hover:bg-brand-border/20 active:scale-[0.98] transition-all text-sm"
+            >
+              <FileText size={16} className="text-blue-400" />
+              تقرير X (لقطة لحظية)
+            </button>
+            <button
+              onClick={() => setShowCloseDay(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-red-950/30 border border-red-900/30 text-red-400 font-bold rounded-xl hover:bg-red-950/50 hover:border-red-800/40 active:scale-[0.98] transition-all text-sm"
+            >
+              <XCircle size={16} />
+              إغلاق يوم العمل (Z-Report)
+            </button>
+          </>
         )}
         <button
           onClick={refresh}
@@ -605,7 +1094,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ currentUser }) => {
         {sessions.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {sessions.map((s) => (
-              <SessionCard key={s.id} session={s} onClose={handleCloseSession} />
+              <SessionCard key={s.id} session={s} onClose={handleCloseSession} onHandover={handleHandover} />
             ))}
           </div>
         ) : (
@@ -684,9 +1173,21 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ currentUser }) => {
         onClose={() => { setShowClose(false); setCloseTarget(null); }}
         onSuccess={refresh}
       />
+      <HandoverDialog
+        isOpen={showHandover}
+        session={handoverTarget}
+        currentUser={currentUser}
+        onClose={() => { setShowHandover(false); setHandoverTarget(null); }}
+        onSuccess={refresh}
+      />
       <XReportDialog
         isOpen={showXReport}
         onClose={() => setShowXReport(false)}
+      />
+      <CloseDayDialog
+        isOpen={showCloseDay}
+        onClose={() => setShowCloseDay(false)}
+        onSuccess={refresh}
       />
     </div>
   );

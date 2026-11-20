@@ -325,6 +325,30 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
         """Alias for get_all_drivers_daily_summary — used by ReportService."""
         return self.get_all_drivers_daily_summary(date_str)
 
+    def get_settled_trip_fees_for_shift(self, shift_id: int) -> list[dict]:
+        """Return settled trip IDs and their delivery fees for a given shift.
+
+        Used by BusinessDayService._batch_driver_fee_payouts to create
+        DRIVER_FEE_PAYOUT ledger entries at day close.
+
+        Returns list of dicts: {trip_id: int, total_delivery_fees: float}
+        """
+        rows = self._db.fetch_all(
+            """SELECT dt.id AS trip_id, dt.total_delivery_fees
+               FROM delivery_trips dt
+               JOIN delivery_trip_orders dto ON dto.trip_id = dt.id
+               JOIN orders o ON o.id = dto.order_id
+               WHERE dt.is_settled = 1
+                 AND o.shift_id = ?
+               GROUP BY dt.id
+               HAVING dt.total_delivery_fees > 0""",
+            (shift_id,),
+        )
+        return [
+            {"trip_id": r["trip_id"], "total_delivery_fees": r["total_delivery_fees"]}
+            for r in rows
+        ]
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------

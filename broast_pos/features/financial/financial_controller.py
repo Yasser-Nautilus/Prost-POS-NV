@@ -31,7 +31,7 @@ class FinancialController:
     def get_active_shift(self) -> dict[str, Any] | None:
         """Return details of the current active shift, if any."""
         try:
-            shift = self._financial_svc._financial.get_active_shift()
+            shift = self._financial_svc.get_active_shift()
             if shift is None:
                 return None
             return {
@@ -181,8 +181,8 @@ class FinancialController:
                     snapshot = json.loads(transfer_obj.summary_snapshot)
 
                     # Get cashier display names
-                    from_user = self._auth_svc._users.get_by_id(from_user_id)
-                    to_user = self._auth_svc._users.get_by_id(to_user_id)
+                    from_user = self._auth_svc.get_user_by_id(from_user_id)
+                    to_user = self._auth_svc.get_user_by_id(to_user_id)
                     from_name = from_user.display_name if from_user else f"#{from_user_id}"
                     to_name = to_user.display_name if to_user else f"#{to_user_id}"
 
@@ -224,8 +224,8 @@ class FinancialController:
             result = []
             for s in shifts:
                 # Resolve integer FK to display name
-                opened_user = self._auth_svc._users.get_by_id(s.opened_by) if s.opened_by else None
-                closed_user = self._auth_svc._users.get_by_id(s.closed_by) if s.closed_by else None
+                opened_user = self._auth_svc.get_user_by_id(s.opened_by) if s.opened_by else None
+                closed_user = self._auth_svc.get_user_by_id(s.closed_by) if s.closed_by else None
                 result.append({
                     "id": s.id,
                     "opened_by": s.opened_by,
