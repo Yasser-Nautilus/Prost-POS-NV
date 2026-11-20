@@ -1,454 +1,372 @@
-# 📦 Prost POS — Complete Project Structure + Progress
+# Prost POS — Project Structure & Progress
 
-> **Last Updated**: 2026-06-02
-> **Tech**: Python 3 · PyQt6 · SQLite (WAL) · ESC/POS · White-Label
-> **Restaurant**: بروستش / Prostsh (configurable via restaurant.json)
-> **Overall Status**: 🟢 **~95% implemented** — 85/89 tasks Done, 4 deferred (sync module)
-> **Codebase**: 79 Python files · ~19,645 lines of code · Working application
-
-> **⚠️ Note**: Multi-device mode (secondary PC over network) is **DEFERRED to v2**. V1 is single-PC only.
+> **Last Updated:** 2026-11-20
+> **Branch:** `dev`
+> **Schema Version:** 6
+> **Documentation generated from:** Source code audit of all implementation files
 
 ---
 
-# 📊 Progress Summary Dashboard
+## Project Overview
 
-| Module | Files Planned | Files Done | Tasks | Status |
-|--------|:---:|:---:|:---:|:---:|
-| config/ | 4 | 4 | 5/5 | 🟢 Done |
-| core/models/ | 6 | 6 | 7/7 | 🟢 Done |
-| core/services/ | 7 | 7 | 7/7 | 🟢 Done |
-| data/database/ | 4 | 4 | 5/5 | 🟢 Done |
-| data/repositories/ | 8 | 8 | 8/8 | 🟢 Done |
-| infrastructure/printing/ | 4 | 5 | 5/5 | 🟢 Done |
-| infrastructure/sync/ | 2 | 0 | 0/4 | 🔴 Deferred to v2 |
-| ui/styles/ | 1 | 1 | 1/1 | 🟢 Done |
-| ui/windows/ | 2 | 2 | 2/2 | 🟢 Done |
-| ui/views/ | 8 | 8 | 8/8 | 🟢 Done |
-| ui/components/ | 4 | 4 | 4/4 | 🟢 Done |
-| ui/dialogs/ | 4 | 4 | 4/4 | 🟢 Done |
-| features/ (controllers) | 6 | 8 | 8/8 | 🟢 Done |
-| **feature/order_lifecycle** | cross-cutting | — | 8/8 | 🟢 Done |
-| **feature/delivery_system** | cross-cutting | — | 8/8 | 🟢 Done |
-| **feature/printing_flow** | cross-cutting | — | 5/5 | 🟢 Done |
-| **feature/reports** | cross-cutting | — | 4/4 | 🟢 Done |
-| **feature/user_permissions** | cross-cutting | — | 5/5 | 🟢 Done |
-| **TOTAL** | ~51 files | 79 files | **85/89** | 🟢 **95%** |
+Prost POS is a hybrid desktop point-of-sale application for a restaurant (Broast/fried chicken), combining a **Python backend** with a **React + TypeScript frontend** rendered inside a **PySide6 QWebEngineView**. The system supports dine-in, takeaway, and delivery order types, with integrated driver management, cashier session accounting, cash ledger reconciliation, printing, and audit logging.
+
+### Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Desktop Shell | PySide6 / QWebEngineView |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS |
+| Bridge | QWebChannel → `POSBridge.dispatch()` |
+| Backend | Python 3.12+, Clean Architecture |
+| Database | SQLite (WAL mode, FK enforcement) |
+| Printing | python-escpos (ESC/POS thermal printers) |
+| Auth | PBKDF2-HMAC-SHA256 (salted + peppered) with legacy SHA-256 auto-upgrade |
 
 ---
 
-# 🏗️ Project Structure (Annotated)
+## Architecture
+
+### Runtime Initialization Flow
+
+```
+main.py
+  → DatabaseConnection.get_instance()       # Singleton, WAL, FK ON, busy_timeout=5000
+  → initialise_database(schema.sql)          # 19 tables
+  → run_migrations()                         # v1 → v6
+  → seed_database()                          # Default admin user
+  → 12 Repositories instantiated
+  → 11 Services instantiated (with dependency injection)
+  → PrinterManager instantiated
+  → QApplication created
+  → WebShell(POSBridge) launched
+  → QTimer for takeaway auto-complete (60 s interval)
+  → app.exec()
+```
+
+### Frontend Request Flow
+
+```
+React View → bridge.ts → QWebChannel → POSBridge.dispatch(action, payload)
+  → Controller method → Service → Repository → SQLite
+  → Response dict → bridge.ts callback → React state update
+```
+
+### Key Runtime Classes
+
+| Class | File | Responsibility |
+|---|---|---|
+| `DatabaseConnection` | `broast_pos/data/database/connection.py` | Singleton SQLite connection, WAL, transactions |
+| `POSBridge` | `broast_pos/infrastructure/web_bridge/bridge.py` | Central dispatch, auth guard, 6 sub-routers |
+| `WebShell` | `broast_pos/ui/web_shell.py` | QWebEngineView + QWebChannel host |
+| `POSWebPage` | `broast_pos/ui/web_shell.py` | Custom QWebEnginePage for JS console logging |
+
+---
+
+## Project Structure
+
+### Backend — `broast_pos/`
 
 ```
 broast_pos/
-├── main.py                          # Entry point (536 lines): load config → init DB → seed → create services → start QApplication → show login
+├── main.py                          # Application entry point (225 lines)
 ├── config/
-│   ├── restaurant.json              # ✅ White-label identity (name, logo, colors, fonts)
-│   ├── config.py                    # ✅ APP_NAME, VERSION, ENVIRONMENT, DEBUG, business rules
-│   └── printers.json                # ✅ Printer role → device mapping
+│   └── config.py                    # Environment-driven configuration via os.getenv
 ├── core/
-│   ├── models/                      # ✅ Pure dataclasses — NO DB, NO UI
-│   │   ├── order.py                 # ✅ Order, OrderItem, OrderStatus, OrderType, PaymentMethod (195 lines)
-│   │   ├── user.py                  # ✅ User, UserRole (CASHIER/MANAGER/ADMIN)
-│   │   ├── product.py               # ✅ Product, Category (NO modifiers)
-│   │   ├── customer.py              # ✅ Customer, CustomerAddress, Zone
-│   │   ├── delivery.py              # ✅ DeliveryTrip, DriverAttendance, DriverStatus
-│   │   └── financial.py             # ✅ Shift, ShiftTransfer, CashTransaction, ShiftSummary
-│   └── services/                    # ✅ Business logic — calls repos, never DB directly
-│       ├── order_service.py         # ✅ Create, amend(تابع), complete, cancel (363 lines)
-│       ├── auth_service.py          # ✅ Login, session, verify_pin (manager override) (246 lines)
-│       ├── delivery_service.py      # ✅ Check-in/out, trips, settlement, daily summary (302 lines)
-│       ├── product_service.py       # ✅ CRUD, search (<100ms) (197 lines)
-│       ├── customer_service.py      # ✅ Phone lookup, addresses, zones (202 lines)
-│       ├── financial_service.py     # ✅ Shift lifecycle, expenses, invoice counter (304 lines)
-│       └── report_service.py        # ✅ Daily/monthly/yearly reports (327 lines)
+│   ├── models/                      # Domain dataclasses and enums
+│   │   ├── order.py                 # Order, OrderItem, OrderType(4), OrderStatus(7), PaymentMethod(3)
+│   │   ├── user.py                  # User, UserRole, pin_salt field
+│   │   ├── product.py               # Product, Category
+│   │   ├── customer.py              # Customer, CustomerAddress, Zone
+│   │   ├── delivery.py              # DeliveryTrip, DriverAttendance, DriverStatus
+│   │   ├── financial.py             # Shift, ShiftTransfer, CashTransaction, ShiftSummary
+│   │   ├── audit.py                 # AuditEventType constants class
+│   │   ├── cashier_session.py       # Station, CashierSession, LedgerEntryType(10), CashLedgerEntry
+│   │   ├── driver_settlement.py     # DriverSettlement dataclass
+│   │   └── order_status_history.py  # OrderStatusHistory dataclass
+│   ├── policies/
+│   │   └── discount.py              # compute_discount with Decimal precision
+│   └── services/
+│       ├── order_service.py          # State machine, create/amend/complete/cancel, ledger entries (893 lines)
+│       ├── auth_service.py           # PBKDF2 auth, legacy upgrade, brute-force throttle (514 lines)
+│       ├── delivery_service.py       # Driver lifecycle, trip management (604 lines)
+│       ├── driver_settlement_service.py  # Settlement preview/execution, ledger entries (543 lines)
+│       ├── report_service.py         # Daily/shift/monthly/yearly reports (451 lines)
+│       ├── cashier_session_service.py    # Open/close/handover sessions, ledger (398 lines)
+│       ├── business_day_service.py   # X/Z reports, business-day close (358 lines)
+│       ├── financial_service.py      # Shift lifecycle, expenses, invoice counter (320 lines)
+│       ├── customer_service.py       # Phone lookup, address/zone management (251 lines)
+│       ├── product_service.py        # Category/product CRUD with search (195 lines)
+│       └── audit_service.py          # Centralized audit logging and queries (168 lines)
 ├── data/
 │   ├── database/
-│   │   ├── connection.py            # ✅ SQLite singleton, WAL mode, foreign keys (190 lines)
-│   │   ├── schema.sql               # ✅ 14 tables (NO modifier tables)
-│   │   ├── migrations.py            # ✅ Version-tracked schema updates (149 lines)
-│   │   └── seed.py                  # ✅ Default admin + sample data (164 lines)
-│   └── repositories/                # ✅ Abstract DB access — enables future sync
-│       ├── base_repository.py       # ✅ Generic ABC
-│       ├── order_repository.py      # ✅ (383 lines)
-│       ├── user_repository.py       # ✅ (170 lines)
-│       ├── product_repository.py    # ✅ (168 lines)
-│       ├── customer_repository.py   # ✅ (184 lines)
-│       ├── delivery_repository.py   # ✅ (338 lines)
-│       ├── financial_repository.py  # ✅ (369 lines)
-│       └── audit_repository.py      # ✅ (168 lines)
-├── features/                        # ✅ Cross-cutting controllers
-│   ├── order_lifecycle/
-│   │   ├── order_controller.py      # ✅ Full order lifecycle (636 lines)
-│   │   ├── amendment_tracker.py     # ✅ Snapshot + diff for edits (126 lines)
-│   │   ├── payment_coordinator.py   # ✅ Payment method validation (124 lines)
-│   │   └── invoice_manager.py       # ✅ Race-safe invoice numbers (73 lines)
+│   │   ├── schema.sql               # 19 tables, triggers, indexes (475 lines)
+│   │   ├── connection.py            # Singleton, WAL, FK, busy_timeout (244 lines)
+│   │   ├── migrations.py            # LATEST_VERSION=6, 5 migrations (364 lines)
+│   │   └── seed.py                  # Default admin seeding (164 lines)
+│   └── repositories/
+│       ├── base_repository.py        # Abstract base with connection access
+│       ├── order_repository.py       # Full CRUD, batch item loading, shift queries (509 lines)
+│       ├── product_repository.py     # Product/category persistence
+│       ├── customer_repository.py    # Customer/address/zone persistence
+│       ├── user_repository.py        # User CRUD
+│       ├── delivery_repository.py    # Trip/driver persistence
+│       ├── financial_repository.py   # Shift/transaction persistence
+│       ├── report_repository.py      # Report queries
+│       ├── audit_repository.py       # Audit log persistence
+│       ├── cash_ledger_repository.py # Append-only ledger, balance queries (204 lines)
+│       ├── cashier_session_repository.py  # Session CRUD, station queries (164 lines)
+│       ├── driver_settlement_repository.py  # Settlement persistence (131 lines)
+│       └── order_status_history_repository.py  # Status history persistence (121 lines)
+├── features/                        # Feature-level documentation only
 │   ├── delivery_system/
-│   │   └── delivery_controller.py   # ✅ Driver lifecycle + settlement (347 lines)
-│   ├── printing_flow/
-│   │   └── printing_controller.py   # ✅ Silent print orchestration (212 lines)
-│   ├── reports/
-│   │   └── reports_controller.py    # ✅ Report generation + validation (486 lines)
 │   ├── financial/
-│   │   └── financial_controller.py  # ✅ Shift lifecycle UI orchestration (219 lines)
+│   ├── order_lifecycle/
+│   ├── printing_flow/
+│   ├── reports/
 │   └── user_permissions/
-│       └── permissions_controller.py # ✅ Role-based access + audit logging (437 lines)
 ├── infrastructure/
 │   ├── printing/
-│   │   ├── printer_manager.py       # ✅ Routes to KITCHEN / CASHIER_1 / CASHIER_2 (224 lines)
-│   │   ├── escpos_printer.py        # ✅ USB/Network/Serial thermal adapter (219 lines)
-│   │   ├── receipt_templates.py     # ✅ 10 print layouts (572 lines)
-│   │   ├── printer_config.py        # ✅ JSON config loader
-│   │   └── print_triggers.py        # ✅ Auto-trigger hooks (159 lines)
-│   └── sync/                        # 🔴 DEFERRED to v2
-│       └── __init__.py              # Placeholder only
-└── ui/                              # ✅ PyQt6 — ZERO business logic
-    ├── styles/
-    │   └── theme.py                 # ✅ Dark navy QSS, Arabic fonts, RTL (521 lines)
-    ├── windows/
-    │   ├── main_window.py           # ✅ Sidebar navigation shell (role-based) (552 lines)
-    │   └── login_window.py          # ✅ Window container for login (wraps login_view)
-    ├── views/
-    │   ├── login_view.py            # ✅ User avatar tiles → PIN → session (593 lines)
-    │   ├── pos_view.py              # ✅ 🔥 Main cashier screen (3-column) (944 lines)
-    │   ├── tracking_view.py         # ✅ Active orders, timers, auto-complete visual (688 lines)
-    │   ├── delivery_view.py         # ✅ 3-panel: drivers | trips | settlement (792 lines)
-    │   ├── reports_view.py          # ✅ Reports dashboard + print (999 lines)
-    │   ├── products_view.py         # ✅ Products/categories/zones (Manager) (827 lines)
-    │   ├── users_view.py            # ✅ User management (Admin) (360 lines)
-    │   └── financial_view.py        # ✅ Shift/expenses/reconciliation (Manager) (667 lines)
-    ├── components/                   # ✅ Reusable widgets
-    │   ├── product_grid.py          # ✅ Tap = add to order (NO popup) (226 lines)
-    │   ├── order_panel.py           # ✅ Live items, +/-, notes, totals (481 lines)
-    │   ├── customer_panel.py        # ✅ Phone → auto-fill → address cards (413 lines)
-    │   └── table_grid.py            # ✅ Green=free / Red=occupied (204 lines)
-    └── dialogs/                      # ✅ Modal dialogs
-        ├── payment_dialog.py        # ✅ كاش / فيزا / اونلاين (476 lines)
-        ├── pin_dialog.py            # ✅ Manager override numpad (331 lines)
-        ├── shift_dialog.py          # ✅ Shift transfer/close flows (539 lines)
-        └── expense_dialog.py        # ✅ Expense entry form (245 lines)
+│   │   ├── printer_manager.py       # Central routing, 3 roles, thread-safe (223 lines)
+│   │   ├── print_triggers.py        # Event-driven silent printing, 7 triggers (159 lines)
+│   │   ├── escpos_printer.py        # ESC/POS hardware interface
+│   │   ├── receipt_templates.py     # Arabic/English receipt formatting
+│   │   └── printer_config.py       # Printer configuration loader
+│   ├── web_bridge/
+│   │   └── bridge.py               # POSBridge dispatch + 6 controllers (1016 lines)
+│   └── sync/                       # Cloud sync — all Deferred
+└── ui/
+    ├── web_shell.py                 # QWebEngineView + QWebChannel (170 lines)
+    ├── components/                  # Legacy PyQt6 components (retained, unused)
+    ├── views/                       # Legacy PyQt6 views (retained, unused)
+    ├── styles/                      # Legacy PyQt6 theme (retained, unused)
+    └── windows/                     # Legacy PyQt6 windows (retained, unused)
+```
+
+### Frontend — `frontend/`
+
+```
+frontend/
+├── src/
+│   ├── App.tsx                      # Main shell, routing, role-based nav (224 lines)
+│   ├── bridge.ts                    # POSBridgeClient, QWebChannel init, mock (1330 lines)
+│   ├── main.tsx                     # React entry point
+│   ├── views/
+│   │   ├── POSView.tsx              # Order entry and management
+│   │   ├── DeliveryView.tsx         # Delivery and driver management
+│   │   ├── TrackingView.tsx         # Order tracking board
+│   │   ├── ReportsView.tsx          # Report generation and display
+│   │   ├── ProductsView.tsx         # Product/category management
+│   │   ├── DriverSettlementView.tsx # Per-trip driver settlement (640 lines)
+│   │   ├── AuditLogView.tsx         # Audit trail viewer (308 lines)
+│   │   ├── UsersView.tsx            # User management (admin only)
+│   │   ├── LoginView.tsx            # PIN-based login
+│   │   └── SessionsView.tsx         # Cashier session management (693 lines) ⚠️ NOT MOUNTED
+│   └── components/
+│       ├── CustomerHistoryModal.tsx  # Customer order history
+│       ├── CustomerLookup.tsx       # Phone-based customer search
+│       ├── DiscountDialog.tsx       # Discount application
+│       ├── Numpad.tsx               # Numeric input pad
+│       ├── PaymentDialog.tsx        # Payment method selection
+│       ├── PinDialog.tsx            # PIN entry dialog
+│       ├── ShiftDialog.tsx          # Shift open/close (legacy, still active)
+│       └── TableGrid.tsx            # Dine-in table layout
+├── index.html
+├── package.json
+├── tsconfig.json
+├── vite.config.ts
+└── tailwind.config.js
+```
+
+### Tests — `tests/`
+
+```
+tests/
+├── 23 test files (6,369 total lines)
+├── Coverage: order lifecycle, delivery, financial, auth, reports,
+│   cashier sessions, cash ledger, business day, driver settlement,
+│   audit, products, customers, permissions, and integration scenarios
+└── Status: Tests exist but have NOT been executed — pass/fail unknown
+```
+
+### Documentation
+
+```
+├── Pos Project Structure + Progress.md   # This file
+├── README.md                              # Project overview and setup
+├── Structure.md                           # File tree reference
+├── docs/
+│   └── TECHNICAL_AUDIT_REPORT.md          # Technical debt and bug findings
+└── PROGRESS.md files in each module       # Per-module implementation status
 ```
 
 ---
 
-# 📁 MODULE-LEVEL STATUS
+## Module Status Summary
+
+| Module | Files | Status | Notes |
+|---|---|---|---|
+| **Core Models** | 10 model files + 1 policy | Implemented | All domain types defined |
+| **Core Services** | 11 service files | Implemented | Full business logic layer |
+| **Database** | schema.sql + connection + migrations + seed | Implemented | 19 tables, schema v6 |
+| **Repositories** | 12 repository files | Implemented | Full persistence layer |
+| **Web Bridge** | bridge.py (1016 lines) | Implemented | 6 controllers, auth guard |
+| **Frontend Shell** | web_shell.py | Implemented | QWebEngineView + QWebChannel |
+| **React App** | 10 views, 8 components | Partially Implemented | SessionsView not mounted |
+| **Printing** | 5 files | Implemented | Hardware validation pending |
+| **Config** | config.py + .env.example | Implemented | Environment-driven |
+| **Legacy PyQt UI** | 26 files in ui/ | Legacy | Retained but unused |
+| **Cloud Sync** | sync/ | Deferred | No implementation |
+| **Tests** | 23 files | Needs Verification | Not executed |
 
 ---
 
-## 📁 config/ — 🟢 DONE (5/5)
+## Feature Status
 
-| # | Task | Status |
-|---|------|:---:|
-| 1 | Restaurant Branding (`restaurant.json`) | 🟢 Done |
-| 2 | General Settings (`config.py`) | 🟢 Done |
-| 3 | Printer Config (`printers.json`) | 🟢 Done |
-| 4 | Business Rules | 🟢 Done |
-| 5 | Paths & Files | 🟢 Done |
+### Fully Implemented Features
 
----
+| Feature | Backend | Frontend | Bridge | Tests |
+|---|---|---|---|---|
+| Order creation (dine-in, takeaway, delivery) | ✅ | ✅ | ✅ | ✅ Exist |
+| 7-state order lifecycle | ✅ | ✅ | ✅ | ✅ Exist |
+| Product/category management | ✅ | ✅ | ✅ | ✅ Exist |
+| Customer management (phone lookup, zones) | ✅ | ✅ | ✅ | ✅ Exist |
+| PIN-based authentication (PBKDF2) | ✅ | ✅ | ✅ | ✅ Exist |
+| Role-based permissions (Cashier/Manager/Admin) | ✅ | ✅ | ✅ | ✅ Exist |
+| Delivery driver lifecycle | ✅ | ✅ | ✅ | ✅ Exist |
+| Driver settlement (per-trip and daily) | ✅ | ✅ | ✅ | ✅ Exist |
+| Audit logging | ✅ | ✅ | ✅ | ✅ Exist |
+| Daily/shift/monthly/yearly reports | ✅ | ✅ | ✅ | ✅ Exist |
+| Cash ledger (append-only) | ✅ | — | ✅ | ✅ Exist |
+| Business day X/Z reports | ✅ | — | ✅ | ✅ Exist |
+| Discount policy (Decimal precision) | ✅ | ✅ | ✅ | ✅ Exist |
+| Order tracking board | ✅ | ✅ | ✅ | — |
+| Takeaway auto-complete (QTimer) | ✅ | — | — | — |
+| Receipt printing (kitchen/cashier) | ✅ | — | ✅ | — |
 
-## 📁 core/models/ — 🟢 DONE (7/7)
+### Partially Implemented / Not Integrated
 
-| # | Task | Status |
-|---|------|:---:|
-| 1 | Order Model (Order, OrderItem, OrderStatus, OrderType, PaymentMethod) | 🟢 Done |
-| 2 | OrderItem Model (inside order.py) | 🟢 Done |
-| 3 | User Model (User, UserRole) | 🟢 Done |
-| 4 | Product Model (Product, Category) | 🟢 Done |
-| 5 | Customer Model (Customer, CustomerAddress, Zone) | 🟢 Done |
-| 6 | Delivery Model (DeliveryTrip, DriverAttendance, DriverStatus) | 🟢 Done |
-| 7 | Financial Model (Shift, ShiftTransfer, CashTransaction, ShiftSummary) | 🟢 Done |
+| Feature | Status | Details |
+|---|---|---|
+| Cashier session management | **Implemented — Not Integrated** | Full backend + SessionsView.tsx (693 lines) exists but is NOT imported in App.tsx |
+| Shift management (legacy) | **Legacy — Still Active** | ShiftDialog still mounted in App.tsx alongside newer cashier-session system |
+| User management bridge auth | **Partially Implemented** | AuthService grants Manager MANAGE_USERS, but bridge.py restricts to admin-only |
 
----
+### Deferred / Not Started
 
-## 📁 core/services/ — 🟢 DONE (7/7)
-
-| # | Service | Status |
-|---|---------|:---:|
-| 1 | OrderService | 🟢 Done |
-| 2 | AuthService | 🟢 Done |
-| 3 | DeliveryService | 🟢 Done |
-| 4 | ProductService | 🟢 Done |
-| 5 | CustomerService | 🟢 Done |
-| 6 | FinancialService | 🟢 Done |
-| 7 | ReportService | 🟢 Done |
-
----
-
-## 📁 data/database/ — 🟢 DONE (5/5)
-
-| # | Task | Status |
-|---|------|:---:|
-| 1 | Connection (WAL, singleton, Row factory) | 🟢 Done |
-| 2 | Schema (14 tables, no modifier tables) | 🟢 Done |
-| 3 | Indexes (11 performance indexes) | 🟢 Done |
-| 4 | Migrations (version-tracked, auto-run) | 🟢 Done |
-| 5 | Seed Data (admin, categories, products, zones) | 🟢 Done |
+| Feature | Status |
+|---|---|
+| Cloud synchronization | Deferred |
+| Multi-device sync | Deferred |
+| Offline queue | Deferred |
+| Conflict resolution | Deferred |
+| File-based logging (RotatingFileHandler) | Planned |
 
 ---
 
-## 📁 data/repositories/ — 🟢 DONE (8/8)
+## Known Issues
 
-| # | Repository | Status |
-|---|-----------|:---:|
-| 1 | BaseRepository (ABC, Generic CRUD) | 🟢 Done |
-| 2 | OrderRepository | 🟢 Done |
-| 3 | UserRepository | 🟢 Done |
-| 4 | ProductRepository | 🟢 Done |
-| 5 | CustomerRepository | 🟢 Done |
-| 6 | DeliveryRepository | 🟢 Done |
-| 7 | FinancialRepository | 🟢 Done |
-| 8 | AuditRepository | 🟢 Done |
+> [!WARNING]
+> These issues were identified during the source code audit. They are documented here for tracking — none have been modified as part of this documentation update.
 
----
+### Authorization Inconsistency (BUG-003 — Partially Resolved)
 
-## 📁 infrastructure/printing/ — 🟢 DONE (5/5)
+- `AuthService` (line 88) now includes `MANAGE_USERS` in Manager permissions.
+- However, `bridge.py` (lines 266, 284, 302) still checks `self._current_user.role.value != "admin"` for user management operations.
+- **Effect:** Managers cannot manage users despite having the permission in AuthService.
 
-| # | Task | Status |
-|---|------|:---:|
-| 1 | PrinterManager (route to KITCHEN / CASHIER_1 / CASHIER_2) | 🟢 Done |
-| 2 | ESC/POS Adapter (USB/Network/Serial/Dummy) | 🟢 Done |
-| 3 | Receipt Templates (10 layouts) | 🟢 Done |
-| 4 | Silent Printing (auto-trigger, zero dialogs) | 🟢 Done |
-| 5 | Printer Config (JSON loader) | 🟢 Done |
+### FinancialController Private Attribute Access
 
----
+- `financial_controller.py` accesses private attributes of injected services at lines 34, 184, 227–228.
+- Accesses `self._financial_svc._financial` and `self._auth_svc._users` directly.
 
-## 📁 infrastructure/sync/ — 🔴 DEFERRED (0/4)
+### Circular Dependency
 
-| # | Task | Status |
-|---|------|:---:|
-| 1 | Sync Interface (abstract contract) | 🔴 Deferred |
-| 2 | Event Hooks (design only) | 🔴 Deferred |
-| 3 | Sheets Adapter (stub) | 🔴 Deferred |
-| 4 | Background Worker (future) | 🔴 Deferred |
+- `main.py` line 144: `delivery_service._order_svc = order_service` — sets a cross-reference after construction.
 
-> **Note**: Sync is intentionally deferred. Local system must be stable first.
+### Seed Admin Legacy Hash
 
----
+- `seed.py` creates the default admin with a legacy SHA-256 hash (no salt, `pin_salt=NULL`).
+- The hash is auto-upgraded to PBKDF2 on first successful login.
 
-## 📁 ui/styles/ — 🟢 DONE (1/1)
+### SessionsView Not Mounted
 
-| # | Task | Status |
-|---|------|:---:|
-| 1 | Global Theme (dark navy, Arabic fonts, RTL, 521 lines QSS) | 🟢 Done |
+- `frontend/src/views/SessionsView.tsx` (693 lines) is fully implemented but not imported or mounted in `App.tsx`.
+- The cashier session backend is complete and exposed through bridge.ts (v2 session API).
+
+### window.confirm() Usage
+
+- `App.tsx` line 56 uses `window.confirm()` for logout confirmation — may not display in QWebEngineView.
+
+### Console-Only Logging
+
+- `main.py` uses `logging.basicConfig()` — no file-based log rotation configured.
 
 ---
 
-## 📁 ui/windows/ — 🟢 DONE (2/2)
+## Database Summary
 
-| # | Task | Status |
-|---|------|:---:|
-| 1 | Main Window (sidebar nav, role-based, collapsible) | 🟢 Done |
-| 2 | Login Window (container for login_view) | 🟢 Done |
+| Metric | Value |
+|---|---|
+| Schema Version | 6 |
+| Total Tables | 19 |
+| Migrations Applied | 5 (v1→v2 through v5→v6) |
+| Connection Mode | WAL |
+| Foreign Keys | Enforced |
+| Busy Timeout | 5,000 ms |
 
----
+### Tables (19)
 
-## 📁 ui/views/ — 🟢 DONE (8/8)
+`categories`, `products`, `customers`, `customer_addresses`, `zones`, `users`, `orders`, `order_items`, `delivery_trips`, `driver_attendance`, `shifts`, `shift_transfers`, `cash_transactions`, `audit_log`, `order_status_history`, `driver_settlements`, `cashier_sessions`, `cash_ledger`, `schema_version`
 
-| # | View | Lines | Status |
-|---|------|:---:|:---:|
-| 0 | Login View (avatar tiles + PIN) | 593 | 🟢 Done |
-| 1 | **POS View** 🔥 (3-column cashier screen) | 944 | 🟢 Done |
-| 2 | Tracking View (timers, auto-highlight) | 688 | 🟢 Done |
-| 3 | Delivery View (3-panel driver management) | 792 | 🟢 Done |
-| 4 | Reports View (daily/monthly/yearly + print) | 999 | 🟢 Done |
-| 5 | Products View (CRUD + zones, manager only) | 827 | 🟢 Done |
-| 6 | Users View (admin only) | 360 | 🟢 Done |
-| 7 | Financial View (shift lifecycle + expenses) | 667 | 🟢 Done |
+### Cash Ledger Design
 
----
-
-## 📁 ui/components/ — 🟢 DONE (4/4)
-
-| # | Component | Lines | Status |
-|---|-----------|:---:|:---:|
-| 1 | Product Grid (tap = add directly) | 226 | 🟢 Done |
-| 2 | Order Panel (live items, +/-, notes, totals) | 481 | 🟢 Done |
-| 3 | Customer Panel (phone → auto-fill → address cards) | 413 | 🟢 Done |
-| 4 | Table Grid (green=free, red=occupied) | 204 | 🟢 Done |
+- Append-only with database-level `BEFORE UPDATE` and `BEFORE DELETE` triggers that raise errors.
+- Integer piaster storage (no floating-point).
+- Signed cash movements (positive = cash in, negative = cash out).
+- Unique idempotency indexes prevent duplicate entries.
+- References: orders, trips, expenses, actors, approval users.
 
 ---
 
-## 📁 ui/dialogs/ — 🟢 DONE (4/4)
+## Test Summary
 
-| # | Dialog | Lines | Status |
-|---|--------|:---:|:---:|
-| 1 | Payment Dialog (كاش/فيزا/اونلاين, quick buttons) | 476 | 🟢 Done |
-| 2 | PIN Dialog (manager override, on-screen numpad) | 331 | 🟢 Done |
-| 3 | Shift Dialog (transfer + close flows) | 539 | 🟢 Done |
-| 4 | Expense Dialog (amount + category + description) | 245 | 🟢 Done |
+- **23 test files** in `tests/` directory (6,369 total lines).
+- Coverage areas: order lifecycle, delivery, financial, auth, reports, cashier sessions, cash ledger, business day, driver settlement, audit, products, customers, permissions, integration.
+- **Status: Not Executed** — pass/fail results are unknown. No runtime verification has been performed.
 
 ---
 
-# 🧩 FEATURE-LEVEL STATUS
+## Overall Project Status
 
----
+### Calculated from Verified Implementation
 
-## 📦 feature/order_lifecycle — 🟢 DONE (8/8)
+| Category | Count | Status |
+|---|---|---|
+| Core domain models | 10+ files | Complete |
+| Business services | 11 | Complete |
+| Data repositories | 12 | Complete |
+| Database tables | 19 | Complete |
+| Frontend views | 10 (9 mounted) | 1 not integrated |
+| Frontend components | 8 | Complete |
+| Bridge controllers | 6 | Complete |
+| Printing infrastructure | 5 files | Complete (hardware unverified) |
+| Test files | 23 | Exist but unverified |
 
-| # | Task | Status |
-|---|------|:---:|
-| 1 | Create Order (in-memory → validate → save) | 🟢 Done |
-| 2 | Parked Orders (multi-order tabs, in-memory) | 🟢 Done |
-| 3 | Validate & Save (shift guard, kitchen print, takeaway auto-pay) | 🟢 Done |
-| 4 | Payment Flow (separate from save, 3 methods) | 🟢 Done |
-| 5 | Edit Saved Order (تابع, manager PIN for removals) | 🟢 Done |
-| 6 | Status Transitions (simplified: ACTIVE → COMPLETED / delivery chain) | 🟢 Done |
-| 7 | Cancel Order (manager PIN + reason + audit) | 🟢 Done |
-| 8 | Invoice Numbers (race-safe, resets per shift) | 🟢 Done |
+### Summary
 
-**Controllers**: `order_controller.py` (636), `amendment_tracker.py` (126), `payment_coordinator.py` (124), `invoice_manager.py` (73)
+The core POS functionality — order management, product/customer management, delivery, settlement, authentication, reporting, audit, and printing — is **implemented end-to-end** from React frontend through Python backend to SQLite persistence.
 
----
+**Remaining engineering work:**
 
-## 🚚 feature/delivery_system — 🟢 DONE (8/8)
+1. Mount `SessionsView.tsx` in `App.tsx` and retire legacy `ShiftDialog`.
+2. Resolve the bridge/AuthService authorization inconsistency for Manager user-management access.
+3. Refactor `FinancialController` to use public service APIs instead of private attribute access.
+4. Resolve circular dependency injection between delivery and order services.
+5. Add file-based logging with rotation.
+6. Execute and verify the full test suite.
+7. Validate printing hardware on target thermal printers.
+8. Replace `window.confirm()` with an in-app dialog.
+9. Cloud sync (deferred).
 
-| # | Task | Status |
-|---|------|:---:|
-| 1 | Driver Management (check-in/out, status tracking) | 🟢 Done |
-| 2 | Assign Driver to Trip (manual order selection) | 🟢 Done |
-| 3 | Mark Out for Delivery (dispatch timestamp) | 🟢 Done |
-| 4 | Mark Returned (driver back, orders → DELIVERED) | 🟢 Done |
-| 5 | Per-Trip Settlement 🔥 (cash vs online breakdown) | 🟢 Done |
-| 6 | Settlement Receipt (per-trip print) | 🟢 Done |
-| 7 | End-of-Day Summary 🔥 (all drivers aggregate) | 🟢 Done |
-| 8 | Expense Entry (manual v1) | 🟢 Done |
-
-**Controller**: `delivery_controller.py` (347 lines)
-
----
-
-## 🖨️ feature/printing_flow — 🟢 DONE (5/5)
-
-| # | Task | Status |
-|---|------|:---:|
-| 1 | Kitchen Ticket (auto on save, NO prices) | 🟢 Done |
-| 2 | Customer Receipt (4 variants by order type) | 🟢 Done |
-| 3 | Daily Summary (matches receipt format) | 🟢 Done |
-| 4 | Driver Settlement Receipt | 🟢 Done |
-| 5 | Failure Handling (log, badge, never block) | 🟢 Done |
-
-**Controller**: `printing_controller.py` (212 lines)
-
----
-
-## 📊 feature/reports — 🟢 DONE (4/4)
-
-| # | Task | Status |
-|---|------|:---:|
-| 1 | Aggregate by Type (صالة/تيك اواي/دليفري/استلام محل) | 🟢 Done |
-| 2 | Daily Summary (shift-based structured data) | 🟢 Done |
-| 3 | Print Integration (thermal, silent) | 🟢 Done |
-| 4 | Consistency Checks (cross-validate sums) | 🟢 Done |
-
-**Controller**: `reports_controller.py` (486 lines)
-
----
-
-## 🔐 feature/user_permissions — 🟢 DONE (5/5)
-
-| # | Task | Status |
-|---|------|:---:|
-| 1 | Role Model (CASHIER/MANAGER/ADMIN hierarchy) | 🟢 Done |
-| 2 | PIN Storage (SHA-256 hash, UNIQUE) | 🟢 Done |
-| 3 | Manager Override (PIN → verify → audit trail) | 🟢 Done |
-| 4 | Audit Logging (cancel, discount, shift events) | 🟢 Done |
-| 5 | Navigation Access (sidebar by role) | 🟢 Done |
-
-**Controller**: `permissions_controller.py` (437 lines)
-
----
-
-# 🧭 EXECUTION ROADMAP
-
-| Phase | Scope | Status |
-|:---:|-------|:---:|
-| **1** | Database + Models + Connection | 🟢 Done |
-| **2** | Repositories + Base CRUD | 🟢 Done |
-| **3** | Auth Service + Login UI | 🟢 Done |
-| **4** | Product Service + POS View (core) | 🟢 Done |
-| **5** | Order Service + Kitchen Printing | 🟢 Done |
-| **6** | Payment Flow + Receipt Printing | 🟢 Done |
-| **7** | Tracking View + Status Transitions | 🟢 Done |
-| **8** | Customer/Delivery Service + Delivery View | 🟢 Done |
-| **9** | Financial Service + Shift Lifecycle | 🟢 Done |
-| **10** | Reports + Daily Summary | 🟢 Done |
-| **11** | Permissions + Audit + PIN Override | 🟢 Done |
-| **12** | Polish: Theme, White-Label, Config | 🟢 Done |
-
----
-
-# 🔧 Recent Fixes & Refinements (Latest Commits)
-
-| Commit | Description |
-|--------|-------------|
-| `50cecfd` | Collapsible sidebar + order type buttons moved to top parked-orders bar |
-| `faff188` | All internal components made flexible (responsive sizing) |
-| `db1f891` | PIN and Payment dialogs made flexible |
-| `590eb02` | Main window sidebar and header made flexible |
-| `029628e` | POS view 3-column layout with stretch factors |
-| `04015fb` | Inject delivery_service into FinancialService for driver settlement check |
-| `3a1417b` | `_recalc_totals()` delegates to `Order.recalculate()` |
-| `6b1b4b6` | Fix order_controller references to non-existent attributes |
-| `955750e` | Eliminate dashed border in empty order state |
-
----
-
-# 📌 What's Left (v1 Polish)
-
-| Item | Priority | Notes |
-|------|:---:|-------|
-| Real hardware printer testing | 🔴 High | Test with actual ESC/POS thermal printers |
-| End-to-end order flow testing | 🔴 High | Full workflow: login → create → pay → print |
-| Edge case handling | 🟡 Medium | Network errors, concurrent access, corrupt data |
-| Sync module stubs | 🟡 Low | Interface + no-op adapter for future Google Sheets |
-| Performance profiling | 🟡 Low | Verify <100ms product search at scale |
-
----
-
-# 📌 Critical Business Rules Reference
-
-### Order Type Requirements
-| Type | Arabic | Requires |
-|------|--------|----------|
-| Dine-In | صالة | Table number |
-| Delivery | دليفري | Phone + Address + Zone |
-| Takeaway | تيك اواي | Nothing extra |
-| Pickup | استلام محل | Phone |
-
-### Payment Availability
-| Method | Dine-In | Takeaway | Pickup | Delivery |
-|--------|:---:|:---:|:---:|:---:|
-| كاش | ✅ | ✅ | ✅ | ✅ driver collects ALL |
-| فيزا | ✅ | ✅ | ✅ | ❌ NOT available |
-| اونلاين | ✅ | ✅ | ✅ | ✅ driver collects NOTHING |
-
-### Financial Formulas
-```
-subtotal         = Σ(qty × unit_price) for all items
-service          = subtotal × (SERVICE_CHARGE_PCT / 100)
-discount_amount  = value (if flat) OR subtotal × (value / 100) (if percent)
-total            = subtotal + service - discount_amount + delivery_fee
-change           = max(0, paid - total)
-restaurant_revenue = total - delivery_fee   ← restaurant's actual income
-expected_cash    = total_sales - total_expenses - pending_delivery - pending_dinein - pending_kitchen
-```
-
----
-
-# ❌ Removed from Original Design
-
-| Item | Reason |
-|------|--------|
-| Modifier Dialog | No modifier system — each variation is separate product |
-| modifiers table | Eliminated from schema |
-| product_modifiers table | Eliminated from schema |
-| order_item_modifiers table | Eliminated from schema |
-| Dedicated Expenses View | Deferred to v2 — lives inside Financial View |
-| Fast user switch | Full logout/login every time (Option A) |
-| Draft system | Unsaved orders = memory only |
-| Touch screen optimization | Input is mouse + keyboard |
-
----
-
-✅ **IMPLEMENTATION ~95% COMPLETE — READY FOR TESTING & POLISH**
+**The project should not be assigned a single completion percentage** without first defining and agreeing on a weighted task list. The backend and bridge layers are substantially complete; the frontend has one significant unintegrated view; hardware validation and test execution remain outstanding.

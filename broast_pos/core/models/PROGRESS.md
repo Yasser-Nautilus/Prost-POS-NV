@@ -1,169 +1,249 @@
-# 📁 core/models — PROGRESS
+# Core Models — Progress
 
-## 🎯 Goal
-
-Define all business entities as **pure Python dataclasses** — no database logic, no UI dependencies. These models represent the exact shape of data flowing through the entire system.
-
----
-
-## ✅ Tasks
-
-### 1. Order Model (`order.py`)
-
-- **What**: Define `Order`, `OrderItem`, `OrderStatus`, `OrderType`, `PaymentMethod` classes
-- **Details**:
-  - `OrderType` enum: صالة (Dine-in), تيك اواي (Takeaway), دليفري (Delivery), استلام محل (Pickup)
-  - `OrderStatus` enum: جديد → قيد التحضير → جاهز → خارج للتوصيل → تم التوصيل → مكتمل / ملغي
-  - `PaymentMethod` enum: **كاش, فيزا, اونلاين** (3 methods only)
-  - `is_prepaid` property: True for اونلاين, False for كاش/فيزا
-  - **Visa NOT available for delivery** — only at restaurant counter
-  - `OrderItem`: product_id, product_name, quantity (**int**), unit_price, notes (str)
-  - `Order`: full order with financial breakdown (subtotal, discount, delivery_fee, service, tax, total)
-  - Computed properties: `subtotal`, `discount_amount`, `total`, `restaurant_revenue`
-  - Cancellation fields: cancelled_by_id, cancelled_by_name, cancel_reason, cancelled_at
-  - `can_be_cancelled()` and `is_delivery()` helper methods
-- **Why**: The `restaurant_revenue` property (total minus delivery_fee) is critical for correct shift reports and driver settlement.
-- **Important**: OrderItem has **NO modifiers list** — each product variation is a separate product. Notes field is used for per-item special instructions (e.g., "3 pieces cold").
-- **Status**: `Done`
-
-### 2. OrderItem Model (inside `order.py`)
-
-- **What**: Define `OrderItem` dataclass
-- **Details**:
-  - Links a product to a quantity with optional notes
-  - Fields: `product_id`, `product_name`, `quantity` (int), `unit_price`, `notes` (str)
-  - `total_price` property: `quantity × unit_price`
-  - **No modifiers** — the product name itself contains the variation (e.g., "تشيكن فرايز حار")
-  - Notes are per-item free text (e.g., "3 pieces cold" when ordering "9 Pieces Hot")
-- **Status**: `Done`
-
-### 3. User Model (`user.py`)
-
-- **What**: Define `User` and `UserRole` classes
-- **Details**:
-  - `UserRole` enum:
-    - `CASHIER` — order creation, driver check-in/out, settlement
-    - `MANAGER` — owner: discounts, cancellations, products, drivers, shifts, reports
-    - `ADMIN` — developer: full access including user management
-  - `User` fields:
-    - id, username, display_name, avatar_path (optional)
-    - pin_hash (SHA-256, **unique per user** — can identify user by PIN alone)
-    - role (UserRole)
-    - is_active (bool)
-    - cashier_slot (1 or 2, **nullable for drivers**) — determines receipt printer routing. Drivers don't print receipts, so their slot is NULL
-  - Manager override: `verify_pin(pin)` returns the user if PIN matches a MANAGER or ADMIN
-- **Why**: PIN uniqueness enables the manager override pattern — manager types PIN on cashier device, system knows who authorized it. Avatar is shown on login screen tiles.
-- **Status**: `Done`
-
-### 4. Product Model (`product.py`)
-
-- **What**: Define `Product` and `Category` classes
-- **Details**:
-  - `Product`: id, name, price, category_id, is_active, sort_order
-  - `Category`: id, name, sort_order, is_active
-  - Products belong to categories
-  - **No Modifier model** — each product variation is a separate product entry
-    - Example: "تشيكن فرايز حار" and "تشيكن فرايز عادي" are two distinct products
-  - Sort order matters — the POS grid must display products in the exact order configured
-- **Why**: Removing modifiers dramatically simplifies the POS flow — tap product, it goes directly to the order panel. No popup dialog needed.
-- **Status**: `Done`
-
-### 5. Customer Model (`customer.py`)
-
-- **What**: Define `Customer`, `CustomerAddress`, and `Zone` classes
-- **Details**:
-  - `Customer` fields:
-    - id, name, phone (11-digit Egyptian, starts with 01, **unique lookup key**)
-    - notes (optional)
-    - created_at
-  - `CustomerAddress` fields:
-    - id, customer_id (FK)
-    - street_name (text — just the street, e.g., "شارع المشالي")
-    - zone_id (FK → Zone)
-    - zone_name (denormalized for display)
-    - delivery_fee (copied from zone at creation time)
-  - `Zone` fields:
-    - id, name (e.g., "مدينة فاقوس", "شارع الانتاج", "الغابة")
-    - delivery_fee (fixed per zone, e.g., 20, 15, 80)
-    - is_active (bool)
-  - One customer can have **multiple addresses** (home, work, etc.)
-  - Zone delivery fee is **fixed** — cashier cannot change it per order
-- **Why**: Phone is the primary key for customer lookup. Zone-based fees ensure pricing consistency. Street name is enough — no building numbers needed.
-- **Status**: `Done`
-
-### 6. Delivery Model (`delivery.py`)
-
-- **What**: Define `DeliveryTrip`, `DriverAttendance`, `DriverStatus` classes
-- **Details**:
-  - `DriverStatus` enum: `CHECKED_OUT` (not working), `AVAILABLE` (checked in, ready), `OUT` (on a delivery trip)
-  - `DeliveryTrip` fields:
-    - id, driver_id, driver_name
-    - order_ids[] (list of order IDs on this trip)
-    - created_at, dispatched_at, returned_at, settled_at
-    - cash_collected (**calculated and stored at settlement time** — snapshot of sum of order_total WHERE payment = كاش)
-    - total_delivery_fees (**calculated and stored at settlement time** — snapshot of sum of delivery_fee for ALL orders)
-    - is_settled (bool — can be false even after return, settlement happens separately)
-  - `DriverAttendance` fields:
-    - id, driver_id, check_in_at, check_out_at
-  - **Trip lifecycle**: created → dispatched → returned → settled (each step independent)
-  - **No settlement blocking**: driver can go on new trips with unsettled previous trips
-- **Why**: Settlement depends on payment method. Cash orders: driver collected the money. Online orders: driver collected nothing. Driver earns fees from ALL orders, paid at end of day as expense.
-- **Status**: `Done`
-
-### 7. Financial Model (`financial.py`)
-
-- **What**: Define `Shift`, `ShiftTransfer`, `CashTransaction`, `ShiftSummary` classes
-- **Details**:
-  - `Shift` fields:
-    - id, opened_by (user_id), opened_at
-    - closed_by (user_id, nullable), closed_at (nullable)
-    - next_invoice_no (int, starts at 1)
-    - is_active (bool)
-  - `ShiftTransfer` fields:
-    - id, shift_id, from_user_id, to_user_id
-    - timestamp, summary_snapshot (JSON — sales, expenses, pending at transfer time)
-  - `CashTransaction` fields:
-    - id, shift_id, type (`expense` only), amount, description, category
-    - timestamp, user_id
-    - **Immutable** — cannot be edited after creation
-  - `ShiftSummary` (computed, not stored):
-    - total_sales (all completed orders)
-    - total_expenses (all cash-out entries)
-    - pending_delivery (unsettled driver orders — money not yet in drawer)
-    - pending_dinein (unpaid dine-in tables)
-    - pending_kitchen (orders still being prepared)
-    - expected_cash = total_sales - total_expenses - all_pending
-    - order_breakdown: dict by type (count + revenue)
-- **Why**: Expected cash accounts for money that hasn't been collected yet. Pending orders are deducted because the cash isn't physically in the drawer.
-- **Status**: `Done`
+> **Last Updated:** 2026-11-20
+> **Source of Truth:** Actual implementation files in `broast_pos/core/models/`
 
 ---
 
-## 📝 Notes
+## Overview
 
-- **All models are pure** — NO `import sqlite3`, NO `import PyQt6`
-- Use Python `dataclasses` with `@dataclass` decorator
-- Use `Enum` for all status/type fields (not magic strings)
-- Use `Optional[T]` for nullable fields
-- Use `@property` for computed values (subtotal, total, etc.)
-- **NO Modifier model** — removed entirely. Product variations are separate products.
-- **Quantity is int** — you don't sell 0.5 chickens
-- **Notes are per-item strings** — for special instructions
-- Financial amounts use `float` with `round(..., 2)`
+The core models define the domain types used throughout the application. All models are Python `@dataclass` classes or enums. There are **10 model files** plus **1 policy file** (`policies/discount.py`).
 
-## 📌 Order Type Requirements
+---
 
-| Type | Arabic | Requires |
-|------|--------|----------|
-| Dine-In | صالة | Table number |
-| Delivery | دليفري | Phone, Address, Zone |
-| Takeaway | تيك اواي | Nothing extra — customer is standing and waiting |
-| Pickup | استلام محل | Phone — customer ordered by phone, will come to collect |
+## Models
 
-## 📌 Payment Method Availability
+### 1. Order (`order.py` — 192 lines)
 
-| Method | Dine-In | Takeaway | Pickup | Delivery |
-|--------|---------|----------|--------|----------|
-| كاش | ✅ | ✅ | ✅ | ✅ driver collects ALL |
-| فيزا | ✅ | ✅ | ✅ | ❌ NOT available |
-| اونلاين | ✅ | ✅ | ✅ | ✅ driver collects NOTHING |
+**Status:** Implemented
+
+Defines the complete order domain:
+
+#### OrderType (Enum — 4 values)
+- `DINE_IN`
+- `TAKEAWAY`
+- `DELIVERY`
+- `PICKUP`
+
+#### OrderStatus (Enum — 7 values)
+```
+NEW → PREPARING → READY → OUT_FOR_DELIVERY → DELIVERED → COMPLETED
+                                                          ↗
+Any non-terminal state ──────────────────────→ CANCELLED
+```
+
+- `NEW` — Order created, not yet sent to kitchen.
+- `PREPARING` — Sent to kitchen, being prepared.
+- `READY` — Prepared, awaiting pickup or delivery dispatch.
+- `OUT_FOR_DELIVERY` — Assigned to a delivery driver, in transit.
+- `DELIVERED` — Driver confirmed delivery (delivery orders only).
+- `COMPLETED` — Order finalized and paid.
+- `CANCELLED` — Order cancelled at any non-terminal stage.
+
+Valid transitions are type-aware and enforced by `OrderService`:
+- Dine-in/Takeaway/Pickup: `NEW → PREPARING → READY → COMPLETED` (skip delivery states)
+- Delivery: `NEW → PREPARING → READY → OUT_FOR_DELIVERY → DELIVERED → COMPLETED`
+- `CANCELLED` is reachable from any non-terminal status.
+
+#### PaymentMethod (Enum — 3 values)
+- `CASH`
+- `CARD`
+- `MOBILE`
+
+#### Order (Dataclass)
+Key fields: `id`, `order_number`, `order_type`, `status`, `items`, `subtotal`, `discount_amount`, `discount_percentage`, `tax_amount`, `total`, `payment_method`, `customer_id`, `table_number`, `notes`, `created_at`, `updated_at`, `created_by`, `updated_by`, `is_paid`.
+
+#### OrderItem (Dataclass)
+Fields: `id`, `order_id`, `product_id`, `product_name`, `product_name_ar`, `quantity`, `unit_price`, `total_price`, `notes`, `is_printed`.
+
+---
+
+### 2. User (`user.py` — 63 lines)
+
+**Status:** Implemented
+
+#### UserRole (Enum)
+- `CASHIER`
+- `MANAGER`
+- `ADMIN`
+
+#### User (Dataclass)
+Fields: `id`, `username`, `pin_hash`, `pin_salt`, `role`, `full_name`, `is_active`, `created_at`.
+
+> [!NOTE]
+> The `pin_salt` field supports the PBKDF2-HMAC-SHA256 hashing scheme. Users with `pin_salt=NULL` use the legacy SHA-256 hash and are auto-upgraded on next successful login.
+
+---
+
+### 3. Product (`product.py` — 45 lines)
+
+**Status:** Implemented
+
+#### Product (Dataclass)
+Fields: `id`, `name`, `name_ar`, `category_id`, `price`, `is_available`, `sort_order`, `created_at`.
+
+#### Category (Dataclass)
+Fields: `id`, `name`, `name_ar`, `sort_order`, `is_active`, `created_at`.
+
+---
+
+### 4. Customer (`customer.py` — 60 lines)
+
+**Status:** Implemented
+
+#### Customer (Dataclass)
+Fields: `id`, `name`, `phone`, `notes`, `created_at`.
+
+#### CustomerAddress (Dataclass)
+Fields: `id`, `customer_id`, `label`, `address_text`, `zone_id`, `is_default`, `created_at`.
+
+#### Zone (Dataclass)
+Fields: `id`, `name`, `name_ar`, `delivery_fee`, `is_active`.
+
+---
+
+### 5. Delivery (`delivery.py` — 82 lines)
+
+**Status:** Implemented
+
+#### DriverStatus (Enum)
+- `AVAILABLE`
+- `ON_DELIVERY`
+- `OFF_DUTY`
+
+#### DeliveryTrip (Dataclass)
+Fields: `id`, `order_id`, `driver_id`, `driver_name`, `status`, `assigned_at`, `picked_up_at`, `delivered_at`, `delivery_fee`, `is_settled`, `notes`.
+
+#### DriverAttendance (Dataclass)
+Fields: `id`, `user_id`, `driver_name`, `clock_in`, `clock_out`, `status`.
+
+---
+
+### 6. Financial (`financial.py` — 134 lines)
+
+**Status:** Implemented
+
+#### Shift (Dataclass)
+Fields: `id`, `user_id`, `cashier_name`, `opening_amount`, `closing_amount`, `expected_amount`, `variance`, `status`, `opened_at`, `closed_at`, `notes`.
+
+#### ShiftTransfer (Dataclass)
+Fields: `id`, `from_shift_id`, `to_shift_id`, `amount`, `transferred_at`, `notes`.
+
+#### CashTransaction (Dataclass)
+Fields: `id`, `shift_id`, `type`, `amount`, `reference`, `description`, `created_at`, `created_by`.
+
+#### ShiftSummary (Dataclass)
+Fields: `total_orders`, `cash_sales`, `card_sales`, `mobile_sales`, `total_sales`, `total_expenses`, `net_cash`.
+
+> [!NOTE]
+> `ShiftSummary` distinguishes `cash_sales` from `total_sales`, enabling cash-only reconciliation.
+
+---
+
+### 7. Audit (`audit.py` — 51 lines)
+
+**Status:** Implemented
+
+#### AuditEventType (Constants Class)
+Defines string constants for all auditable events:
+
+- Order events: `ORDER_CREATED`, `ORDER_UPDATED`, `ORDER_CANCELLED`, `ORDER_COMPLETED`, `ORDER_STATUS_CHANGED`, `ORDER_AMENDED`
+- User events: `USER_CREATED`, `USER_UPDATED`, `USER_DEACTIVATED`
+- Auth events: `LOGIN`, `LOGOUT`, `LOGIN_FAILED`
+- Financial events: `SHIFT_OPENED`, `SHIFT_CLOSED`, `EXPENSE_ADDED`, `CASH_TRANSACTION`
+- Delivery events: `DRIVER_CLOCKED_IN`, `DRIVER_CLOCKED_OUT`, `TRIP_ASSIGNED`, `TRIP_COMPLETED`
+- Product events: `PRODUCT_CREATED`, `PRODUCT_UPDATED`, `CATEGORY_CREATED`, `CATEGORY_UPDATED`
+- Settlement events: `DRIVER_SETTLEMENT`
+- Session events: `SESSION_OPENED`, `SESSION_CLOSED`, `SESSION_HANDOVER`
+
+> [!NOTE]
+> `AuditEventType` is a constants class (not an Enum). Event types are plain string values.
+
+---
+
+### 8. Cashier Session (`cashier_session.py` — 131 lines)
+
+**Status:** Implemented
+
+#### Station (Enum — 3 values)
+- `ALL` — Handles all order types.
+- `COUNTER` — Handles dine-in, takeaway, and pickup orders.
+- `DELIVERY` — Handles delivery orders only.
+
+#### CashierSession (Dataclass)
+Fields: `id`, `user_id`, `cashier_name`, `station`, `opening_float`, `closing_float`, `expected_cash`, `variance`, `status`, `opened_at`, `closed_at`, `closed_by`, `notes`, `handover_to_session_id`.
+
+#### LedgerEntryType (Enum — 10 values)
+- `SALE_CASH` — Cash sale recorded.
+- `SALE_CARD` — Card sale recorded.
+- `SALE_MOBILE` — Mobile payment sale recorded.
+- `REVERSAL` — Order cancellation reversal.
+- `EXPENSE` — Cash expense payout.
+- `CASH_IN` — Manual cash deposit.
+- `CASH_OUT` — Manual cash withdrawal.
+- `FLOAT` — Opening float for a session.
+- `DRIVER_REMITTANCE` — Cash collected by driver, returned to register.
+- `DRIVER_FEE_PAYOUT` — Delivery fee paid to driver.
+
+#### CashLedgerEntry (Dataclass)
+Fields: `id`, `session_id`, `entry_type`, `amount_piasters`, `order_id`, `trip_id`, `expense_id`, `actor_user_id`, `actor_name`, `approval_user_id`, `approval_name`, `reference`, `notes`, `created_at`.
+
+> [!IMPORTANT]
+> `amount_piasters` uses integer storage to avoid floating-point precision errors. Positive values represent cash inflow; negative values represent cash outflow. The cash ledger table is append-only with database-level UPDATE and DELETE triggers that raise errors.
+
+---
+
+### 9. Driver Settlement (`driver_settlement.py` — 47 lines)
+
+**Status:** Implemented
+
+#### DriverSettlement (Dataclass)
+Fields: `id`, `driver_id`, `driver_name`, `trip_id`, `order_id`, `order_total_piasters`, `delivery_fee_piasters`, `amount_collected_piasters`, `amount_to_remit_piasters`, `settled_by_user_id`, `settled_by_name`, `settled_at`, `notes`.
+
+> [!NOTE]
+> All monetary fields use integer piasters for consistency with the cash ledger.
+
+---
+
+### 10. Order Status History (`order_status_history.py` — 27 lines)
+
+**Status:** Implemented
+
+#### OrderStatusHistory (Dataclass)
+Fields: `id`, `order_id`, `old_status`, `new_status`, `changed_by`, `changed_at`, `notes`.
+
+Provides an immutable audit trail of every order status transition.
+
+---
+
+## Policies
+
+### Discount Policy (`core/policies/discount.py` — 64 lines)
+
+**Status:** Implemented
+
+#### `compute_discount(subtotal, discount_percentage, discount_amount)`
+
+Centralized discount computation with the following behavior:
+- Uses `Decimal` arithmetic for precision.
+- If both `discount_percentage` and `discount_amount` are provided, `discount_percentage` takes precedence.
+- Returns the calculated discount amount, clamped to `[0, subtotal]`.
+- Used by `OrderService` during order creation and amendment.
+
+---
+
+## Summary
+
+| Model File | Types Defined | Status |
+|---|---|---|
+| `order.py` | Order, OrderItem, OrderType, OrderStatus, PaymentMethod | Implemented |
+| `user.py` | User, UserRole | Implemented |
+| `product.py` | Product, Category | Implemented |
+| `customer.py` | Customer, CustomerAddress, Zone | Implemented |
+| `delivery.py` | DeliveryTrip, DriverAttendance, DriverStatus | Implemented |
+| `financial.py` | Shift, ShiftTransfer, CashTransaction, ShiftSummary | Implemented |
+| `audit.py` | AuditEventType | Implemented |
+| `cashier_session.py` | Station, CashierSession, LedgerEntryType, CashLedgerEntry | Implemented |
+| `driver_settlement.py` | DriverSettlement | Implemented |
+| `order_status_history.py` | OrderStatusHistory | Implemented |
+| `policies/discount.py` | compute_discount function | Implemented |

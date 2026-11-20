@@ -1,109 +1,154 @@
-# 🔐 feature/user_permissions — PROGRESS
+# User Permissions — Progress
 
-## 🎯 Goal
-
-Enforce **role-based actions** with manager PIN overrides. Prevent unauthorized access to sensitive operations (cancel, discount, management screens).
-
----
-
-## ✅ Tasks
-
-### 1. Role Model
-
-- **What**: Define clear role hierarchy with permissions
-- **Details**:
-  - **Cashier**: create orders, view tracking, view delivery status
-  - **Manager**: all cashier permissions + cancel orders, apply discounts, view reports, manage products, settle drivers
-  - **Admin**: all manager permissions + manage users, system configuration
-  - Roles stored in `UserRole` enum
-- **Why**: Cashiers should never be able to cancel orders or apply discounts without supervision. This prevents revenue leakage.
-- **Touches**: `core/models/user.py`, `core/services/auth_service.py`
-- **Status**: `Done`
-  - `UserRole` enum (CASHIER, MANAGER, ADMIN) in `core/models/user.py`
-  - Permission helpers: `has_manager_access`, `can_cancel_order`, `can_authorise_discount`
-  - `Action` enum with 10 restricted actions in `auth_service.py`
-  - `_PERMISSIONS` dict mapping roles → allowed actions
-
-### 2. PIN Storage (Hashed)
-
-- **What**: Store user PINs as hashed values, never plain text
-- **Details**:
-  - Use SHA-256 hash for PIN storage
-  - `hash_pin(raw_pin) → hashed_pin` utility function
-  - Comparison: hash the input PIN and compare to stored hash
-  - No way to recover a forgotten PIN — admin must reset it
-- **Why**: Even for a local restaurant system, plain text PINs are a security gap. If the database file is copied or accessed, PINs should be unreadable.
-- **Touches**: `core/services/auth_service.py`, `data/repositories/user_repository.py`
-- **Status**: `Done`
-  - `AuthService.hash_pin()` — SHA-256 hex digest
-  - `UserRepository.get_by_pin(pin_hash)` — lookup by hashed PIN
-  - `UserRepository.pin_exists(pin_hash, exclude_user_id)` — uniqueness validation
-  - Seed data hashes PINs at insert time
-
-### 3. Manager Override Flow
-
-- **What**: PIN dialog system for restricted actions
-- **Details**:
-  - Cashier triggers restricted action (cancel, discount)
-  - System shows PIN dialog (modal)
-  - Cashier enters manager's PIN (not their own)
-  - System verifies: PIN valid + user has manager/admin role
-  - If valid: action proceeds with audit trail
-  - If invalid: show error, action blocked
-  - The override is per-action — it doesn't change the logged-in user
-- **Why**: This is the standard "manager override" pattern in production POS systems. The manager doesn't need to log in — they just enter their PIN when a cashier requests approval.
-- **Touches**: `ui/components/pin_dialog.py`, `core/services/order_service.py`
-- **Status**: `Done`
-  - `AuthService.verify_pin(pin)` — returns manager/admin user or None
-  - `PermissionsController.request_override(pin, action)` — orchestrates verification + permission check
-  - `OrderService._verify_manager_pin()` — used by cancel, discount, item removal
-  - `FinancialService._verify_manager_pin()` — used by shift transfer/close
-  - UI component (`pin_dialog.py`) deferred to `ui/components` phase
-
-### 4. Audit Logging
-
-- **What**: Log every sensitive action with user identity and timestamp
-- **Details**:
-  - Events to log:
-    - Order cancelled: who, when, which order, reason
-    - Discount applied: who approved, amount, which order
-    - Shift opened/closed: who, when, amounts
-    - User created/modified: who changed what
-  - Storage: dedicated `audit_log` table in SQLite
-  - Fields: event_type, user_id, user_name, order_id (if applicable), details (JSON), timestamp
-  - Viewable by admin in a future audit screen
-- **Why**: When the manager asks "who cancelled order #1234?" or "who applied a discount today?", the audit log has the answer. Without it, there's no accountability.
-- **Touches**: `data/repositories/audit_repository.py`, `core/services/order_service.py`, `core/services/financial_service.py`
-- **Status**: `Done`
-  - `AuditRepository.log()` — write-only, immutable
-  - `AuditRepository.get_logs_for_date()`, `get_logs_for_order()`, `get_logs_by_user()`, `get_logs_by_event_type()` — query methods
-  - `OrderService` logs: order_cancelled, discount_applied, item_removed
-  - `FinancialService` logs: shift_opened, shift_closed, shift_transferred, expense_recorded
-  - `PermissionsController` logs: user_created, user_updated, user_deactivated, pin_reset
-
-### 5. Navigation Access Control
-
-- **What**: Show/hide navigation items based on user role
-- **Details**:
-  - Cashier sees: POS, Tracking, Delivery
-  - Manager sees: + Reports, Products, Financial
-  - Admin sees: + Users
-  - Implemented in `main_window.py` sidebar based on `current_user.role`
-- **Why**: Cashiers don't need to see management screens — it reduces confusion and prevents accidental changes.
-- **Touches**: `ui/windows/main_window.py`
-- **Status**: `Done`
-  - `PermissionsController.get_allowed_views(role)` — returns view identifiers per role
-  - `PermissionsController.get_allowed_views_for_current_user()` — convenience method
-  - `_VIEW_ACCESS` dict: role → [view_ids]
-  - UI wiring deferred to `main_window.py` build phase
+> **Last Updated:** 2026-11-20
+> **Source of Truth:** `auth_service.py`, `user.py`, `permissions_controller.py`, `bridge.py`
 
 ---
 
-## 📝 Notes
+## Overview
 
-- Prevent revenue leakage via uncontrolled discounts and cancellations
-- Manager override does NOT change the active session — it's a one-time approval
-- Audit logs are write-only in normal operation — no deletion
-- User management operations require ADMIN role specifically (not just MANAGER)
-- PIN dialog UI component (`pin_dialog.py`) will be built in the `ui/components` phase
-- Navigation sidebar filtering will be wired in `main_window.py` build phase
+The user permissions system provides PIN-based authentication with PBKDF2 hashing, role-based access control, brute-force protection, and user management.
+
+---
+
+## Authentication
+
+### PIN Hashing
+
+**Status:** Implemented
+
+| Property | Detail |
+|---|---|
+| Algorithm | PBKDF2-HMAC-SHA256 |
+| Salt | Per-user random salt stored in `users.pin_salt` |
+| Pepper | Application-level secret from `BROAST_PIN_PEPPER` environment variable |
+| Legacy Support | Auto-upgrade from SHA-256 on successful login |
+
+**Legacy auto-upgrade flow:**
+1. User attempts login.
+2. If `pin_salt` is `NULL`, verify against legacy SHA-256 hash.
+3. On success, generate a new random salt, hash the PIN with PBKDF2 + salt + pepper, and update the user record.
+4. Subsequent logins use PBKDF2 directly.
+
+### Brute-Force Throttling
+
+**Status:** Implemented
+
+- Tracks failed login attempts per user.
+- Configurable lockout after repeated failures.
+- Prevents rapid PIN guessing attacks.
+
+---
+
+## Roles & Permissions
+
+### UserRole (Enum)
+
+| Role | Description |
+|---|---|
+| `CASHIER` | Basic POS operations |
+| `MANAGER` | Extended access including reports, settlement, products, audit |
+| `ADMIN` | Full system access including user management |
+
+### Navigation Access (from `App.tsx`)
+
+| Tab | Cashier | Manager | Admin |
+|---|---|---|---|
+| POS | ✅ | ✅ | ✅ |
+| Delivery | ✅ | ✅ | ✅ |
+| Tracking | ✅ | ✅ | ✅ |
+| Settlement | ❌ | ✅ | ✅ |
+| Reports | ❌ | ✅ | ✅ |
+| Products | ❌ | ✅ | ✅ |
+| Audit | ❌ | ✅ | ✅ |
+| Users | ❌ | ❌ | ✅ |
+
+### Manager Permissions
+
+As defined in `AuthService` (line 88), Manager permissions include:
+- `VIEW_REPORTS`
+- `MANAGE_PRODUCTS`
+- `VIEW_AUDIT`
+- `MANAGE_USERS` ← Defined in AuthService
+- Other operational permissions
+
+> [!WARNING]
+> **Authorization Inconsistency:** `AuthService` grants Managers the `MANAGE_USERS` permission, but `bridge.py` (lines 266, 284, 302) independently checks `self._current_user.role.value != "admin"` for user management operations (create, update, deactivate). This bridge-level check overrides the AuthService permission, effectively restricting user management to Admin only. The `PermissionsController` and `UsersView` frontend tab also enforce Admin-only access. This inconsistency should be resolved by either:
+> 1. Removing `MANAGE_USERS` from Manager permissions in AuthService, or
+> 2. Updating the bridge and frontend to allow Manager access to user management.
+
+---
+
+## User Management
+
+### PermissionsController (`permissions_controller.py` — 437 lines)
+
+**Status:** Implemented
+
+**Key actions:**
+- User CRUD (create, update, deactivate).
+- PIN changes.
+- Authentication (login/logout).
+- Audit log queries for user operations.
+- Navigation access control based on role.
+
+### Bridge Authorization Guard
+
+**Status:** Implemented
+
+The `POSBridge` checks `self._current_user` before dispatching most actions. Unauthenticated requests are rejected with an error response.
+
+---
+
+## Frontend Integration
+
+### LoginView
+
+**Status:** Implemented
+
+- PIN-based login with numeric keypad.
+- User selection.
+
+### UsersView
+
+**Status:** Implemented
+
+- User list with role and status.
+- Create/edit/deactivate users.
+- PIN change functionality.
+- Access restricted to Admin role.
+
+### PinDialog
+
+**Status:** Implemented
+
+- Reusable PIN entry component used for authentication and PIN changes.
+
+---
+
+## Seed Admin
+
+The default admin user is seeded with a legacy SHA-256 hash (no salt). The hash is auto-upgraded to PBKDF2 on first login.
+
+> [!CAUTION]
+> The default admin PIN should be changed immediately after first deployment. The seed uses a legacy hash without salt, which is less secure than the PBKDF2 scheme used for all other operations.
+
+---
+
+## Summary
+
+| Feature | Status | Notes |
+|---|---|---|
+| PBKDF2-HMAC-SHA256 hashing | Implemented | With per-user salt and app pepper |
+| Legacy SHA-256 auto-upgrade | Implemented | Transparent on login |
+| Brute-force throttling | Implemented | Per-user tracking |
+| Role-based access control | Implemented | Cashier / Manager / Admin |
+| Navigation access by role | Implemented | Enforced in App.tsx |
+| User CRUD | Implemented | Admin only (see inconsistency) |
+| PIN changes | Implemented | |
+| Audit log queries | Implemented | |
+| Login/Logout | Implemented | |
+| Frontend (LoginView) | Implemented | |
+| Frontend (UsersView) | Implemented | Admin only |
+| Bridge auth guard | Implemented | |
+| Manager MANAGE_USERS | **Partially Implemented** | Defined in AuthService but blocked by bridge |
