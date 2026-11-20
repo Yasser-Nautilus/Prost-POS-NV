@@ -128,11 +128,13 @@ class BusinessDayService:
         session_repo: CashierSessionRepository | None = None,
         ledger_repo: CashLedgerRepository | None = None,
         auth_service=None,
+        delivery_repo=None,          # DeliveryRepository — for settled trip fees
     ) -> None:
         self._financial = financial_service
         self._sessions = session_repo or CashierSessionRepository()
         self._ledger = ledger_repo or CashLedgerRepository()
         self._auth = auth_service
+        self._delivery_repo = delivery_repo
 
     # ------------------------------------------------------------------
     # FR-DAY-3: X-Report (live snapshot, no close)
@@ -278,31 +280,21 @@ class BusinessDayService:
             )
             return 0
 
-        # Load settled trip fees for this day via direct SQL query
-        # (avoids importing DeliveryRepository to keep dependency light)
-        db = self._sessions._db
-        rows = db.fetch_all(
-            """SELECT dt.id AS trip_id, dt.total_delivery_fees
-               FROM delivery_trips dt
-               JOIN delivery_trip_orders dto ON dto.trip_id = dt.id
-               JOIN orders o ON o.id = dto.order_id
-               WHERE dt.is_settled = 1
-                 AND o.shift_id = ?
-               GROUP BY dt.id
-               HAVING dt.total_delivery_fees > 0""",
-            (day_id,),
-        )
+        # Load settled trip fees via the delivery repository (no direct SQL)
+        if self._delivery_repo is None:
+            logger.warning(
+                "DRIVER_FEE_PAYOUT batch skipped — delivery_repo not injected for day %d", day_id
+            )
+            return 0
+
+        rows = self._delivery_repo.get_settled_trip_fees_for_shift(day_id)
 
         count = 0
         now = datetime.now().isoformat()
 
-        # Resolve a real actor_id for the ledger FK (actor_id cannot be 0 or NULL).
-        # Use whoever opened the shift (shifts.opened_by).
-        shift_row = db.fetch_one("SELECT opened_by FROM shifts WHERE id = ?", (day_id,))
-        system_actor_id: int = (
-            shift_row["opened_by"] if shift_row
-            else delivery_session.user_id
-        )
+        # Resolve a real actor_id for the ledger FK.
+        # Use the delivery session's user_id as a safe fallback.
+        system_actor_id: int = delivery_session.user_id
 
         for row in rows:
             trip_id = row["trip_id"]
@@ -310,9 +302,8 @@ class BusinessDayService:
             fee_pt = round(fee_egp * 100)
 
             # Idempotency: skip if already payed out this trip
-            existing = db.fetch_one(
-                "SELECT 1 FROM cash_ledger WHERE trip_id = ? AND entry_type = 'DRIVER_FEE_PAYOUT'",
-                (trip_id,),
+            existing = self._ledger.get_entry_by_trip(
+                trip_id, LedgerEntryType.DRIVER_FEE_PAYOUT,
             )
             if existing:
                 continue

@@ -63,12 +63,35 @@ logger = logging.getLogger(__name__)
 
 
 def _setup_logging() -> None:
-    """Configure root logger with a simple console format."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
+    """Configure root logger with console + rotating file output."""
+    from logging.handlers import RotatingFileHandler
+    from pathlib import Path
+
+    log_dir = Path(config.LOGS_PATH)
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+
+    fmt = logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s — %(message)s",
         datefmt="%H:%M:%S",
     )
+
+    # Console handler
+    console = logging.StreamHandler()
+    console.setFormatter(fmt)
+    root.addHandler(console)
+
+    # Rotating file handler (5 MB × 3 backups)
+    file_handler = RotatingFileHandler(
+        str(log_dir / "prost_pos.log"),
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(fmt)
+    root.addHandler(file_handler)
 
 
 
@@ -123,6 +146,8 @@ def main() -> int:
         audit_repo=audit_repo,
         auth_service=auth_service,
         delivery_service=delivery_service,
+        cash_ledger_repo=cash_ledger_repo,
+        cashier_session_repo=cashier_session_repo,
     )
     cashier_session_service = CashierSessionService(
         session_repo=cashier_session_repo,
@@ -141,7 +166,7 @@ def main() -> int:
         cashier_session_repo=cashier_session_repo,
     )
     # Inject order_service back into delivery_service for status history recording
-    delivery_service._order_svc = order_service
+    delivery_service.set_order_service(order_service)
 
     settlement_service = DriverSettlementService(
         settlement_repo=settlement_repo,
@@ -163,6 +188,7 @@ def main() -> int:
         session_repo=cashier_session_repo,
         ledger_repo=cash_ledger_repo,
         auth_service=auth_service,
+        delivery_repo=delivery_repo,
     )
 
     # ------------------------------------------------------------------

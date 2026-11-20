@@ -382,6 +382,42 @@ class DeliveryController:
             return []
 
     # ------------------------------------------------------------------
+    # 9. Order Reassignment (transfer between drivers)
+    # ------------------------------------------------------------------
+
+    def reassign_order(
+        self,
+        order_id: int,
+        new_driver_id: int,
+        new_driver_name: str,
+    ) -> tuple[bool, Any]:
+        """Transfer an order from one driver to another.
+
+        Returns:
+            (True, new_trip_dict) on success.
+            (False, error_message_str) on failure.
+        """
+        try:
+            new_trip = self._delivery_svc.reassign_order(
+                order_id=order_id,
+                new_driver_id=new_driver_id,
+                new_driver_name=new_driver_name,
+            )
+            self._notify_trips()
+            self._notify_drivers()
+            return True, {
+                "trip_id": new_trip.id,
+                "driver_id": new_trip.driver_id,
+                "driver_name": new_trip.driver_name,
+                "order_ids": new_trip.order_ids or [],
+            }
+        except ValueError as exc:
+            return False, str(exc)
+        except Exception as exc:
+            logger.error("reassign_order error: %s", exc)
+            return False, str(exc)
+
+    # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
 

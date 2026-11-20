@@ -85,7 +85,7 @@ _PERMISSIONS: dict[UserRole, set[Action]] = {
         Action.CHECK_IN_OUT_DRIVERS,
         Action.OPEN_CLOSE_SHIFT,
         Action.VIEW_REPORTS,
-        Action.MANAGE_USERS,
+        # MANAGE_USERS is intentionally admin-only (canonical policy).
     },
     UserRole.ADMIN: set(Action),  # Admin can do everything
 }
@@ -209,6 +209,42 @@ class AuthService:
         self._reset_throttle(key)
         self._upgrade_if_legacy(user, pin)
         return user
+
+    def verify_manager_pin(self, pin: str | None) -> User:
+        """Verify a manager/admin PIN — raises ValueError on failure.
+
+        Thin wrapper around verify_pin() for use by CashierSessionService
+        where a missing or invalid PIN must raise rather than return None.
+
+        Returns:
+            The manager/admin User.
+        Raises:
+            ValueError: if PIN is None, empty, or does not match a manager/admin.
+        """
+        if not pin:
+            raise ValueError("يجب إدخال رمز PIN للمدير")
+        user = self.verify_pin(pin)
+        if user is None:
+            raise ValueError("PIN غير صحيح أو ليس لديك صلاحية")
+        return user
+
+    def get_manager_by_pin(self, pin: str | None) -> User | None:
+        """Resolve a manager/admin user from a PIN — returns None on failure.
+
+        Alias for verify_pin() with None-safe input handling.
+        Used by CashierSessionService for optional manager identification.
+        """
+        if not pin:
+            return None
+        return self.verify_pin(pin)
+
+    def get_user_by_id(self, user_id: int) -> User | None:
+        """Public accessor to look up a user by ID.
+
+        Provides a clean public interface so controllers don't need to
+        access the private _users repository attribute directly.
+        """
+        return self._users.get_by_id(user_id)
 
     # ------------------------------------------------------------------
     # Permission checks
