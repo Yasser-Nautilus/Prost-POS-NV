@@ -197,18 +197,20 @@ class FinancialService:
                 "يوجد طلبات مفتوحة — يجب تأكيد أو إلغاء جميع الطلبات قبل إغلاق الوردية"
             )
 
-        # Close it
+        # Close it — shift save and audit must be atomic: a failed audit write
+        # must roll back the shift close so the DB never shows a closed shift
+        # without a corresponding audit record.
         shift.is_active = False
         shift.closed_at = datetime.now().isoformat()
         shift.closed_by = manager.id
-        saved = self._financial.save(shift)
-
-        self._audit.log(
-            event_type="shift_closed",
-            user_id=manager.id,
-            user_name=manager.display_name,
-            details={"shift_id": shift_id},
-        )
+        with self._financial._db.transaction():
+            saved = self._financial.save(shift)
+            self._audit.log(
+                event_type="shift_closed",
+                user_id=manager.id,
+                user_name=manager.display_name,
+                details={"shift_id": shift_id},
+            )
 
         return saved
 
@@ -262,21 +264,22 @@ class FinancialService:
             user_id=user_id,
         )
 
-        saved = self._financial.save_expense(transaction)
-
-        # Create corresponding EXPENSE ledger entry (cash leaves drawer)
-        self._record_expense_to_ledger(saved)
-
-        self._audit.log(
-            event_type="expense_added",
-            user_id=user_id,
-            user_name="",
-            details={
-                "amount": amount,
-                "category": category,
-                "description": description,
-            },
-        )
+        # Save expense, ledger entry, and audit are all atomic.
+        # _record_expense_to_ledger is a no-op in legacy mode (no repos); in
+        # non-legacy mode any ledger failure rolls back the expense save too.
+        with self._financial._db.transaction():
+            saved = self._financial.save_expense(transaction)
+            self._record_expense_to_ledger(saved)
+            self._audit.log(
+                event_type="expense_added",
+                user_id=user_id,
+                user_name="",
+                details={
+                    "amount": amount,
+                    "category": category,
+                    "description": description,
+                },
+            )
 
         return saved
 
@@ -319,51 +322,44 @@ class FinancialService:
         if self._ledger is None or self._sessions is None:
             return  # Legacy mode — no session-based ledger
 
-        try:
-            from broast_pos.core.models.cashier_session import (
-                CashLedgerEntry,
-                LedgerEntryType,
-                Station,
-            )
+        from broast_pos.core.models.cashier_session import (
+            CashLedgerEntry,
+            LedgerEntryType,
+            Station,
+        )
 
-            day_id = expense.shift_id
+        day_id = expense.shift_id
 
-            # Find an open session to attribute the expense to.
-            # Preference: ALL → COUNTER (expenses are typically counter ops).
-            session = None
-            open_sessions = self._sessions.get_open_sessions_for_day(day_id)
+        # Find an open session to attribute the expense to.
+        # Preference: ALL → COUNTER (expenses are typically counter ops).
+        session = None
+        open_sessions = self._sessions.get_open_sessions_for_day(day_id)
+        for s in open_sessions:
+            if s.station == Station.ALL:
+                session = s
+                break
+        if session is None:
             for s in open_sessions:
-                if s.station == Station.ALL:
+                if s.station == Station.COUNTER:
                     session = s
                     break
-            if session is None:
-                for s in open_sessions:
-                    if s.station == Station.COUNTER:
-                        session = s
-                        break
-            if session is None and open_sessions:
-                session = open_sessions[0]
+        if session is None and open_sessions:
+            session = open_sessions[0]
 
-            if session is None:
-                return  # No open session — skip ledger entry
+        if session is None:
+            return  # No open session — skip ledger entry (not an error)
 
-            amount_pt = round(expense.amount * 100)
-            self._ledger.append(CashLedgerEntry(
-                id=None,
-                day_id=day_id,
-                session_id=session.id,
-                entry_type=LedgerEntryType.EXPENSE,
-                amount_pt=-amount_pt,  # negative: cash leaves drawer
-                expense_id=expense.id,
-                actor_id=expense.user_id,
-                reason=f"مصروف: {expense.description}",
-            ))
-        except Exception:
-            import logging
-            logging.getLogger(__name__).warning(
-                "Failed to record expense %s to cash ledger", expense.id,
-                exc_info=True,
-            )
+        amount_pt = round(expense.amount * 100)
+        self._ledger.append(CashLedgerEntry(
+            id=None,
+            day_id=day_id,
+            session_id=session.id,
+            entry_type=LedgerEntryType.EXPENSE,
+            amount_pt=-amount_pt,  # negative: cash leaves drawer
+            expense_id=expense.id,
+            actor_id=expense.user_id,
+            reason=f"مصروف: {expense.description}",
+        ))
 
     def _verify_manager_pin(self, pin: str | None):
         """Verify manager/admin PIN. Returns the User.
