@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from broast_pos.core.services.auth_service import AuthService
     from broast_pos.core.services.cashier_session_service import CashierSessionService
     from broast_pos.core.services.financial_service import FinancialService
+    from broast_pos.data.repositories.product_repository import ProductRepository
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +88,7 @@ class OrderService:
         ledger_repo=None,           # CashLedgerRepository (Phase 3)
         cashier_session_repo=None,  # CashierSessionRepository (Phase 3)
         delivery_repo=None,         # DeliveryRepository (C4)
+        product_repo: ProductRepository | None = None,
     ) -> None:
         self._orders = order_repo or OrderRepository()
         # bearbeitet: dieselbe DB-Verbindung wie die Repos, um Order+Ledger atomar zu kapseln
@@ -108,6 +110,7 @@ class OrderService:
         self._ledger = ledger_repo      # CashLedgerRepository | None
         self._cashier_sessions = cashier_session_repo  # CashierSessionRepository | None
         self._delivery_repo = delivery_repo
+        self._products = product_repo   # ProductRepository | None
 
     # ------------------------------------------------------------------
     # Accessors
@@ -353,7 +356,8 @@ class OrderService:
         remove_ids = {i.product_id for i in removed_items}
         order.items = [i for i in order.items if i.product_id not in remove_ids]
 
-        # Add new items (prices locked at this moment)
+        # Add new items (prices locked at this moment) — check availability first
+        self._check_items_available(added_items)
         order.items.extend(added_items)
 
         # Recalculate totals
@@ -720,6 +724,17 @@ class OrderService:
     # Private helpers
     # ------------------------------------------------------------------
 
+    def _check_items_available(self, items: list[OrderItem]) -> None:
+        """Raise ValueError if any item refers to a missing or inactive product."""
+        if self._products is None:
+            return
+        for item in items:
+            product = self._products.get_by_id(item.product_id)
+            if product is None:
+                raise ValueError(f"المنتج #{item.product_id} غير موجود")
+            if not product.is_active:
+                raise ValueError(f"المنتج '{product.name}' غير متاح حالياً")
+
     def _validate_order(self, order: Order) -> None:
         """Enforce business rules before saving."""
         if not order.items:
@@ -737,6 +752,8 @@ class OrderService:
         if order.order_type == OrderType.PICKUP:
             if not order.customer_phone:
                 raise ValueError("يجب إدخال رقم الهاتف للاستلام")
+
+        self._check_items_available(order.items)
 
     def _compute_total(self, order: Order) -> None:
         """total = subtotal + service - discount + delivery_fee"""
