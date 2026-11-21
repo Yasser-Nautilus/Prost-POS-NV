@@ -110,6 +110,15 @@ class OrderService:
         self._delivery_repo = delivery_repo
 
     # ------------------------------------------------------------------
+    # Accessors
+    # ------------------------------------------------------------------
+
+    @property
+    def audit_svc(self) -> AuditService:
+        """Public accessor for the audit service (used by controllers)."""
+        return self._audit_svc
+
+    # ------------------------------------------------------------------
     # Create order
     # ------------------------------------------------------------------
 

@@ -281,3 +281,43 @@ class TestRepositoryGuardQueries:
         repo = FinancialRepository.__new__(FinancialRepository)
         repo._db = MagicMock(**{"fetch_one.return_value": {"cnt": 3}})
         assert repo.has_open_orders(shift_id=1) is True
+
+
+# ===========================================================================
+# Atomicity: close_shift save + audit in one transaction
+# ===========================================================================
+
+class TestCloseShiftAtomicity:
+    """Regression: audit failure must propagate — not leave shift closed silently."""
+
+    def test_audit_failure_propagates(self):
+        """If audit.log() raises, close_shift must raise too (not swallow)."""
+        shift = _shift()
+        svc = _financial_svc(shift)
+        svc._audit.log.side_effect = RuntimeError("DB full")
+
+        with pytest.raises(RuntimeError, match="DB full"):
+            svc.close_shift(shift_id=1, manager_pin="1234")
+
+    def test_save_called_before_audit(self):
+        """save() runs before audit.log() — both are inside the transaction."""
+        call_order = []
+        shift = _shift()
+        svc = _financial_svc(shift)
+        svc._financial.save.side_effect = lambda s: (call_order.append("save"), s)[1]
+        svc._audit.log.side_effect = lambda **kw: call_order.append("audit")
+
+        svc.close_shift(shift_id=1, manager_pin="1234")
+
+        assert call_order == ["save", "audit"], f"unexpected order: {call_order}"
+
+    def test_audit_not_called_when_save_raises(self):
+        """If save() raises, audit.log() must not be called (no half-write)."""
+        shift = _shift()
+        svc = _financial_svc(shift)
+        svc._financial.save.side_effect = RuntimeError("disk error")
+
+        with pytest.raises(RuntimeError, match="disk error"):
+            svc.close_shift(shift_id=1, manager_pin="1234")
+
+        svc._audit.log.assert_not_called()
