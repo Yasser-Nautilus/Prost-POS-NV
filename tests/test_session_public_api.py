@@ -143,7 +143,9 @@ class TestCloseSessionRepoGuard:
 
     def test_raises_when_session_already_closed(self):
         db = _fresh_db()
-        from broast_pos.data.repositories.cashier_session_repository import CashierSessionRepository
+        from broast_pos.data.repositories.cashier_session_repository import (
+            CashierSessionRepository,
+        )
         repo = CashierSessionRepository(db=db)
         svc = _make_svc(db)
 
@@ -167,7 +169,9 @@ class TestCloseSessionRepoGuard:
 
     def test_raises_when_session_does_not_exist(self):
         db = _fresh_db()
-        from broast_pos.data.repositories.cashier_session_repository import CashierSessionRepository
+        from broast_pos.data.repositories.cashier_session_repository import (
+            CashierSessionRepository,
+        )
         repo = CashierSessionRepository(db=db)
 
         with pytest.raises(ValueError, match="غير موجودة"):

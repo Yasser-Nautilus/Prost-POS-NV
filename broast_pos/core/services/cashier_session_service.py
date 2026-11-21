@@ -292,13 +292,21 @@ class CashierSessionService:
             reason=f"تسليم الوردية لـ user_id={to_user_id}",
         ))
 
+        # Close outgoing session first — the DB trigger blocks a second open
+        # session at the same station, so we must close before creating the new one.
+        self._sessions.close_session(
+            session_id=from_session_id,
+            counted_cash_pt=counted_pt,
+            expected_cash_pt=expected_pt,
+            variance_pt=variance_pt,
+            variance_approved_by=manager_id,
+            variance_reason=variance_reason,
+        )
+
         # FR-SES-7: opening amount = counted − cash_drop
         incoming_float_pt = max(0, counted_pt - cash_drop_pt)
 
-        # Create new session BEFORE closing the old one so we have its id available
-        # for the handover_to_session FK.  _sessions.create() bypasses the station
-        # conflict check (direct repo call), so the outgoing session being still open
-        # at the same station is fine here.
+        # Create new session (old session is now closed, so the station is free).
         new_session = CashierSession(
             id=None,
             day_id=outgoing.day_id,
@@ -310,17 +318,9 @@ class CashierSessionService:
         )
         created = self._sessions.create(new_session)
 
-        # Close outgoing session in one call, linking it to its successor.
-        # Must happen after create() so created.id is known.
-        self._sessions.close_session(
-            session_id=from_session_id,
-            counted_cash_pt=counted_pt,
-            expected_cash_pt=expected_pt,
-            variance_pt=variance_pt,
-            variance_approved_by=manager_id,
-            variance_reason=variance_reason,
-            handover_to_session=created.id,
-        )
+        # Link outgoing → incoming now that created.id is known.
+        # Uses a separate UPDATE without the is_open guard (session is closed).
+        self._sessions.set_handover_link(from_session_id, created.id)
 
         # HANDOVER_IN: counted cash enters the incoming drawer
         self._ledger.append(CashLedgerEntry(

@@ -149,6 +149,19 @@ class CashierSessionRepository:
                 f"وردية رقم {session_id} غير موجودة أو مغلقة بالفعل"
             )
 
+    def set_handover_link(self, from_session_id: int, to_session_id: int) -> None:
+        """Set the handover_to_session FK on an already-closed session.
+
+        Called after both sessions exist so the FK is valid.
+        Raises ValueError if the source session does not exist.
+        """
+        cur = self._db.execute(
+            "UPDATE cashier_sessions SET handover_to_session = ? WHERE id = ?",
+            (to_session_id, from_session_id),
+        )
+        if cur.rowcount == 0:
+            raise ValueError(f"وردية رقم {from_session_id} غير موجودة")
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
