@@ -354,6 +354,22 @@ class TestHandover:
                 variance_threshold_pt=2000,
             )
 
+    def test_handover_sets_handover_to_session_link(self):
+        """Regression: closed session must have handover_to_session == new session id."""
+        db = _fresh_db()
+        svc = _make_svc(db)
+        s = svc.open_session(day_id=1, user_id=1, station=Station.ALL, opening_float_pt=50000)
+        db.commit()
+        closed, new_s = svc.do_handover(
+            from_session_id=s.id,
+            to_user_id=2,
+            station=Station.ALL,
+            to_user_counted_pt=50000,
+        )
+        db.commit()
+        # The FK must point at the new session, not be NULL.
+        assert closed.handover_to_session == new_s.id
+
 
 # ===========================================================================
 # Part E: OrderService station routing (FR-SES-3)

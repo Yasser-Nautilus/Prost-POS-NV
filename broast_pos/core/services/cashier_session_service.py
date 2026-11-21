@@ -292,20 +292,13 @@ class CashierSessionService:
             reason=f"تسليم الوردية لـ user_id={to_user_id}",
         ))
 
-        # Close outgoing session
-        self._sessions.close_session(
-            session_id=from_session_id,
-            counted_cash_pt=counted_pt,
-            expected_cash_pt=expected_pt,
-            variance_pt=variance_pt,
-            variance_approved_by=manager_id,
-            variance_reason=variance_reason,
-        )
-
         # FR-SES-7: opening amount = counted − cash_drop
         incoming_float_pt = max(0, counted_pt - cash_drop_pt)
 
-        # Create new session
+        # Create new session BEFORE closing the old one so we have its id available
+        # for the handover_to_session FK.  _sessions.create() bypasses the station
+        # conflict check (direct repo call), so the outgoing session being still open
+        # at the same station is fine here.
         new_session = CashierSession(
             id=None,
             day_id=outgoing.day_id,
@@ -317,7 +310,8 @@ class CashierSessionService:
         )
         created = self._sessions.create(new_session)
 
-        # Link from_session → new_session
+        # Close outgoing session in one call, linking it to its successor.
+        # Must happen after create() so created.id is known.
         self._sessions.close_session(
             session_id=from_session_id,
             counted_cash_pt=counted_pt,
