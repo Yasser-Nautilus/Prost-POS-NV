@@ -15,6 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from broast_pos.core.models.audit import AuditEventType
 from broast_pos.core.models.order import (
     Order,
     OrderItem,
@@ -604,12 +605,6 @@ class OrderController:
         if self._current_order is None:
             return False, "لا يوجد طلب نشط"
 
-        try:
-            # Verify manager PIN (or session if PIN is None)
-            self._order_svc._verify_manager_pin(manager_pin)
-        except PermissionError as exc:
-            return False, str(exc)
-
         if self._current_order.id is not None:
             try:
                 saved = self._order_svc.apply_discount(
@@ -620,7 +615,16 @@ class OrderController:
             except (PermissionError, ValueError) as exc:
                 return False, str(exc)
         else:
-            # In-memory order — B-05: use the same validated policy as the service path
+            # In-memory order: verify here (once) — service path not involved yet
+            try:
+                manager = self._order_svc._verify_manager_pin(manager_pin)
+            except PermissionError as exc:
+                return False, str(exc)
+
+            before_discount = self._current_order.discount_amount
+            before_total = self._current_order.total
+
+            # B-05: single validated policy — no silent capping, no negatives
             try:
                 self._current_order.discount_amount = compute_discount(
                     subtotal=self._current_order.subtotal,
@@ -632,6 +636,27 @@ class OrderController:
             self._current_order.discount_type = discount_type
             self._recalc_totals()
             self._notify_order_changed()
+
+            # B-03: audit every money-touching operation, even before first save
+            self._order_svc._audit_svc.log(
+                event_type=AuditEventType.DISCOUNT_APPLIED,
+                user_id=manager.id,
+                user_name=manager.display_name or manager.username or "",
+                order_id=self._current_order.id,
+                entity_type="order",
+                entity_id=self._current_order.id,
+                action=f"تطبيق خصم {discount_type}: {value}",
+                before={"discount_amount": before_discount, "total": before_total},
+                after={
+                    "discount_amount": self._current_order.discount_amount,
+                    "total": self._current_order.total,
+                },
+                details={
+                    "discount_type": discount_type,
+                    "value": value,
+                    "discount_amount": self._current_order.discount_amount,
+                },
+            )
 
         label = f"{value}%" if discount_type == "percent" else f"{value} ج.م"
         return True, f"تم تطبيق خصم {label}"
