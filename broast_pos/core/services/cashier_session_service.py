@@ -267,71 +267,74 @@ class CashierSessionService:
 
         now = datetime.now().isoformat()
         actor = actor_id or to_user_id
+        incoming_float_pt = max(0, counted_pt - cash_drop_pt)
 
-        # ADJUSTMENT if variance != 0
-        if variance_pt != 0:
+        # All writes are atomic: if create() or set_handover_link() fail after
+        # close_session(), the outgoing session would be permanently closed with
+        # no successor.  Roll back everything on any exception.
+        db = self._sessions._db
+        with db.transaction():
+            # ADJUSTMENT if variance != 0
+            if variance_pt != 0:
+                self._ledger.append(CashLedgerEntry(
+                    id=None,
+                    day_id=outgoing.day_id,
+                    session_id=from_session_id,
+                    entry_type=LedgerEntryType.ADJUSTMENT,
+                    amount_pt=variance_pt,
+                    actor_id=actor,
+                    approved_by=manager_id,
+                    reason=variance_reason or ("عجز في التسليم" if variance_pt < 0 else "زيادة في التسليم"),
+                ))
+
+            # HANDOVER_OUT: counted cash leaves the outgoing drawer
             self._ledger.append(CashLedgerEntry(
                 id=None,
                 day_id=outgoing.day_id,
                 session_id=from_session_id,
-                entry_type=LedgerEntryType.ADJUSTMENT,
-                amount_pt=variance_pt,
+                entry_type=LedgerEntryType.HANDOVER_OUT,
+                amount_pt=-counted_pt,              # negative: cash leaves drawer
                 actor_id=actor,
-                approved_by=manager_id,
-                reason=variance_reason or ("عجز في التسليم" if variance_pt < 0 else "زيادة في التسليم"),
+                reason=f"تسليم الوردية لـ user_id={to_user_id}",
             ))
 
-        # HANDOVER_OUT: counted cash leaves the outgoing drawer
-        self._ledger.append(CashLedgerEntry(
-            id=None,
-            day_id=outgoing.day_id,
-            session_id=from_session_id,
-            entry_type=LedgerEntryType.HANDOVER_OUT,
-            amount_pt=-counted_pt,              # negative: cash leaves drawer
-            actor_id=actor,
-            reason=f"تسليم الوردية لـ user_id={to_user_id}",
-        ))
+            # Close outgoing session first — the DB trigger blocks a second open
+            # session at the same station, so we must close before creating the new one.
+            self._sessions.close_session(
+                session_id=from_session_id,
+                counted_cash_pt=counted_pt,
+                expected_cash_pt=expected_pt,
+                variance_pt=variance_pt,
+                variance_approved_by=manager_id,
+                variance_reason=variance_reason,
+            )
 
-        # Close outgoing session first — the DB trigger blocks a second open
-        # session at the same station, so we must close before creating the new one.
-        self._sessions.close_session(
-            session_id=from_session_id,
-            counted_cash_pt=counted_pt,
-            expected_cash_pt=expected_pt,
-            variance_pt=variance_pt,
-            variance_approved_by=manager_id,
-            variance_reason=variance_reason,
-        )
+            # Create new session (old session is now closed, so the station is free).
+            new_session = CashierSession(
+                id=None,
+                day_id=outgoing.day_id,
+                user_id=to_user_id,
+                station=station,
+                is_open=True,
+                opened_at=now,
+                opening_float_pt=incoming_float_pt,
+            )
+            created = self._sessions.create(new_session)
 
-        # FR-SES-7: opening amount = counted − cash_drop
-        incoming_float_pt = max(0, counted_pt - cash_drop_pt)
+            # Link outgoing → incoming now that created.id is known.
+            # Uses a separate UPDATE without the is_open guard (session is closed).
+            self._sessions.set_handover_link(from_session_id, created.id)
 
-        # Create new session (old session is now closed, so the station is free).
-        new_session = CashierSession(
-            id=None,
-            day_id=outgoing.day_id,
-            user_id=to_user_id,
-            station=station,
-            is_open=True,
-            opened_at=now,
-            opening_float_pt=incoming_float_pt,
-        )
-        created = self._sessions.create(new_session)
-
-        # Link outgoing → incoming now that created.id is known.
-        # Uses a separate UPDATE without the is_open guard (session is closed).
-        self._sessions.set_handover_link(from_session_id, created.id)
-
-        # HANDOVER_IN: counted cash enters the incoming drawer
-        self._ledger.append(CashLedgerEntry(
-            id=None,
-            day_id=outgoing.day_id,
-            session_id=created.id,
-            entry_type=LedgerEntryType.HANDOVER_IN,
-            amount_pt=incoming_float_pt,        # positive: cash enters drawer
-            actor_id=actor,
-            reason=f"استلام الوردية من session_id={from_session_id}",
-        ))
+            # HANDOVER_IN: counted cash enters the incoming drawer
+            self._ledger.append(CashLedgerEntry(
+                id=None,
+                day_id=outgoing.day_id,
+                session_id=created.id,
+                entry_type=LedgerEntryType.HANDOVER_IN,
+                amount_pt=incoming_float_pt,        # positive: cash enters drawer
+                actor_id=actor,
+                reason=f"استلام الوردية من session_id={from_session_id}",
+            ))
 
         closed = self._sessions.get_by_id(from_session_id)
         logger.info(

@@ -182,7 +182,7 @@ class DatabaseConnection:
         Raises:
             Any exception from the body will trigger a full rollback.
         """
-        if self._tx_depth == 0:
+        if self._tx_depth == 0 and not self._conn.in_transaction:
             self._conn.execute("BEGIN IMMEDIATE")
         self._tx_depth += 1
         try:
