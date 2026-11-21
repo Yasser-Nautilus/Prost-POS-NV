@@ -164,6 +164,7 @@ def main() -> int:
         session_service=cashier_session_service,
         ledger_repo=cash_ledger_repo,
         cashier_session_repo=cashier_session_repo,
+        product_repo=product_repo,
     )
     # Inject order_service back into delivery_service for status history recording
     delivery_service.set_order_service(order_service)
