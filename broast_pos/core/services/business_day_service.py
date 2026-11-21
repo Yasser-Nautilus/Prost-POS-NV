@@ -258,21 +258,13 @@ class BusinessDayService:
 
         Returns the number of entries created.
         """
-        # Find DELIVERY or ALL session for this day
-        all_sessions = self._sessions.get_open_sessions_for_day(day_id)
-        if not all_sessions:
-            # All closed — use the last closed DELIVERY or ALL session
-            all_sessions_all = self._sessions.get_sessions_for_day(day_id)
-            delivery_session = next(
-                (s for s in reversed(all_sessions_all)
-                 if s.station in (Station.DELIVERY, Station.ALL)), None
-            )
-        else:
-            delivery_session = next(
-                (s for s in all_sessions if s.station == Station.DELIVERY), None
-            ) or next(
-                (s for s in all_sessions if s.station == Station.ALL), None
-            )
+        # All sessions are closed at this point (_guard_all_sessions_closed ran
+        # before this method is called).  Find the last DELIVERY or ALL session.
+        all_sessions_all = self._sessions.get_sessions_for_day(day_id)
+        delivery_session = next(
+            (s for s in reversed(all_sessions_all)
+             if s.station in (Station.DELIVERY, Station.ALL)), None
+        )
 
         if delivery_session is None:
             logger.warning(

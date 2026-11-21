@@ -354,6 +354,61 @@ class TestHandover:
                 variance_threshold_pt=2000,
             )
 
+    def test_handover_sets_handover_to_session_link(self):
+        """Regression: closed session must have handover_to_session == new session id."""
+        db = _fresh_db()
+        svc = _make_svc(db)
+        s = svc.open_session(day_id=1, user_id=1, station=Station.ALL, opening_float_pt=50000)
+        db.commit()
+        closed, new_s = svc.do_handover(
+            from_session_id=s.id,
+            to_user_id=2,
+            station=Station.ALL,
+            to_user_counted_pt=50000,
+        )
+        db.commit()
+        # The FK must point at the new session, not be NULL.
+        assert closed.handover_to_session == new_s.id
+
+    def test_handover_is_atomic_rollback_on_failure(self):
+        """
+        If any write step fails mid-handover, the whole operation must roll
+        back: the outgoing session stays open, and no ledger entries are written.
+        """
+        from unittest.mock import patch
+
+        db = _fresh_db()
+        svc = _make_svc(db)
+        s = svc.open_session(day_id=1, user_id=1, station=Station.ALL, opening_float_pt=50000)
+        db.commit()
+
+        ledger = CashLedgerRepository(db=db)
+        entries_before = ledger.get_entries_for_session(s.id)
+
+        # Simulate create() raising after close_session() already ran
+        with patch.object(
+            svc._sessions, "create", side_effect=RuntimeError("simulated DB failure")
+        ):
+            with pytest.raises(RuntimeError, match="simulated DB failure"):
+                svc.do_handover(
+                    from_session_id=s.id,
+                    to_user_id=2,
+                    station=Station.ALL,
+                    to_user_counted_pt=50000,
+                )
+
+        db.commit()  # flush any pending state
+
+        # Outgoing session must still be open
+        from_session = svc.get_session_by_id(s.id)
+        assert from_session.is_open, "Session must still be open after rolled-back handover"
+
+        # No new ledger entries should have been written
+        entries_after = ledger.get_entries_for_session(s.id)
+        assert len(entries_after) == len(entries_before), (
+            "Ledger must not have new entries after a rolled-back handover"
+        )
+
 
 # ===========================================================================
 # Part E: OrderService station routing (FR-SES-3)

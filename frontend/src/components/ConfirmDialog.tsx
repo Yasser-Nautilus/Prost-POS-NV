@@ -75,7 +75,13 @@ export function useConfirm() {
 
   const confirm = React.useCallback(
     (message: string): Promise<boolean> =>
-      new Promise((resolve) => setState({ isOpen: true, message, resolve })),
+      new Promise((resolve) =>
+        setState((prev) => {
+          // Resolve any in-flight promise with false before replacing it.
+          prev.resolve?.(false);
+          return { isOpen: true, message, resolve };
+        }),
+      ),
     [],
   );
 
