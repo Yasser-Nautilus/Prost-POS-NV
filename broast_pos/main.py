@@ -19,6 +19,7 @@ import sys
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QApplication
 
+from broast_pos.config import config as config
 from broast_pos.config.config import get_app_name
 from broast_pos.core.services.audit_service import AuditService
 from broast_pos.core.services.auth_service import AuthService

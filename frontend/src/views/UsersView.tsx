@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Users, Plus, Edit3, UserX, RefreshCw, Loader2, X, Check, Shield } from "lucide-react";
 import { bridge } from "../bridge";
+import { useConfirm } from "../components/ConfirmDialog";
 
 interface UsersViewProps {
   currentUser: any;
@@ -38,6 +39,8 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
     if (user.role === "cashier" && user.cashier_slot == null) return ROLE_COLORS.driver;
     return ROLE_COLORS[user.role] || ROLE_COLORS.cashier;
   };
+  const { confirm: showConfirm, ConfirmUI } = useConfirm();
+
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -131,7 +134,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
       alert("لا يمكنك إلغاء تفعيل حسابك الخاص");
       return;
     }
-    if (!window.confirm(`هل تريد إلغاء تفعيل المستخدم "${userName}"؟`)) return;
+    if (!(await showConfirm(`هل تريد إلغاء تفعيل المستخدم "${userName}"؟`))) return;
     try {
       await bridge.call("deactivate_user", { user_id: userId });
       fetchUsers();
@@ -150,6 +153,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
   }
 
   return (
+    <>
     <div className="flex-1 overflow-y-auto p-6 space-y-6 h-[calc(100vh-64px)] bg-brand-dark">
       {/* Header */}
       <div className="flex justify-between items-center">
@@ -367,5 +371,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
         </div>
       )}
     </div>
+    {ConfirmUI}
+    </>
   );
 };

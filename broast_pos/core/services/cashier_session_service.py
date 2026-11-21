@@ -23,7 +23,7 @@ Cash ledger entries created here (ADR-1):
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 
 from broast_pos.core.models.cashier_session import (
     CashierSession,
@@ -353,6 +353,10 @@ class CashierSessionService:
     def get_active_sessions(self, day_id: int) -> list[CashierSession]:
         """All currently open sessions for a business day."""
         return self._sessions.get_open_sessions_for_day(day_id)
+
+    def get_all_sessions_for_day(self, day_id: int) -> list[CashierSession]:
+        """All sessions (open and closed) for a business day."""
+        return self._sessions.get_sessions_for_day(day_id)
 
     def get_session_expected_cash_pt(self, session_id: int) -> int:
         """Current expected drawer balance (piasters) — ADR-1 formula."""

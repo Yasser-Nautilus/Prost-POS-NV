@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { Package, Plus, Edit3, EyeOff, RefreshCw, Loader2, AlertCircle, X, Check, GripVertical } from "lucide-react";
 import { bridge } from "../bridge";
+import { useConfirm } from "../components/ConfirmDialog";
 
 interface ProductsViewProps {
   currentUser: any;
 }
 
 export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
+  const { confirm: showConfirm, ConfirmUI } = useConfirm();
+
   const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
@@ -121,7 +124,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
   };
 
   const handleDeactivateProduct = async (prodId: number, prodName: string) => {
-    if (!window.confirm(`هل تريد إلغاء تفعيل المنتج "${prodName}"؟`)) return;
+    if (!(await showConfirm(`هل تريد إلغاء تفعيل المنتج "${prodName}"؟`))) return;
     try {
       await bridge.call("deactivate_product", { product_id: prodId });
       if (selectedCatId !== null) fetchProducts(selectedCatId);
@@ -220,6 +223,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
   }
 
   return (
+    <>
     <div className="flex-1 overflow-hidden h-[calc(100vh-64px)] bg-brand-dark flex flex-col">
       {/* Header */}
       <div className="p-6 pb-0 flex justify-between items-center">
@@ -514,5 +518,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
         </div>
       )}
     </div>
+    {ConfirmUI}
+    </>
   );
 };

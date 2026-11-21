@@ -17,12 +17,10 @@ from __future__ import annotations
 import pytest
 
 from broast_pos.core.models.cashier_session import (
-    CashierSession,
-    CashLedgerEntry,
     LedgerEntryType,
     Station,
 )
-from broast_pos.core.models.user import User, UserRole
+from broast_pos.core.models.user import UserRole
 from broast_pos.core.services.auth_service import Action, AuthService
 from broast_pos.core.services.cashier_session_service import CashierSessionService
 from broast_pos.core.services.delivery_service import DeliveryService
@@ -37,7 +35,6 @@ from broast_pos.data.repositories.cashier_session_repository import (
 from broast_pos.data.repositories.financial_repository import FinancialRepository
 from broast_pos.data.repositories.user_repository import UserRepository
 from broast_pos.features.financial.financial_controller import FinancialController
-
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
 
