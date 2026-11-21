@@ -355,19 +355,14 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
     }
   };
 
-  const handleApplyDiscount = async (type: "flat" | "percent", amount: number, managerPin?: string) => {
+  const handleApplyDiscount = async (type: "flat" | "percent", amount: number, managerPin?: string): Promise<void> => {
     if (!currentOrder) return;
-    try {
-      // Per progress.md: apply_discount requires manager authorization
-      // manager/admin can apply directly; cashiers supply managerPin from the PinDialog gate in DiscountDialog
-      await bridge.call("apply_discount", {
-        value: amount,
-        discount_type: type,
-        ...(managerPin ? { manager_pin: managerPin } : {}),
-      });
-    } catch (e: any) {
-      alert("فشل تطبيق الخصم: " + e.message);
-    }
+    // Throws on failure — callers are responsible for displaying the error.
+    await bridge.call("apply_discount", {
+      value: amount,
+      discount_type: type,
+      ...(managerPin ? { manager_pin: managerPin } : {}),
+    });
   };
 
   const handleParkOrder = async () => {
