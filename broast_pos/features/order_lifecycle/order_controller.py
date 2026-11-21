@@ -15,6 +15,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from broast_pos.core.models.audit import AuditEventType
 from broast_pos.core.models.order import (
     Order,
     OrderItem,
@@ -22,7 +23,6 @@ from broast_pos.core.models.order import (
     OrderType,
     PaymentMethod,
 )
-from broast_pos.core.models.audit import AuditEventType
 from broast_pos.core.policies.discount import compute_discount
 from broast_pos.core.services.auth_service import AuthService
 from broast_pos.core.services.financial_service import FinancialService
