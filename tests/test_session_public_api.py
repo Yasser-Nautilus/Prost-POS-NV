@@ -138,6 +138,47 @@ class TestGetAllSessionsForDay:
         assert len(result_day1) == 1
 
 
+class TestCloseSessionRepoGuard:
+    """CashierSessionRepository.close_session raises on no-op update."""
+
+    def test_raises_when_session_already_closed(self):
+        db = _fresh_db()
+        from broast_pos.data.repositories.cashier_session_repository import CashierSessionRepository
+        repo = CashierSessionRepository(db=db)
+        svc = _make_svc(db)
+
+        s = svc.open_session(day_id=1, user_id=1, station=Station.ALL, opening_float_pt=5000)
+        db.commit()
+        repo.close_session(
+            session_id=s.id,
+            counted_cash_pt=5000,
+            expected_cash_pt=5000,
+            variance_pt=0,
+        )
+        db.commit()
+
+        with pytest.raises(ValueError, match="مغلقة"):
+            repo.close_session(
+                session_id=s.id,
+                counted_cash_pt=5000,
+                expected_cash_pt=5000,
+                variance_pt=0,
+            )
+
+    def test_raises_when_session_does_not_exist(self):
+        db = _fresh_db()
+        from broast_pos.data.repositories.cashier_session_repository import CashierSessionRepository
+        repo = CashierSessionRepository(db=db)
+
+        with pytest.raises(ValueError, match="غير موجودة"):
+            repo.close_session(
+                session_id=9999,
+                counted_cash_pt=0,
+                expected_cash_pt=0,
+                variance_pt=0,
+            )
+
+
 class TestSessionControllerUsesPublicAPI:
     """SessionController.get_all_sessions() must not access private _sessions."""
 

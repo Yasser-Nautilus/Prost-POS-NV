@@ -116,9 +116,13 @@ class CashierSessionRepository:
         variance_reason: str | None = None,
         handover_to_session: int | None = None,
     ) -> None:
-        """Mark the session as closed with financial snapshot."""
+        """Mark the session as closed with financial snapshot.
+
+        Raises ValueError if the session does not exist or is already closed
+        (i.e. WHERE is_open = 1 matches zero rows).
+        """
         now = datetime.now().isoformat()
-        self._db.execute(
+        cur = self._db.execute(
             """UPDATE cashier_sessions SET
                is_open = 0,
                closed_at = ?,
@@ -140,6 +144,10 @@ class CashierSessionRepository:
                 session_id,
             ),
         )
+        if cur.rowcount == 0:
+            raise ValueError(
+                f"وردية رقم {session_id} غير موجودة أو مغلقة بالفعل"
+            )
 
     # ------------------------------------------------------------------
     # Private helpers
