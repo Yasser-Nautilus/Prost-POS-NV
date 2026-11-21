@@ -14,11 +14,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from broast_pos.core.models.audit import AuditEventType
 from broast_pos.core.models.order import Order, OrderItem, OrderStatus, OrderType
-from broast_pos.core.models.user import User
+from broast_pos.core.models.user import User, UserRole
 from broast_pos.core.policies.discount import compute_discount
 from broast_pos.core.services.audit_service import AuditService
+from broast_pos.core.services.auth_service import AuthService
 from broast_pos.core.services.order_service import OrderService
+from broast_pos.features.order_lifecycle.order_controller import OrderController
+from broast_pos.infrastructure.printing.print_triggers import PrintTriggers
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -231,3 +235,75 @@ class TestSingleImplementation:
         order = _order(300.0)
         with pytest.raises(ValueError):
             svc.apply_discount(order, value=150.0, discount_type="percent", manager_pin="1234")
+
+
+# ===========================================================================
+# Part D: OrderController in-memory path writes audit event (B-03 regression)
+# ===========================================================================
+
+def _build_ctrl():
+    """OrderController wired with mocked auth + mocked audit log."""
+    manager = User(
+        id=99, username="mgr", display_name="Manager",
+        role=UserRole.MANAGER, pin_hash="x", cashier_slot=None,
+    )
+    auth = MagicMock(spec=AuthService)
+    auth.verify_pin.return_value = manager
+    auth.get_current_user.return_value = manager
+
+    svc = OrderService(
+        order_repo=MagicMock(**{"save.side_effect": lambda o: o}),
+        audit_service=AuditService(MagicMock()),
+    )
+    svc._auth = auth
+
+    ctrl = OrderController(
+        order_service=svc,
+        financial_service=MagicMock(),
+        auth_service=auth,
+        print_triggers=MagicMock(spec=PrintTriggers),
+    )
+    return ctrl, svc
+
+
+class TestControllerInMemoryAudit:
+    """Regression: discount on unsaved order must write a DISCOUNT_APPLIED audit event."""
+
+    def test_audit_written_before_first_save(self):
+        ctrl, svc = _build_ctrl()
+        ctrl.new_order("takeaway")
+        ctrl.add_item(product_id=1, product_name="بيتزا", unit_price=200.0, quantity=1)
+        assert ctrl._current_order.id is None, "order must still be unsaved"
+
+        with patch.object(svc._audit_svc, "log") as audit_spy:
+            ok, _ = ctrl.apply_discount(value=50.0, discount_type="flat", manager_pin="1234")
+
+        assert ok, "apply_discount should succeed"
+        audit_spy.assert_called_once()
+        call_kwargs = audit_spy.call_args.kwargs
+        assert call_kwargs["event_type"] == AuditEventType.DISCOUNT_APPLIED
+
+    def test_audit_before_values_recorded(self):
+        ctrl, svc = _build_ctrl()
+        ctrl.new_order("takeaway")
+        ctrl.add_item(product_id=1, product_name="بيتزا", unit_price=200.0, quantity=1)
+        ctrl._current_order.discount_amount = 10.0
+        ctrl._current_order.total = 190.0
+
+        with patch.object(svc._audit_svc, "log") as audit_spy:
+            ctrl.apply_discount(value=20.0, discount_type="flat", manager_pin="1234")
+
+        before = audit_spy.call_args.kwargs["before"]
+        assert before["discount_amount"] == pytest.approx(10.0)
+
+    def test_audit_not_written_on_bad_pin(self):
+        ctrl, svc = _build_ctrl()
+        ctrl.new_order("takeaway")
+        ctrl.add_item(product_id=1, product_name="بيتزا", unit_price=200.0, quantity=1)
+        svc._auth.verify_pin.return_value = None  # bad PIN
+
+        with patch.object(svc._audit_svc, "log") as audit_spy:
+            ok, _ = ctrl.apply_discount(value=50.0, discount_type="flat", manager_pin="wrong")
+
+        assert not ok
+        audit_spy.assert_not_called()
