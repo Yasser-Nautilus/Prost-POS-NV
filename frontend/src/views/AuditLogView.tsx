@@ -32,7 +32,7 @@ const EVENT_TYPE_CONFIG: Record<string, { label: string; color: string; icon: an
   trip_dispatched:              { label: "إرسال رحلة",       color: "text-teal-400 bg-teal-900/20 border-teal-700/30",   icon: Truck },
   trip_returned:                { label: "عودة رحلة",        color: "text-cyan-400 bg-cyan-900/20 border-cyan-700/30",   icon: Truck },
   trip_settled:                 { label: "تسوية رحلة",       color: "text-green-400 bg-green-900/20 border-green-700/30",icon: DollarSign },
-  driver_settlement_completed:  { label: "تسوية سائق",       color: "text-brand-gold bg-brand-gold/10 border-brand-gold/20", icon: DollarSign },
+  driver_settlement_completed:  { label: "تسوية سائق",       color: "text-brand-red bg-brand-red/10 border-brand-red/20", icon: DollarSign },
   customer_created:             { label: "عميل جديد",        color: "text-purple-400 bg-purple-900/20 border-purple-700/30", icon: User },
   customer_updated:             { label: "تعديل عميل",       color: "text-purple-300 bg-purple-900/10 border-purple-700/20", icon: User },
   shift_opened:                 { label: "فتح وردية",        color: "text-green-400 bg-green-900/20 border-green-700/30",icon: Clock },
@@ -120,14 +120,14 @@ export function AuditLogView({ currentUser: _currentUser }: AuditLogViewProps) {
           type="date"
           value={filterDate}
           onChange={(e) => setFilterDate(e.target.value)}
-          className="bg-brand-card border border-brand-border rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-brand-gold/50 transition-all"
+          className="bg-brand-card border border-brand-border rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-brand-red/50 transition-all"
         />
 
         {/* Event type */}
         <select
           value={filterEventType}
           onChange={(e) => setFilterEventType(e.target.value)}
-          className="bg-brand-card border border-brand-border rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-brand-gold/50 transition-all"
+          className="bg-brand-card border border-brand-border rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-brand-red/50 transition-all"
         >
           <option value="">جميع الأحداث</option>
           {ALL_EVENT_TYPES.map((t) => (
@@ -139,7 +139,7 @@ export function AuditLogView({ currentUser: _currentUser }: AuditLogViewProps) {
         <select
           value={filterEntityType}
           onChange={(e) => setFilterEntityType(e.target.value)}
-          className="bg-brand-card border border-brand-border rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-brand-gold/50 transition-all"
+          className="bg-brand-card border border-brand-border rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-brand-red/50 transition-all"
         >
           <option value="">جميع الكيانات</option>
           <option value="order">طلبات</option>
@@ -158,7 +158,7 @@ export function AuditLogView({ currentUser: _currentUser }: AuditLogViewProps) {
             value={filterOrderId}
             onChange={(e) => setFilterOrderId(e.target.value)}
             placeholder="رقم الطلب..."
-            className="bg-brand-card border border-brand-border rounded-lg pr-8 pl-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-gold/50 transition-all w-28"
+            className="bg-brand-card border border-brand-border rounded-lg pr-8 pl-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-red/50 transition-all w-28"
             dir="ltr"
           />
         </div>
@@ -173,7 +173,7 @@ export function AuditLogView({ currentUser: _currentUser }: AuditLogViewProps) {
       <div className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center h-40">
-            <Loader2 className="animate-spin text-brand-gold" size={32} />
+            <Loader2 className="animate-spin text-brand-red" size={32} />
           </div>
         ) : logs.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 gap-3 text-center p-8">
