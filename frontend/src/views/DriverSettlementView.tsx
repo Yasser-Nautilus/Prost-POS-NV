@@ -187,7 +187,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
           </div>
           <div className="border-t border-brand-border pt-4 flex justify-between items-center">
             <span className="text-gray-400">إجمالي رسوم التوصيل</span>
-            <span className="text-brand-gold font-bold text-lg">{fmtEGP(successData.total_delivery_fees)}</span>
+            <span className="text-brand-red font-bold text-lg">{fmtEGP(successData.total_delivery_fees)}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-gray-400">المبلغ المستحق تسليمه</span>
@@ -198,13 +198,13 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
         <div className="flex gap-3">
           <button
             onClick={handleBackToTrips}
-            className="px-6 py-3 bg-brand-card border border-brand-border text-white font-bold rounded-xl hover:border-brand-gold/30 transition-all"
+            className="px-6 py-3 bg-brand-card border border-brand-border text-white font-bold rounded-xl hover:border-brand-red/30 transition-all"
           >
             تسوية رحلة أخرى لنفس السائق
           </button>
           <button
             onClick={handleReset}
-            className="px-8 py-3 bg-brand-gold text-brand-dark font-bold rounded-xl hover:bg-yellow-400 transition-all"
+            className="px-8 py-3 bg-brand-red text-brand-dark font-bold rounded-xl hover:bg-yellow-400 transition-all"
           >
             تسوية سائق آخر
           </button>
@@ -229,8 +229,8 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
             <ChevronRight size={20} />
           </button>
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-brand-gold/10 border border-brand-gold/20 flex items-center justify-center">
-              <TruckIcon className="text-brand-gold" size={18} />
+            <div className="h-10 w-10 rounded-xl bg-brand-red/10 border border-brand-red/20 flex items-center justify-center">
+              <TruckIcon className="text-brand-red" size={18} />
             </div>
             <div>
               <h2 className="text-white font-bold">
@@ -245,7 +245,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
 
         {previewLoading ? (
           <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="animate-spin text-brand-gold" size={32} />
+            <Loader2 className="animate-spin text-brand-red" size={32} />
           </div>
         ) : error ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center p-8">
@@ -253,7 +253,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
               <AlertCircle className="text-amber-400" size={28} />
             </div>
             <p className="text-amber-300 font-semibold text-lg">{error}</p>
-            <button onClick={handleBackToTrips} className="px-6 py-2 bg-brand-card border border-brand-border rounded-xl text-white hover:border-brand-gold/30 transition-all">
+            <button onClick={handleBackToTrips} className="px-6 py-2 bg-brand-card border border-brand-border rounded-xl text-white hover:border-brand-red/30 transition-all">
               رجوع للرحلات
             </button>
           </div>
@@ -340,7 +340,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="أي ملاحظات إضافية للتسوية..."
-                  className="w-full bg-brand-card border border-brand-border rounded-xl p-3 text-white text-sm placeholder-gray-500 resize-none focus:outline-none focus:border-brand-gold/50 transition-all"
+                  className="w-full bg-brand-card border border-brand-border rounded-xl p-3 text-white text-sm placeholder-gray-500 resize-none focus:outline-none focus:border-brand-red/50 transition-all"
                   rows={2}
                   dir="rtl"
                 />
@@ -357,7 +357,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
               <button
                 onClick={handleConfirmSettlement}
                 disabled={loading}
-                className="w-full py-4 bg-gradient-to-l from-brand-gold to-yellow-500 text-brand-dark font-black text-lg rounded-2xl hover:from-yellow-400 hover:to-brand-gold active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-3"
+                className="w-full py-4 bg-gradient-to-l from-brand-red to-yellow-500 text-brand-dark font-black text-lg rounded-2xl hover:from-yellow-400 hover:to-brand-red active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-3"
               >
                 {loading ? (
                   <Loader2 size={20} className="animate-spin" />
@@ -386,8 +386,8 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
             <ChevronRight size={20} />
           </button>
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-brand-gold/10 border border-brand-gold/20 flex items-center justify-center">
-              <User className="text-brand-gold" size={18} />
+            <div className="h-10 w-10 rounded-xl bg-brand-red/10 border border-brand-red/20 flex items-center justify-center">
+              <User className="text-brand-red" size={18} />
             </div>
             <div>
               <h2 className="text-white font-bold">{selectedDriver?.display_name}</h2>
@@ -401,13 +401,13 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
         <div className="flex-1 overflow-y-auto p-6">
           {tripsLoading ? (
             <div className="flex items-center justify-center h-40">
-              <Loader2 className="animate-spin text-brand-gold" size={32} />
+              <Loader2 className="animate-spin text-brand-red" size={32} />
             </div>
           ) : tripsError ? (
             <div className="flex flex-col items-center justify-center h-40 gap-3 text-center">
               <AlertCircle className="text-amber-400" size={40} />
               <p className="text-amber-300">{tripsError}</p>
-              <button onClick={() => setViewState("select_driver")} className="px-6 py-2 bg-brand-card border border-brand-border rounded-xl text-white hover:border-brand-gold/30 transition-all">
+              <button onClick={() => setViewState("select_driver")} className="px-6 py-2 bg-brand-card border border-brand-border rounded-xl text-white hover:border-brand-red/30 transition-all">
                 اختر سائقًا آخر
               </button>
             </div>
@@ -424,7 +424,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                     className={`rounded-2xl border p-4 transition-all ${
                       isSettled
                         ? "border-brand-border/30 bg-brand-card/20 opacity-60"
-                        : "border-brand-border bg-brand-card hover:border-brand-gold/20"
+                        : "border-brand-border bg-brand-card hover:border-brand-red/20"
                     }`}
                   >
                     {/* Trip header row */}
@@ -433,7 +433,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                         <div className={`h-9 w-9 rounded-xl flex items-center justify-center font-black text-sm ${
                           isSettled
                             ? "bg-gray-700 text-gray-400"
-                            : "bg-brand-gold/10 text-brand-gold"
+                            : "bg-brand-red/10 text-brand-red"
                         }`}>
                           {idx + 1}
                         </div>
@@ -459,7 +459,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                       ) : (
                         <button
                           onClick={() => handleSettleTrip(trip.trip_id)}
-                          className="flex items-center gap-2 px-4 py-2 bg-brand-gold text-brand-dark font-bold text-sm rounded-xl hover:bg-yellow-400 active:scale-[0.97] transition-all"
+                          className="flex items-center gap-2 px-4 py-2 bg-brand-red text-brand-dark font-bold text-sm rounded-xl hover:bg-yellow-400 active:scale-[0.97] transition-all"
                         >
                           <Wallet size={14} />
                           تسوية هذه الرحلة
@@ -513,10 +513,10 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                   0
                 );
                 return (
-                  <div className="mt-6 rounded-2xl border-2 border-brand-gold/40 bg-brand-gold/10 p-5 flex items-center justify-between">
+                  <div className="mt-6 rounded-2xl border-2 border-brand-red/40 bg-brand-red/10 p-5 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="h-11 w-11 rounded-xl bg-brand-gold/20 flex items-center justify-center">
-                        <TruckIcon className="text-brand-gold" size={20} />
+                      <div className="h-11 w-11 rounded-xl bg-brand-red/20 flex items-center justify-center">
+                        <TruckIcon className="text-brand-red" size={20} />
                       </div>
                       <div>
                         <p className="text-sm font-bold text-white">إجمالي توصيل السائق اليوم</p>
@@ -525,7 +525,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                         </p>
                       </div>
                     </div>
-                    <span className="text-2xl font-black text-brand-gold font-mono">
+                    <span className="text-2xl font-black text-brand-red font-mono">
                       {fmtEGP(totalDriverFees)}
                     </span>
                   </div>
@@ -544,8 +544,8 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-brand-border bg-brand-surface">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-brand-gold/10 border border-brand-gold/20 flex items-center justify-center">
-            <Wallet className="text-brand-gold" size={18} />
+          <div className="h-10 w-10 rounded-xl bg-brand-red/10 border border-brand-red/20 flex items-center justify-center">
+            <Wallet className="text-brand-red" size={18} />
           </div>
           <div>
             <h1 className="text-lg font-bold text-white">تسوية السائقين</h1>
@@ -567,7 +567,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
       <div className="flex-1 overflow-y-auto p-6">
         {loading ? (
           <div className="flex items-center justify-center h-40">
-            <Loader2 className="animate-spin text-brand-gold" size={32} />
+            <Loader2 className="animate-spin text-brand-red" size={32} />
           </div>
         ) : drivers.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 gap-3 text-center">
@@ -587,13 +587,13 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                   disabled={!driver.is_checked_in}
                   className={`relative flex flex-col items-center gap-3 p-5 rounded-2xl border text-center transition-all group ${
                     driver.is_checked_in
-                      ? "border-brand-border hover:border-brand-gold/40 bg-brand-card hover:bg-brand-card/80 cursor-pointer active:scale-[0.98]"
+                      ? "border-brand-border hover:border-brand-red/40 bg-brand-card hover:bg-brand-card/80 cursor-pointer active:scale-[0.98]"
                       : "border-brand-border/40 bg-brand-card/30 opacity-50 cursor-not-allowed"
                   }`}
                 >
                   <div className={`h-14 w-14 rounded-2xl flex items-center justify-center text-xl font-black ${
                     driver.is_checked_in
-                      ? "bg-brand-gold/10 text-brand-gold group-hover:bg-brand-gold/20"
+                      ? "bg-brand-red/10 text-brand-red group-hover:bg-brand-red/20"
                       : "bg-gray-800 text-gray-600"
                   }`}>
                     {(driver.display_name || driver.username).charAt(0)}
@@ -607,7 +607,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                   {driver.is_checked_in && (
                     <div className="absolute top-3 left-3 h-2 w-2 rounded-full bg-green-400 animate-pulse" />
                   )}
-                  <ChevronRight size={16} className="text-gray-500 group-hover:text-brand-gold transition-colors" />
+                  <ChevronRight size={16} className="text-gray-500 group-hover:text-brand-red transition-colors" />
                 </button>
               ))}
             </div>

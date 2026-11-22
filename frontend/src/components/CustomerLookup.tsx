@@ -125,7 +125,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
         
         {/* Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-brand-border/60 bg-brand-card">
-          <h3 className="font-bold text-lg text-brand-gold">{isPickup ? "البحث عن عميل (استلام محل)" : "البحث عن عميل الدليفري"}</h3>
+          <h3 className="font-bold text-lg text-brand-red">{isPickup ? "البحث عن عميل (استلام محل)" : "البحث عن عميل الدليفري"}</h3>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-brand-border/30"
@@ -146,13 +146,13 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className="w-full bg-brand-card border border-brand-border/60 rounded-xl py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-brand-gold text-left font-mono text-lg"
+                className="w-full bg-brand-card border border-brand-border/60 rounded-xl py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-brand-red text-left font-mono text-lg"
               />
               <Search className="absolute left-3 top-3.5 text-gray-500" size={20} />
             </div>
             <button
               onClick={handleSearch}
-              className="py-3 px-6 bg-brand-gold text-brand-dark hover:bg-opacity-90 font-bold rounded-xl active:translate-y-0.5 btn-hover-active"
+              className="py-3 px-6 bg-brand-red text-brand-dark hover:bg-opacity-90 font-bold rounded-xl active:translate-y-0.5 btn-hover-active"
             >
               بحث
             </button>
@@ -180,7 +180,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                             zone_name: "",
                             delivery_fee: 0,
                           })}
-                          className="py-2 px-4 bg-brand-gold text-brand-dark hover:bg-opacity-90 rounded-xl font-bold text-sm flex items-center gap-1.5 active:translate-y-0.5 btn-hover-active shadow-md"
+                          className="py-2 px-4 bg-brand-red text-brand-dark hover:bg-opacity-90 rounded-xl font-bold text-sm flex items-center gap-1.5 active:translate-y-0.5 btn-hover-active shadow-md"
                         >
                           <Check size={16} />
                           اختيار لاستلام المحل
@@ -189,7 +189,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                       {!isAddingAddress && (
                       <button
                         onClick={() => setIsAddingAddress(true)}
-                        className="py-2 px-3 bg-brand-border/30 hover:bg-brand-border/60 text-brand-gold rounded-lg font-semibold text-xs flex items-center gap-1 active:translate-y-0.5 btn-hover-active"
+                        className="py-2 px-3 bg-brand-border/30 hover:bg-brand-border/60 text-brand-red rounded-lg font-semibold text-xs flex items-center gap-1 active:translate-y-0.5 btn-hover-active"
                       >
                         <Plus size={14} />
                         إضافة عنوان جديد
@@ -207,7 +207,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                           <select
                             value={selectedZoneId}
                             onChange={(e) => setSelectedZoneId(e.target.value)}
-                            className="w-full bg-brand-surface border border-brand-border/50 rounded-lg p-2.5 text-white focus:outline-none focus:border-brand-gold"
+                            className="w-full bg-brand-surface border border-brand-border/50 rounded-lg p-2.5 text-white focus:outline-none focus:border-brand-red"
                           >
                             {zones.map((z) => (
                               <option key={z.id} value={z.id}>
@@ -224,7 +224,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                             placeholder="اسم الشارع، العمارة، الشقة..."
                             value={street}
                             onChange={(e) => setStreet(e.target.value)}
-                            className="w-full bg-brand-surface border border-brand-border/50 rounded-lg p-2.5 text-white focus:outline-none focus:border-brand-gold"
+                            className="w-full bg-brand-surface border border-brand-border/50 rounded-lg p-2.5 text-white focus:outline-none focus:border-brand-red"
                           />
                         </div>
                       </div>
@@ -238,7 +238,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                         </button>
                         <button
                           type="submit"
-                          className="py-1.5 px-4 bg-brand-gold text-brand-dark hover:bg-opacity-90 rounded-lg font-bold text-sm"
+                          className="py-1.5 px-4 bg-brand-red text-brand-dark hover:bg-opacity-90 rounded-lg font-bold text-sm"
                         >
                           حفظ العنوان
                         </button>
@@ -262,7 +262,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                           >
                             <div>
                               <span className="text-white font-medium block">{addr.street_name}</span>
-                              <span className="text-xs text-brand-gold mt-1 inline-block">
+                              <span className="text-xs text-brand-red mt-1 inline-block">
                                 منطقة: {addr.zone_name} | خدمة التوصيل: {addr.delivery_fee} ج.م
                               </span>
                             </div>
@@ -283,7 +283,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                   {!isRegistering ? (
                     <button
                       onClick={() => setIsRegistering(true)}
-                      className="py-2.5 px-5 bg-brand-gold text-brand-dark hover:bg-opacity-90 font-bold rounded-xl flex items-center gap-2 mx-auto active:translate-y-0.5 btn-hover-active"
+                      className="py-2.5 px-5 bg-brand-red text-brand-dark hover:bg-opacity-90 font-bold rounded-xl flex items-center gap-2 mx-auto active:translate-y-0.5 btn-hover-active"
                     >
                       <UserPlus size={18} />
                       تسجيل عميل جديد بالرقم {phone}
@@ -298,7 +298,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                           placeholder="الاسم الكامل للعميل..."
                           value={regName}
                           onChange={(e) => setRegName(e.target.value)}
-                          className="w-full bg-brand-surface border border-brand-border/50 rounded-lg p-2.5 text-white focus:outline-none focus:border-brand-gold"
+                          className="w-full bg-brand-surface border border-brand-border/50 rounded-lg p-2.5 text-white focus:outline-none focus:border-brand-red"
                         />
                       </div>
                       <div className="flex justify-end gap-2">
@@ -311,7 +311,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                         </button>
                         <button
                           type="submit"
-                          className="py-1.5 px-4 bg-brand-gold text-brand-dark hover:bg-opacity-90 rounded-lg font-bold text-sm"
+                          className="py-1.5 px-4 bg-brand-red text-brand-dark hover:bg-opacity-90 rounded-lg font-bold text-sm"
                         >
                           حفظ وتسجيل العميل
                         </button>

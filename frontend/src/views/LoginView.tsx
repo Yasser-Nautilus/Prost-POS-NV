@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import { Lock, Users, ShieldAlert, Loader2 } from "lucide-react";
 import { Numpad } from "../components/Numpad";
 import { bridge } from "../bridge";
-import loginBackground from "../assets/fried-chicken-login.webp";
+import loginBackground from "../assets/prostsh-brand.webp";
+import prostshP from "../assets/prostsh-p.png";
 
 interface LoginViewProps {
   onLoginSuccess: (user: any) => void;
@@ -43,14 +44,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
   return (
     <main
-      className="relative min-h-screen overflow-y-auto bg-brand-dark bg-cover bg-right bg-no-repeat"
-      style={{ backgroundImage: `url(${loginBackground})` }}
+      className="relative min-h-screen overflow-y-auto bg-brand-dark bg-right bg-no-repeat"
+      style={{ backgroundImage: `url(${loginBackground})`, backgroundSize: "auto 135%" }}
     >
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0"
         style={{
-          background: "linear-gradient(90deg, rgba(7, 9, 14, 0.97) 0%, rgba(7, 9, 14, 0.89) 33%, rgba(7, 9, 14, 0.62) 52%, rgba(7, 9, 14, 0.12) 78%, rgba(7, 9, 14, 0.08) 100%)",
+          background: "linear-gradient(90deg, rgba(10, 10, 12, 0.97) 0%, rgba(10, 10, 12, 0.89) 33%, rgba(10, 10, 12, 0.62) 52%, rgba(10, 10, 12, 0.12) 78%, rgba(10, 10, 12, 0.08) 100%)",
         }}
       />
       <div className="relative z-10 mr-auto ml-0 flex min-h-screen w-full max-w-[900px] flex-col items-center justify-center gap-6 px-6 py-8 md:flex-row md:gap-8 md:px-12" dir="rtl">
@@ -62,11 +63,12 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         className="w-full min-w-0 flex-1 text-right space-y-6 flex flex-col justify-center"
       >
         <div className="space-y-2">
-          <div className="inline-block py-1.5 px-4 bg-brand-gold/10 border border-brand-gold/30 rounded-full text-brand-gold text-sm font-bold">
+          <img src={prostshP} alt="شعار بروستش" className="h-20 w-auto mb-2 drop-shadow-lg" />
+          <div className="inline-block py-1.5 px-4 bg-brand-red/10 border border-brand-red/30 rounded-full text-brand-red text-sm font-bold">
             نظام إدارة المبيعات الذكي v1.0
           </div>
           <h1 className="text-4xl font-black text-white leading-tight drop-shadow-lg">
-            بروستد <span className="gold-gradient-text">البروست</span>
+            بروستش <span className="red-gradient-text">Prostsh</span>
           </h1>
           <p className="text-gray-200 text-base leading-relaxed">
             قم باختيار حسابك أو إدخال رمز PIN الخاص بك مباشرة للوصول إلى لوحة المبيعات.
@@ -75,10 +77,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
         {/* User Tiles Grid */}
         <div className="space-y-3">
-          <h3 className="text-xs font-bold text-gray-300 flex items-center gap-1.5 justify-end">
-            الموظفون المتاحون بالوردية
-            <Users size={14} />
-          </h3>
+          <div className="flex items-center gap-3 justify-end">
+            <div className="h-px flex-1 bg-brand-border/50" aria-hidden="true" />
+            <h3 className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
+              الموظفون المتاحون بالوردية
+              <Users size={14} className="text-brand-red" />
+            </h3>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             {users.filter((u) => !(u.role === "cashier" && u.cashier_slot == null)).length > 0 ? (
               users
@@ -89,7 +94,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                   onClick={handleUserTileClick}
                   className="p-4 bg-brand-card/85 backdrop-blur-md hover:bg-brand-border/70 border border-brand-border/60 rounded-2xl cursor-pointer text-right transition-all hover:scale-[1.02] active:scale-[0.98] group"
                 >
-                  <span className="text-white font-bold block text-base group-hover:text-brand-gold transition-colors">
+                  <span className="text-white font-bold block text-base group-hover:text-brand-red transition-colors">
                     {u.display_name}
                   </span>
                   <span className="text-xs text-gray-400 mt-1 inline-block">
@@ -114,20 +119,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         </div>
       </div>
 
-      {/* Separator */}
-      <div className="hidden md:flex flex-col items-center gap-3 select-none" role="separator" aria-hidden="true">
-        <div className="w-px flex-1 bg-brand-border/30" />
-        <span className="text-gray-500 text-xs font-bold tracking-widest">أو</span>
-        <div className="w-px flex-1 bg-brand-border/30" />
-      </div>
-
       {/* Left column: Security lock & Numpad block */}
       <div
         role="region"
         aria-label="لوحة PIN — أدخل رمز الدخول"
-        className="w-full max-w-sm shrink-0 p-6 bg-brand-card/90 backdrop-blur-xl border border-brand-gold/25 rounded-3xl shadow-2xl shadow-black/50 flex flex-col items-center"
+        className="w-full max-w-sm shrink-0 p-6 bg-brand-card/90 backdrop-blur-xl border border-brand-red/25 rounded-3xl shadow-2xl shadow-black/50 flex flex-col items-center"
       >
-        <div className="h-16 w-16 rounded-full bg-brand-gold/10 text-brand-gold flex items-center justify-center mb-4">
+        <div className="h-16 w-16 rounded-full bg-brand-red/10 text-brand-red flex items-center justify-center mb-4">
           {loading ? (
             <Loader2 size={28} className="animate-spin" />
           ) : (
@@ -143,8 +141,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           {[0, 1, 2, 3].map((idx) => (
             <div
               key={idx}
-              className={`w-4 h-4 rounded-full border border-brand-gold/60 transition-colors ${
-                pin.length > idx ? "bg-brand-gold" : "bg-transparent"
+              className={`w-4 h-4 rounded-full border border-brand-red/60 transition-colors ${
+                pin.length > idx ? "bg-brand-red" : "bg-transparent"
               }`}
             />
           ))}
@@ -164,7 +162,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           }}
           onConfirm={handleLoginSubmit}
           confirmLabel={loading ? "جاري التحقق..." : "تأكيد PIN"}
-          confirmColor="bg-brand-gold text-brand-dark hover:bg-opacity-90 font-bold"
+          confirmColor="bg-brand-red text-brand-dark hover:bg-opacity-90 font-bold"
         />
       </div>
 

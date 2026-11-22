@@ -3,11 +3,11 @@
 
 @theme {
   --font-cairo: "Cairo", sans-serif;
-  --color-brand-dark: #0a0f1d;
-  --color-brand-surface: #121829;
-  --color-brand-card: #1b233a;
-  --color-brand-border: #2c3756;
-  --color-brand-gold: #cfa860;
+  --color-brand-dark: #131313;
+  --color-brand-surface: #1b1b1e;
+  --color-brand-card: #242428;
+  --color-brand-border: #3a3a40;
+  --color-brand-red: #e01038;
   --color-brand-teal: #10b981;
 }
 
@@ -44,7 +44,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-brand-gold);
+  background: var(--color-brand-red);
 }
 
 /* Micro-animations and premium effects */
@@ -54,14 +54,14 @@ body {
   border: 1px solid rgba(44, 55, 86, 0.5);
 }
 
-.gold-gradient-text {
-  background: linear-gradient(135deg, #f3d082 0%, #cfa860 100%);
+.red-gradient-text {
+  background: linear-gradient(135deg, #ff5a6e 0%, #e01038 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-.gold-gradient-bg {
-  background: linear-gradient(135deg, #f3d082 0%, #cfa860 100%);
+.red-gradient-bg {
+  background: linear-gradient(135deg, #ff5a6e 0%, #e01038 100%);
 }
 
 .btn-hover-active {
@@ -70,7 +70,7 @@ body {
 
 .btn-hover-active:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(207, 168, 96, 0.2);
+  box-shadow: 0 4px 12px rgba(224, 16, 56, 0.25);
 }
 
 .btn-hover-active:active {

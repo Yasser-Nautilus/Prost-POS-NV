@@ -568,7 +568,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
                 onClick={() => handleSetOrderType(ot.id)}
                 className={`py-2 px-1 text-xs font-bold rounded-xl border transition-all ${
                   currentOrder?.order_type === ot.id
-                    ? "bg-brand-gold/10 border-brand-gold text-brand-gold"
+                    ? "bg-brand-red/10 border-brand-red text-brand-red"
                     : "bg-brand-surface border-brand-border/40 text-gray-400 hover:text-white"
                 }`}
               >
@@ -641,14 +641,14 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
                   <div>
                     <span className="text-white font-bold block">{currentOrder.customer_name}</span>
                     <span className="text-gray-400 block mt-1 font-mono">{currentOrder.customer_phone}</span>
-                    <span className="text-brand-gold mt-1 block">العنوان: {currentOrder.customer_address}</span>
+                    <span className="text-brand-red mt-1 block">العنوان: {currentOrder.customer_address}</span>
                   </div>
                 ) : (
                   <span className="text-gray-400 italic">لم يتم اختيار عميل (مطلوب قبل التأكيد)</span>
                 )}
                 <button
                   onClick={() => setIsCustomerLookupOpen(true)}
-                  className="py-1 px-3 bg-brand-gold text-brand-dark hover:bg-opacity-90 font-bold rounded-lg"
+                  className="py-1 px-3 bg-brand-red text-brand-dark hover:bg-opacity-90 font-bold rounded-lg"
                 >
                   {currentOrder.customer_name ? "تغيير" : "اختيار عميل"}
                 </button>
@@ -674,7 +674,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
               )}
               <button
                 onClick={() => setIsCustomerLookupOpen(true)}
-                className="py-1 px-3 bg-brand-gold text-brand-dark hover:bg-opacity-90 font-bold rounded-lg"
+                className="py-1 px-3 bg-brand-red text-brand-dark hover:bg-opacity-90 font-bold rounded-lg"
               >
                 {currentOrder.customer_name ? "تغيير" : "اختيار عميل"}
               </button>
@@ -687,14 +687,14 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
               {selectedTable ? (
                 <div className="flex items-center gap-2">
                   <span className="text-gray-400">طاولة رقم:</span>
-                  <span className="text-2xl font-black text-brand-gold font-mono">{selectedTable}</span>
+                  <span className="text-2xl font-black text-brand-red font-mono">{selectedTable}</span>
                 </div>
               ) : (
                 <span className="text-red-400 italic">لم يتم اختيار طاولة بعد!</span>
               )}
               <button
                 onClick={() => setIsTableGridOpen(true)}
-                className="py-1 px-3 bg-brand-gold text-brand-dark hover:bg-opacity-90 font-bold rounded-lg"
+                className="py-1 px-3 bg-brand-red text-brand-dark hover:bg-opacity-90 font-bold rounded-lg"
               >
                 {selectedTable ? "تغيير الطاولة" : "اختيار طاولة"}
               </button>
@@ -714,7 +714,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
                   {/* Product Name & Qty */}
                   <div className="flex-1">
                     <span className="text-white font-bold text-sm block">{item.product_name}</span>
-                    <span className="text-xs text-brand-gold font-bold mt-1 inline-block">
+                    <span className="text-xs text-brand-red font-bold mt-1 inline-block">
                       {item.unit_price} ج.م
                     </span>
                     {item.notes && commentIdx !== idx && (
@@ -729,14 +729,14 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
                     <div className="flex items-center bg-brand-card border border-brand-border/40 rounded-xl p-1">
                       <button
                         onClick={() => handleQtyChange(idx, 1)}
-                        className="h-8 w-8 text-white hover:text-brand-gold flex items-center justify-center rounded-lg active:scale-95"
+                        className="h-8 w-8 text-white hover:text-brand-red flex items-center justify-center rounded-lg active:scale-95"
                       >
                         <Plus size={16} />
                       </button>
                       <span className="w-8 text-center text-white font-bold font-mono">{item.quantity}</span>
                       <button
                         onClick={() => handleQtyChange(idx, -1)}
-                        className="h-8 w-8 text-white hover:text-brand-gold flex items-center justify-center rounded-lg active:scale-95"
+                        className="h-8 w-8 text-white hover:text-brand-red flex items-center justify-center rounded-lg active:scale-95"
                       >
                         <Minus size={16} />
                       </button>
@@ -748,8 +748,8 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
                       title="إضافة ملاحظة للصنف"
                       className={`h-9 w-9 rounded-xl flex items-center justify-center border transition-all ${
                         item.notes || commentIdx === idx
-                          ? "text-brand-gold bg-brand-gold/10 border-brand-gold/40"
-                          : "text-gray-400 hover:text-brand-gold bg-brand-card border-brand-border/40"
+                          ? "text-brand-red bg-brand-red/10 border-brand-red/40"
+                          : "text-gray-400 hover:text-brand-red bg-brand-card border-brand-border/40"
                       }`}
                     >
                       <Pencil size={15} />
@@ -777,11 +777,11 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
                         if (e.key === "Escape") { setCommentIdx(null); setCommentDraft(""); }
                       }}
                       placeholder="ملاحظة للصنف (مثلاً: بدون بصل)..."
-                      className="flex-1 bg-brand-dark border border-brand-border/50 rounded-lg py-2 px-3 text-white text-xs placeholder-gray-500 focus:outline-none focus:border-brand-gold text-right"
+                      className="flex-1 bg-brand-dark border border-brand-border/50 rounded-lg py-2 px-3 text-white text-xs placeholder-gray-500 focus:outline-none focus:border-brand-red text-right"
                     />
                     <button
                       onClick={() => handleSaveComment(idx)}
-                      className="py-2 px-3 bg-brand-gold text-brand-dark hover:bg-opacity-90 rounded-lg text-xs font-bold active:translate-y-0.5"
+                      className="py-2 px-3 bg-brand-red text-brand-dark hover:bg-opacity-90 rounded-lg text-xs font-bold active:translate-y-0.5"
                     >
                       حفظ
                     </button>
@@ -812,7 +812,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
               </div>
             )}
             {currentOrder?.delivery_fee > 0 && (
-              <div className="flex justify-between items-center text-brand-gold">
+              <div className="flex justify-between items-center text-brand-red">
                 <span>خدمة التوصيل (الطيار):</span>
                 <span className="font-bold font-mono">+{currentOrder.delivery_fee.toFixed(2)} ج.م</span>
               </div>
@@ -820,7 +820,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
             <div className="h-px bg-brand-border/30" />
             <div className="flex justify-between items-center">
               <span className="text-sm font-bold text-white">الإجمالي الكلي:</span>
-              <span className="text-xl font-black text-brand-gold font-mono">
+              <span className="text-xl font-black text-brand-red font-mono">
                 {(currentOrder?.total || 0).toFixed(2)} ج.م
               </span>
             </div>
@@ -838,7 +838,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
             <button
               onClick={handleParkOrder}
               disabled={!currentOrder || currentOrder.items.length === 0}
-              className="py-2 bg-brand-card hover:bg-brand-border/20 text-brand-gold border border-brand-gold/20 rounded-xl text-xs font-bold active:translate-y-0.5 btn-hover-active flex items-center justify-center gap-1 disabled:opacity-50"
+              className="py-2 bg-brand-card hover:bg-brand-border/20 text-brand-red border border-brand-red/20 rounded-xl text-xs font-bold active:translate-y-0.5 btn-hover-active flex items-center justify-center gap-1 disabled:opacity-50"
             >
               <Tag size={14} />
               تعليق
@@ -846,7 +846,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
             <button
               onClick={() => setIsDiscountOpen(true)}
               disabled={!currentOrder || currentOrder.items.length === 0}
-              className="py-2 bg-brand-card hover:bg-brand-border/20 text-brand-gold border border-brand-gold/20 rounded-xl text-xs font-bold active:translate-y-0.5 btn-hover-active flex items-center justify-center gap-1 disabled:opacity-50"
+              className="py-2 bg-brand-card hover:bg-brand-border/20 text-brand-red border border-brand-red/20 rounded-xl text-xs font-bold active:translate-y-0.5 btn-hover-active flex items-center justify-center gap-1 disabled:opacity-50"
             >
               <Tag size={14} />
               خصم
@@ -857,7 +857,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
           {parkedCount > 0 && (
             <button
               onClick={handleOpenParkedPanel}
-              className="w-full py-2.5 bg-brand-card hover:bg-brand-border/20 text-brand-gold border border-brand-gold/30 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all"
+              className="w-full py-2.5 bg-brand-card hover:bg-brand-border/20 text-brand-red border border-brand-red/30 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all"
             >
               <Archive size={14} />
               استرجاع طلب معلّق ({parkedCount})
@@ -878,7 +878,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
               <button
                 onClick={handleCashOut}
                 disabled={!currentOrder || currentOrder.items.length === 0}
-                className="w-full py-3 bg-brand-gold hover:bg-opacity-95 text-brand-dark disabled:opacity-50 font-black text-base rounded-xl flex items-center justify-center gap-2 shadow-lg active:translate-y-0.5 btn-hover-active transition-colors"
+                className="w-full py-3 bg-brand-red hover:bg-opacity-95 text-brand-dark disabled:opacity-50 font-black text-base rounded-xl flex items-center justify-center gap-2 shadow-lg active:translate-y-0.5 btn-hover-active transition-colors"
               >
                 <CreditCard size={20} />
                 دفع وإغلاق الفاتورة
@@ -888,7 +888,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
             <button
               onClick={handleCheckoutClick}
               disabled={!currentOrder || currentOrder.items.length === 0}
-              className={`w-full py-3 ${isAmending ? "bg-orange-500 hover:bg-orange-400" : "bg-brand-gold hover:bg-opacity-95"} text-brand-dark disabled:opacity-50 font-black text-base rounded-xl flex items-center justify-center gap-2 shadow-lg active:translate-y-0.5 btn-hover-active transition-colors`}
+              className={`w-full py-3 ${isAmending ? "bg-orange-500 hover:bg-orange-400" : "bg-brand-red hover:bg-opacity-95"} text-brand-dark disabled:opacity-50 font-black text-base rounded-xl flex items-center justify-center gap-2 shadow-lg active:translate-y-0.5 btn-hover-active transition-colors`}
             >
               <CreditCard size={20} />
               {isAmending
@@ -917,7 +917,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
               placeholder="ابحث عن وجبة أو مشروب..."
               value={searchQuery}
               onChange={(e) => handleProductSearch(e.target.value)}
-              className="w-full bg-brand-card border border-brand-border/60 rounded-xl py-2 px-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-gold text-right"
+              className="w-full bg-brand-card border border-brand-border/60 rounded-xl py-2 px-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-red text-right"
             />
             <Search className="absolute left-3 top-2.5 text-gray-500" size={16} />
           </div>
@@ -934,7 +934,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
                 }}
                 className={`py-2 px-4 text-xs font-bold rounded-full border whitespace-nowrap transition-all ${
                   selectedCatId === cat.id && !searchQuery
-                    ? "bg-brand-gold text-brand-dark border-brand-gold"
+                    ? "bg-brand-red text-brand-dark border-brand-red"
                     : "bg-brand-card border-brand-border/40 text-gray-400 hover:text-white"
                 }`}
               >
@@ -955,15 +955,15 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
                   className="p-4 bg-brand-card hover:bg-brand-border/10 border border-brand-border/40 rounded-2xl cursor-pointer flex flex-col justify-between h-40 transition-all hover:scale-[1.03] active:scale-[0.97] group"
                 >
                   <div>
-                    <h4 className="text-white font-bold text-sm leading-snug group-hover:text-brand-gold transition-colors">
+                    <h4 className="text-white font-bold text-sm leading-snug group-hover:text-brand-red transition-colors">
                       {prod.name}
                     </h4>
                   </div>
                   <div className="flex justify-between items-center mt-4">
-                    <span className="text-brand-gold font-extrabold text-base">
+                    <span className="text-brand-red font-extrabold text-base">
                       {prod.price} <span className="text-[10px] font-semibold">ج.م</span>
                     </span>
-                    <div className="h-8 w-8 rounded-full bg-brand-gold/10 text-brand-gold flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="h-8 w-8 rounded-full bg-brand-red/10 text-brand-red flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                       <Plus size={16} />
                     </div>
                   </div>
@@ -1039,7 +1039,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md">
           <div className="w-full max-w-md mx-4 bg-brand-surface border border-brand-border rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="p-5 border-b border-brand-border/40 flex items-center justify-between">
-              <h3 className="font-bold text-xl text-brand-gold">الطلبات المعلّقة</h3>
+              <h3 className="font-bold text-xl text-brand-red">الطلبات المعلّقة</h3>
               <button
                 onClick={() => setIsParkedPanelOpen(false)}
                 className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-brand-border/30"
@@ -1053,13 +1053,13 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
                   <button
                     key={idx}
                     onClick={() => handleResumeParked(idx)}
-                    className="w-full p-4 bg-brand-card/60 border border-brand-border/40 rounded-xl text-right hover:bg-brand-card hover:border-brand-gold/30 transition-all group"
+                    className="w-full p-4 bg-brand-card/60 border border-brand-border/40 rounded-xl text-right hover:bg-brand-card hover:border-brand-red/30 transition-all group"
                   >
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-xs text-gray-500 font-bold uppercase">
                         {order.order_type === "dine_in" ? "صالة" : order.order_type === "takeaway" ? "تيك أواي" : order.order_type === "delivery" ? "دليفري" : "استلام"}
                       </span>
-                      <span className="text-brand-gold font-black text-lg font-mono">
+                      <span className="text-brand-red font-black text-lg font-mono">
                         {(order.total || 0).toFixed(2)} ج.م
                       </span>
                     </div>
