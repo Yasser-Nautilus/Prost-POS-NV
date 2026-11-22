@@ -329,6 +329,14 @@ class OrderService:
         if order.status in (OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED):
             raise ValueError("لا يمكن تعديل طلب في هذه الحالة (مكتمل، ملغي، أو خارج للتوصيل)")
 
+        # H03: reject item changes on a paid active order — the amount already
+        # posted to the ledger would no longer match the new total and there is
+        # no reconciliation workflow available.
+        if order.is_paid and (added_items or removed_items):
+            raise ValueError(
+                "لا يمكن تعديل عناصر طلب مدفوع — لا توجد عملية تسوية"
+            )
+
         # Removing items requires manager override
         if removed_items:
             if not manager_pin:
@@ -401,6 +409,22 @@ class OrderService:
 
         if order.status == OrderStatus.CANCELLED:
             raise ValueError("لا يمكن دفع طلب ملغي")
+
+        # H03: guard against unsupported re-payment on a paid active order.
+        # Only an exact retry (same method + same amount) is idempotent.
+        # Any method change is rejected — no reconciliation workflow exists.
+        if order.is_paid:
+            same_method = (order.payment_method == payment_method)
+            same_amount = (abs((order.amount_paid or 0) - amount_received) < 0.001)
+            if same_method and same_amount:
+                return order  # exact retry — nothing to do
+            if not same_method:
+                raise ValueError(
+                    "لا يمكن تغيير طريقة الدفع لطلب مدفوع — لا توجد عملية تسوية"
+                )
+            raise ValueError(
+                "الطلب مدفوع بالفعل — لا يمكن إعادة المعالجة بمبلغ مختلف"
+            )
 
         payment = self._payments.calculate(
             total=order.total,
