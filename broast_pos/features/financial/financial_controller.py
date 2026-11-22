@@ -150,12 +150,22 @@ class FinancialController:
             raise ValueError(str(e))
 
     def get_users_for_transfer(self) -> list[dict[str, Any]]:
-        """Get list of cashiers and managers for shift transfer dropdown."""
+        """Return users eligible to receive a shift handover.
+
+        Only users who operate the register (cashier_slot is not None) may
+        receive a shift. Delivery drivers (cashier_slot IS NULL) are excluded.
+        """
         try:
             users = self._auth_svc.get_all_users()
             return [
-                {"id": u.id, "display_name": u.display_name, "role": u.role.value}
+                {
+                    "id": u.id,
+                    "display_name": u.display_name,
+                    "role": u.role.value,
+                    "cashier_slot": u.cashier_slot,
+                }
                 for u in users
+                if u.cashier_slot is not None
             ]
         except Exception as e:
             logger.error("Error listing users for transfer: %s", e)

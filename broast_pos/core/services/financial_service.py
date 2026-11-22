@@ -121,6 +121,13 @@ class FinancialService:
         # Verify manager authorization
         self._verify_manager_pin(manager_pin)
 
+        # Fail-closed: reject delivery drivers as handover target.
+        # Drivers have cashier_slot = None and cannot operate the register.
+        if self._auth is not None:
+            to_user = self._auth.get_user_by_id(to_user_id)
+            if to_user is None or to_user.cashier_slot is None:
+                raise ValueError("المستخدم المستلم ليس كاشيراً مسجلاً — لا يمكن نقل الوردية لسائق توصيل")
+
         # Capture current state
         summary = self._financial.get_shift_summary(shift.id)
         snapshot = json.dumps({
