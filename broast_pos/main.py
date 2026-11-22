@@ -94,6 +94,24 @@ def _setup_logging() -> None:
     root.addHandler(file_handler)
 
 
+def _configure_printing(printer_manager: PrinterManager) -> PrintTriggers:
+    """H14: initialise all configured printers and build print-trigger wiring.
+
+    Extracted out of main() so tests can exercise this exact startup step
+    (with a safe dummy transport) instead of re-implementing it.
+    """
+    printer_manager.initialise()
+    return PrintTriggers(printer_manager)
+
+
+def _wire_printer_shutdown(app: QApplication, printer_manager: PrinterManager) -> None:
+    """H14: disconnect printers gracefully on app exit.
+
+    Extracted out of main() so tests can verify this exact wiring runs the
+    real shutdown() method, not a hand-rolled stand-in.
+    """
+    app.aboutToQuit.connect(printer_manager.shutdown)
+
 
 def main() -> int:
     """Application entry point — returns exit code."""
@@ -196,8 +214,7 @@ def main() -> int:
     # 4. Printing infrastructure
     # ------------------------------------------------------------------
     printer_manager = PrinterManager()
-    printer_manager.initialise()
-    print_triggers = PrintTriggers(printer_manager)
+    print_triggers = _configure_printing(printer_manager)
 
     # ------------------------------------------------------------------
     # 5. Qt Application
@@ -237,7 +254,7 @@ def main() -> int:
     shell.show()
 
     # Disconnect printers gracefully on app exit
-    app.aboutToQuit.connect(printer_manager.shutdown)
+    _wire_printer_shutdown(app, printer_manager)
 
     # ------------------------------------------------------------------
     # 7. Background Tasks

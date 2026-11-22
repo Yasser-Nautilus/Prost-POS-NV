@@ -79,36 +79,50 @@ class TestH14PrinterManagerLifecycle:
         assert pm.is_printer_available("kitchen") is False
 
 
-class TestH14MainCompositionWiring:
-    """Exercises main.py's actual startup/shutdown composition, with a fake
-    transport standing in for hardware — not a real Qt event loop."""
+class TestH14RealMainCompositionWiring:
+    """Calls broast_pos.main's actual startup/shutdown functions directly —
+    the real code path main() runs, not a re-implementation of its steps.
+    Only the printer transport is a dummy; PrinterManager, EscPosPrinter and
+    QApplication are all the genuine classes."""
 
-    def test_startup_composition_initialises_printers(self):
+    def test_real_configure_printing_initialises_printers(self):
+        from broast_pos.infrastructure.printing.print_triggers import PrintTriggers
+        from broast_pos.main import _configure_printing
+
         with patch(
             "broast_pos.infrastructure.printing.printer_manager.load_printer_config",
             return_value=_dummy_config(),
         ):
             printer_manager = PrinterManager()
-            # Mirrors main.py's "4. Printing infrastructure" step exactly.
-            printer_manager.initialise()
+            # The real function main() calls — not a re-implementation.
+            print_triggers = _configure_printing(printer_manager)
 
+        assert isinstance(print_triggers, PrintTriggers)
+        assert printer_manager.is_printer_available("kitchen") is True
+        assert printer_manager.is_printer_available("cashier_1") is True
+        assert printer_manager.is_printer_available("cashier_2") is True
+
+    def test_real_shutdown_wiring_disconnects_printers_on_quit(self):
+        """A real QApplication, with the real signal connection main() makes —
+        firing aboutToQuit (not calling shutdown() directly) must disconnect."""
+        from PyQt6.QtWidgets import QApplication
+
+        from broast_pos.main import _configure_printing, _wire_printer_shutdown
+
+        app = QApplication.instance() or QApplication([])
+
+        with patch(
+            "broast_pos.infrastructure.printing.printer_manager.load_printer_config",
+            return_value=_dummy_config(),
+        ):
+            printer_manager = PrinterManager()
+            _configure_printing(printer_manager)
             assert printer_manager.is_printer_available("kitchen") is True
-            assert printer_manager.is_printer_available("cashier_1") is True
 
-    def test_exit_composition_disconnects_printers(self):
-        """Mirrors main.py wiring printer_manager.shutdown() to
-        app.aboutToQuit — simulated here by calling the same callable."""
-        with patch(
-            "broast_pos.infrastructure.printing.printer_manager.load_printer_config",
-            return_value=_dummy_config(),
-        ):
-            printer_manager = PrinterManager()
-            printer_manager.initialise()
-            on_about_to_quit = printer_manager.shutdown  # what main.py connects
+            _wire_printer_shutdown(app, printer_manager)  # the real wiring call
+            app.aboutToQuit.emit()  # simulates real app shutdown firing the signal
 
-            on_about_to_quit()
-
-            assert printer_manager.is_printer_available("kitchen") is False
+        assert printer_manager.is_printer_available("kitchen") is False
 
 
 class TestH14BridgeExposesReadiness:

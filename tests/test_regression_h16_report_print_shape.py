@@ -15,9 +15,11 @@ Fix verified here:
     "breakdown"/"grand_total" out of "sales_by_type", and splits
     opened_at/closed_at into from_date/from_time/to_date/to_time.
   - End-to-end through Controller → (FinancialService lookup) →
-    PrinterManager → template: a single 70 EGP order produces a report
-    showing exactly 1 order, 70.00 EGP, and a populated period — not
-    zero orders / blank period.
+    PrinterManager → the REAL print_daily_sales_report template →
+    the REAL EscPosPrinter (dummy transport, not a hand-rolled test
+    double): a single 70 EGP order produces a report showing exactly
+    1 order, 70.00 EGP, and a populated period — not zero orders /
+    blank period.
 """
 from __future__ import annotations
 
@@ -35,31 +37,25 @@ from broast_pos.data.repositories.financial_repository import FinancialRepositor
 from broast_pos.data.repositories.order_repository import OrderRepository
 from broast_pos.data.repositories.user_repository import UserRepository
 from broast_pos.features.reports.reports_controller import ReportsController
+from broast_pos.infrastructure.printing.escpos_printer import EscPosPrinter
+from broast_pos.infrastructure.printing.printer_config import PrinterEntry
 from broast_pos.infrastructure.printing.printer_manager import PrinterManager
 
 
-class _FakePrinter:
-    """Records every printed line so the test can inspect the real output,
-    and behaves like EscPosPrinter's bool-returning interface."""
+def _real_dummy_printer() -> EscPosPrinter:
+    """A genuine EscPosPrinter over python-escpos's own Dummy transport —
+    the real low-level driver, just with no physical device attached.
+    Its captured byte buffer is the actual ESC/POS output the template
+    would send to real hardware."""
+    printer = EscPosPrinter(PrinterEntry(key="cashier_1", conn_type="dummy"))
+    printer.connect()
+    return printer
 
-    def __init__(self):
-        self.lines: list[str] = []
 
-    def print_text(self, text, *, align="left", bold=False, double_width=False, double_height=False):
-        self.lines.append(str(text))
-        return True
-
-    def print_line(self, char="-", width=32):
-        self.lines.append(char * width)
-        return True
-
-    def print_double_line(self, width=32):
-        self.lines.append("=" * width)
-        return True
-
-    def cut(self):
-        self.lines.append("<CUT>")
-        return True
+def _captured_text(printer: EscPosPrinter) -> str:
+    """Decode the real Dummy transport's captured byte stream for substring
+    assertions (ESC/POS control bytes included — this is the raw output)."""
+    return printer._printer.output.decode("utf-8", errors="replace")
 
 
 @pytest.fixture(autouse=True)
@@ -97,7 +93,7 @@ def _fresh_db() -> DatabaseConnection:
     return db
 
 
-def _build_controller(db: DatabaseConnection, fake_printer: _FakePrinter) -> ReportsController:
+def _build_controller(db: DatabaseConnection, printer: EscPosPrinter) -> ReportsController:
     order_repo = OrderRepository(db=db)
     financial_repo = FinancialRepository(db=db)
     delivery_repo = DeliveryRepository(db=db)
@@ -111,7 +107,7 @@ def _build_controller(db: DatabaseConnection, fake_printer: _FakePrinter) -> Rep
     )
 
     pm = PrinterManager()
-    pm._printers["cashier_1"] = fake_printer
+    pm._printers["cashier_1"] = printer
 
     return ReportsController(
         report_service=report_svc, financial_service=financial_svc, printer_manager=pm,
@@ -119,16 +115,19 @@ def _build_controller(db: DatabaseConnection, fake_printer: _FakePrinter) -> Rep
 
 
 class TestH16ReportPrintShape:
+    """Runs print_daily_summary() through the real PrinterManager, the real
+    print_daily_sales_report template, and a real EscPosPrinter (dummy
+    transport) — not a hand-rolled test double standing in for any of them."""
 
     def test_single_order_report_shows_correct_count_total_and_period(self):
         db = _fresh_db()
-        printer = _FakePrinter()
+        printer = _real_dummy_printer()
         controller = _build_controller(db, printer)
 
         result = controller.print_daily_summary(shift_id=1, cashier_slot=1)
 
         assert result is True, "Print must succeed with a real order and a real printer"
-        output = "\n".join(printer.lines)
+        output = _captured_text(printer)
 
         # H16 regression: previously this showed "0" orders and "0.00" EGP
         # because breakdown/grand_total were read from the wrong nesting level.
@@ -143,7 +142,7 @@ class TestH16ReportPrintShape:
 
     def test_grand_total_matches_the_single_order(self):
         db = _fresh_db()
-        printer = _FakePrinter()
+        printer = _real_dummy_printer()
         controller = _build_controller(db, printer)
 
         summary = controller.generate_daily_summary(shift_id=1)
