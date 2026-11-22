@@ -98,6 +98,8 @@ def _make_bridge(db, current_user):
     mock_auth.verify_manager_pin.return_value = current_user
     mock_auth.get_manager_by_pin.return_value = current_user
     mock_auth.verify_pin.return_value = current_user
+    # H20: dispatch() revalidates the session from the DB on every call.
+    mock_auth.refresh_current_user.return_value = current_user
 
     fin_svc = FinancialService(
         financial_repo=financial_repo,
@@ -127,6 +129,7 @@ def _make_bridge(db, current_user):
     bridge._session_ctrl = session_ctrl
     bridge._session_svc = session_svc
     bridge._current_user = current_user
+    bridge._auth = mock_auth
     bridge._trigger_shift_status_changed = lambda: None
     return bridge
 

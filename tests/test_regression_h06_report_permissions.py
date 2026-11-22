@@ -23,6 +23,7 @@ Fix verified here:
 from __future__ import annotations
 
 import json
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -64,6 +65,10 @@ def _make_bridge(current_user: User) -> tuple[POSBridge, _StubReportsController]
     bridge._reports_ctrl = reports_ctrl
     bridge._current_user = current_user
     bridge._financial = None
+    # H20: dispatch() revalidates the session from the DB on every call.
+    auth = MagicMock()
+    auth.refresh_current_user.return_value = current_user
+    bridge._auth = auth
     return bridge, reports_ctrl
 
 
