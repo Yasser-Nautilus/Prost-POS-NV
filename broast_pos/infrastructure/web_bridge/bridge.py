@@ -1139,9 +1139,11 @@ class POSBridge(QObject):
             elif action == "handover":
                 # H05: cashiers may only handover their own session; recipient cannot be a driver
                 from_session_id = payload["from_session_id"]
-                if not actor_is_manager and self._session_svc is not None:
-                    owned = self._session_svc.get_session_by_id(from_session_id)
-                    if owned is None or owned.user_id != actor.id:
+                outgoing_session = None
+                if self._session_svc is not None:
+                    outgoing_session = self._session_svc.get_session_by_id(from_session_id)
+                if not actor_is_manager:
+                    if outgoing_session is None or outgoing_session.user_id != actor.id:
                         return json.dumps({
                             "success": False,
                             "error": "لا يمكن تسليم درج كاشير آخر",
@@ -1154,10 +1156,19 @@ class POSBridge(QObject):
                             "success": False,
                             "error": "المستخدم المستلم ليس كاشيراً مسجلاً — لا يمكن نقل الوردية لسائق توصيل",
                         })
+                if outgoing_session is None:
+                    return json.dumps({
+                        "success": False,
+                        "error": "وردية التسليم غير موجودة",
+                    })
+                # H05: the recipient's new session always takes over the SAME
+                # physical station as the outgoing one — a handover changes
+                # who is responsible for a drawer, never which drawer it is.
+                # Never trust a client-supplied station here.
                 data = ctrl.do_handover(
                     from_session_id=from_session_id,
                     to_user_id=to_user_id,
-                    station=payload.get("station", "ALL"),
+                    station=outgoing_session.station.value,
                     counted_cash_egp=float(payload.get("counted_cash_egp", 0)),
                     cash_drop_egp=float(payload.get("cash_drop_egp", 0)),
                     actor_id=actor.id,
