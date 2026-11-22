@@ -18,7 +18,7 @@ interface TrackingViewProps {
 }
 
 const ORDER_TYPE_LABELS: Record<string, { label: string; icon: any; color: string }> = {
-  dine_in:  { label: "صالة",        icon: UtensilsCrossed, color: "text-brand-gold bg-brand-gold/10 border-brand-gold/30" },
+  dine_in:  { label: "صالة",        icon: UtensilsCrossed, color: "text-brand-red bg-brand-red/10 border-brand-red/30" },
   takeaway: { label: "تيك أواي",     icon: ShoppingBag,    color: "text-brand-teal bg-brand-teal/10 border-brand-teal/30" },
   delivery: { label: "دليفري",       icon: Truck,           color: "text-blue-400 bg-blue-900/20 border-blue-800/30" },
   pickup:   { label: "استلام محل",   icon: Package,         color: "text-purple-400 bg-purple-900/20 border-purple-800/30" },
@@ -26,7 +26,7 @@ const ORDER_TYPE_LABELS: Record<string, { label: string; icon: any; color: strin
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   new:              { label: "جديد — في الانتظار",  color: "text-yellow-400" },
-  confirmed:        { label: "مؤكد",                 color: "text-brand-gold" },
+  confirmed:        { label: "مؤكد",                 color: "text-brand-red" },
   out_for_delivery: { label: "خرج للتوصيل",          color: "text-blue-400" },
   completed:        { label: "مكتمل",                 color: "text-green-400" },
   cancelled:        { label: "ملغي",                  color: "text-red-400" },
@@ -59,7 +59,7 @@ const LiveTimer: React.FC<{ since: string | null; urgentSecs?: number }> = ({ si
     return () => clearInterval(id);
   }, [since, urgentSecs]);
   return (
-    <span className={`font-mono font-bold tabular-nums text-xs ${isUrgent ? "text-red-400 animate-pulse" : "text-brand-gold"}`}>
+    <span className={`font-mono font-bold tabular-nums text-xs ${isUrgent ? "text-red-400 animate-pulse" : "text-brand-red"}`}>
       {display}
     </span>
   );
@@ -121,11 +121,11 @@ const DineInTable: React.FC<{ orders: any[]; onResume: (o: any) => void; onCance
               key={order.id}
               onClick={() => onResume(order)}
               title="افتح الطاولة"
-              className={`border-t border-brand-border/20 cursor-pointer hover:bg-brand-gold/5 transition-colors ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}
+              className={`border-t border-brand-border/20 cursor-pointer hover:bg-brand-red/5 transition-colors ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}
             >
               <td className="py-2.5 px-3 text-gray-400 font-mono text-xs">#{order.invoice_no || order.id}</td>
               <td className="py-2.5 px-3">
-                <span className="text-brand-gold font-black text-lg font-mono">{order.table_no || "—"}</span>
+                <span className="text-brand-red font-black text-lg font-mono">{order.table_no || "—"}</span>
               </td>
               <td className="py-2.5 px-3 text-gray-400 text-xs">
                 {(order.items || []).slice(0, 2).map((it: any, j: number) => (
@@ -139,7 +139,7 @@ const DineInTable: React.FC<{ orders: any[]; onResume: (o: any) => void; onCance
               <td className="py-2.5 px-3 text-center">
                 <LiveTimer since={order.created_at} urgentSecs={1800} />
               </td>
-              <td className="py-2.5 px-3 text-center text-brand-gold font-black font-mono text-sm">
+              <td className="py-2.5 px-3 text-center text-brand-red font-black font-mono text-sm">
                 {(order.total || 0).toFixed(2)} ج.م
               </td>
               {/* CHANGED: cancel (x) now available on dine-in too. stopPropagation
@@ -191,7 +191,7 @@ const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => v
               key={order.id}
               onClick={() => canAddItems && onResume(order)}
               title={canAddItems ? "افتح الطلب" : undefined}
-              className={`border-t border-brand-border/20 transition-colors ${canAddItems ? "cursor-pointer hover:bg-brand-gold/5" : ""} ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}
+              className={`border-t border-brand-border/20 transition-colors ${canAddItems ? "cursor-pointer hover:bg-brand-red/5" : ""} ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}
             >
               <td className="py-2.5 px-3 text-gray-400 font-mono text-xs">#{order.invoice_no || order.id}</td>
               <td className="py-2.5 px-3">
@@ -201,9 +201,9 @@ const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => v
                     className="text-right group"
                     title="عرض تاريخ العميل"
                   >
-                    <span className="text-white font-bold text-sm group-hover:text-brand-gold transition-colors flex items-center gap-1">
+                    <span className="text-white font-bold text-sm group-hover:text-brand-red transition-colors flex items-center gap-1">
                       {order.customer_name || "—"}
-                      <History size={10} className="opacity-0 group-hover:opacity-100 transition-opacity text-brand-gold" />
+                      <History size={10} className="opacity-0 group-hover:opacity-100 transition-opacity text-brand-red" />
                     </span>
                     {order.customer_phone && (
                       <span className="text-gray-500 font-mono block text-[10px]">{order.customer_phone}</span>
@@ -225,7 +225,7 @@ const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => v
                   </span>
                 ) : (
                   <>
-                    {order.customer_zone && <div className="text-brand-gold">{order.customer_zone}</div>}
+                    {order.customer_zone && <div className="text-brand-red">{order.customer_zone}</div>}
                     {order.customer_address && <div className="truncate max-w-[120px]">{order.customer_address}</div>}
                   </>
                 )}
@@ -236,7 +236,7 @@ const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => v
               <td className="py-2.5 px-3 text-center">
                 <LiveTimer since={order.created_at} urgentSecs={1200} />
               </td>
-              <td className="py-2.5 px-3 text-center text-brand-gold font-black font-mono text-sm">
+              <td className="py-2.5 px-3 text-center text-brand-red font-black font-mono text-sm">
                 {(order.total || 0).toFixed(2)} ج.م
               </td>
               {/* CHANGED: "إضافة" removed (row click opens the order now). Keep the
@@ -294,7 +294,7 @@ const TakeawayTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; o
               key={order.id}
               onClick={() => canAddItems && onResume(order)}
               title={canAddItems ? "افتح الطلب" : undefined}
-              className={`border-t border-brand-border/20 transition-colors ${canAddItems ? "cursor-pointer hover:bg-brand-gold/5" : ""} ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}
+              className={`border-t border-brand-border/20 transition-colors ${canAddItems ? "cursor-pointer hover:bg-brand-red/5" : ""} ${i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}
             >
               <td className="py-2.5 px-3 text-gray-400 font-mono text-xs">#{order.invoice_no || order.id}</td>
               <td className="py-2.5 px-3 text-gray-400 text-xs">
@@ -309,7 +309,7 @@ const TakeawayTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; o
               <td className="py-2.5 px-3 text-center">
                 <CountdownTimer since={order.paid_at || order.created_at} windowSecs={TAKEAWAY_WINDOW_SECS} />
               </td>
-              <td className="py-2.5 px-3 text-center text-brand-gold font-black font-mono text-sm">
+              <td className="py-2.5 px-3 text-center text-brand-red font-black font-mono text-sm">
                 {(order.total || 0).toFixed(2)} ج.م
               </td>
               {/* CHANGED: "إضافة" removed (row click opens the order). Keep cancel.
@@ -379,7 +379,7 @@ const HistoryTable: React.FC<{ orders: any[] }> = ({ orders }) => (
               <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border ${st.color}`}>{st.label}</span>
             </td>
             <td className="py-2.5 px-3 text-center text-gray-400 font-mono text-xs">{formatClock(order.paid_at || order.created_at)}</td>
-            <td className="py-2.5 px-3 text-center text-brand-gold font-black font-mono text-sm">
+            <td className="py-2.5 px-3 text-center text-brand-red font-black font-mono text-sm">
               {(order.total || 0).toFixed(2)} ج.م
             </td>
           </tr>
@@ -497,7 +497,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
   if (loading && orders.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-white space-y-2 h-[calc(100vh-64px)]">
-        <Loader2 className="animate-spin text-brand-gold" size={32} />
+        <Loader2 className="animate-spin text-brand-red" size={32} />
         <p className="text-gray-400 text-xs">جاري تحميل الطلبات...</p>
       </div>
     );
@@ -508,7 +508,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
       {/* Header */}
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl bg-brand-gold/10 text-brand-gold flex items-center justify-center">
+          <div className="h-10 w-10 rounded-2xl bg-brand-red/10 text-brand-red flex items-center justify-center">
             {isHistory ? <Archive size={20} /> : <Eye size={20} />}
           </div>
           <div>
@@ -531,7 +531,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
               onClick={() => setFilterType(f.id)}
               className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all ${
                 filterType === f.id
-                  ? "bg-brand-gold/10 border-brand-gold text-brand-gold"
+                  ? "bg-brand-red/10 border-brand-red text-brand-red"
                   : "bg-brand-card border-brand-border/40 text-gray-400 hover:text-white"
               }`}
             >
@@ -544,7 +544,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
             onClick={() => setFilterType("history")}
             className={`py-1.5 px-3 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 ${
               isHistory
-                ? "bg-brand-gold/10 border-brand-gold text-brand-gold"
+                ? "bg-brand-red/10 border-brand-red text-brand-red"
                 : "bg-brand-card border-brand-border/40 text-gray-400 hover:text-white"
             }`}
           >
@@ -553,7 +553,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
           </button>
           <button
             onClick={isHistory ? fetchHistory : fetchOrders}
-            className={`p-2 bg-brand-card border border-brand-border/40 hover:border-brand-gold text-gray-400 hover:text-brand-gold rounded-xl transition-all ${loading ? "animate-spin" : ""}`}
+            className={`p-2 bg-brand-card border border-brand-border/40 hover:border-brand-red text-gray-400 hover:text-brand-red rounded-xl transition-all ${loading ? "animate-spin" : ""}`}
           >
             <RefreshCw size={16} />
           </button>
