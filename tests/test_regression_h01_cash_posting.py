@@ -85,8 +85,13 @@ def _open_session(db: DatabaseConnection, user_id: int, float_egp: float) -> int
     """Open a cashier session with opening float; return session id."""
     repo = CashierSessionRepository(db=db)
     ledger = CashLedgerRepository(db=db)
-    from broast_pos.core.models.cashier_session import CashierSession, CashLedgerEntry, LedgerEntryType
     from datetime import datetime
+
+    from broast_pos.core.models.cashier_session import (
+        CashierSession,
+        CashLedgerEntry,
+        LedgerEntryType,
+    )
     session = repo.create(CashierSession(
         id=None, day_id=1, user_id=user_id, station=Station.ALL, is_open=True,
         opened_at=datetime.now().isoformat(),
@@ -168,7 +173,7 @@ class TestH01CashPosting:
     def test_visa_payment_does_not_post_sale_cash(self):
         """Visa payment must not add any entry to cash_ledger."""
         db = _fresh_db()
-        session_id = _open_session(db, user_id=1, float_egp=100.0)
+        _open_session(db, user_id=1, float_egp=100.0)
         svc = _make_svc(db)
         order = _saved_order(db, total=70.0)
 
