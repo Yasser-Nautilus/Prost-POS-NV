@@ -97,19 +97,21 @@ class CashierSessionService:
             opening_float_pt=opening_float_pt,
         )
 
-        created = self._sessions.create(session)
+        db = self._sessions._db
+        with db.transaction():
+            created = self._sessions.create(session)
 
-        # OPENING_FLOAT ledger entry — cash enters the drawer
-        if opening_float_pt > 0:
-            self._ledger.append(CashLedgerEntry(
-                id=None,
-                day_id=day_id,
-                session_id=created.id,
-                entry_type=LedgerEntryType.OPENING_FLOAT,
-                amount_pt=opening_float_pt,
-                actor_id=actor_id or user_id,
-                reason="فتح الوردية",
-            ))
+            # OPENING_FLOAT ledger entry — cash enters the drawer
+            if opening_float_pt > 0:
+                self._ledger.append(CashLedgerEntry(
+                    id=None,
+                    day_id=day_id,
+                    session_id=created.id,
+                    entry_type=LedgerEntryType.OPENING_FLOAT,
+                    amount_pt=opening_float_pt,
+                    actor_id=actor_id or user_id,
+                    reason="فتح الوردية",
+                ))
 
         logger.info(
             "Session %d opened — day=%d user=%d station=%s float=%.2f EGP",
@@ -163,7 +165,7 @@ class CashierSessionService:
             if self._auth is not None:
                 self._auth.verify_manager_pin(manager_pin)
 
-        # ADJUSTMENT entry if there is a variance
+        # ADJUSTMENT entry and session close are atomic — roll back both on failure
         manager_id: int | None = None
         if variance_pt != 0:
             if self._auth is not None and manager_pin:
@@ -174,25 +176,28 @@ class CashierSessionService:
                     # Checkup-Fix: manager lookup is optional here, but log failures.
                     logger.debug("Manager-by-PIN lookup failed (variance entry)", exc_info=True)
 
-            self._ledger.append(CashLedgerEntry(
-                id=None,
-                day_id=session.day_id,
-                session_id=session_id,
-                entry_type=LedgerEntryType.ADJUSTMENT,
-                amount_pt=variance_pt,          # signed: + shortage counted more, − counted less
-                actor_id=actor_id,
-                approved_by=manager_id,
-                reason=variance_reason or ("عجز" if variance_pt < 0 else "زيادة"),
-            ))
+        db = self._sessions._db
+        with db.transaction():
+            if variance_pt != 0:
+                self._ledger.append(CashLedgerEntry(
+                    id=None,
+                    day_id=session.day_id,
+                    session_id=session_id,
+                    entry_type=LedgerEntryType.ADJUSTMENT,
+                    amount_pt=variance_pt,          # signed: + shortage counted more, − counted less
+                    actor_id=actor_id,
+                    approved_by=manager_id,
+                    reason=variance_reason or ("عجز" if variance_pt < 0 else "زيادة"),
+                ))
 
-        self._sessions.close_session(
-            session_id=session_id,
-            counted_cash_pt=counted_cash_pt,
-            expected_cash_pt=expected_pt,
-            variance_pt=variance_pt,
-            variance_approved_by=manager_id,
-            variance_reason=variance_reason,
-        )
+            self._sessions.close_session(
+                session_id=session_id,
+                counted_cash_pt=counted_cash_pt,
+                expected_cash_pt=expected_pt,
+                variance_pt=variance_pt,
+                variance_approved_by=manager_id,
+                variance_reason=variance_reason,
+            )
 
         closed = self._sessions.get_by_id(session_id)
         logger.info(
