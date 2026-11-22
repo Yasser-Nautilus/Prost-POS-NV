@@ -580,8 +580,14 @@ class TestFullUserSimulation:
         assert res["success"] is False
         assert "طباعة التقرير اليومي" in res["error"]
 
-        # Print shift summary
+        # Print shift summary — manager/admin only (H06): the frontend never
+        # shows this button to a cashier, so the manager steps in to print it.
+        client.call("logout")
+        client.call("login", {"pin": "1234"})
         res = client.call("print_shift_summary")
+        assert res["success"] is True
+        client.call("logout")
+        res = client.call("login", {"pin": "2222"})
         assert res["success"] is True
 
         # Now attempt to close shift while an order is open -> MUST FAIL (Guard 4: open orders)
@@ -607,10 +613,6 @@ class TestFullUserSimulation:
         assert "expected_cash" not in cashier_summary
         assert "total_sales" not in cashier_summary
         assert cashier_summary["total_expenses"] == 50.0
-
-        # Print shift summary (simulating cashier pressing Print Daily Summary)
-        res = client.call("print_shift_summary")
-        assert res["success"] is True
 
         # Log out cashier, log in manager/admin to view full figures
         client.call("logout")
