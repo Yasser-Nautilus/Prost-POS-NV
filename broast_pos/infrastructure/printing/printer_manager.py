@@ -93,6 +93,15 @@ class PrinterManager:
         printer = self._printers.get(key)
         return printer is not None and printer.is_connected
 
+    def get_status(self) -> dict[str, bool]:
+        """H14: readiness of every configured printer, keyed by role.
+
+        Exposes what initialise() connected (or failed to connect) so a
+        caller — the bridge, a UI badge, a health check — can see printer
+        readiness instead of only discovering it on the first failed print.
+        """
+        return {key: printer.is_connected for key, printer in self._printers.items()}
+
     # ------------------------------------------------------------------
     # Simulate mode
     # ------------------------------------------------------------------

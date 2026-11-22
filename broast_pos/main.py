@@ -196,6 +196,7 @@ def main() -> int:
     # 4. Printing infrastructure
     # ------------------------------------------------------------------
     printer_manager = PrinterManager()
+    printer_manager.initialise()
     print_triggers = PrintTriggers(printer_manager)
 
     # ------------------------------------------------------------------
@@ -234,6 +235,9 @@ def main() -> int:
 
     shell = WebShell(bridge)
     shell.show()
+
+    # Disconnect printers gracefully on app exit
+    app.aboutToQuit.connect(printer_manager.shutdown)
 
     # ------------------------------------------------------------------
     # 7. Background Tasks

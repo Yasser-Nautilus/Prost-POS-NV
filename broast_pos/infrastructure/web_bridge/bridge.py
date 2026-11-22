@@ -571,6 +571,13 @@ class POSBridge(QObject):
                     return json.dumps({"success": False, "error": "فشل في طباعة تقرير الوردية"})
                 return json.dumps({"success": True})
 
+            elif action == "get_printer_status":
+                # H14: visible readiness per printer — the UI can show a
+                # warning badge instead of only finding out on a failed print.
+                if not self._printer:
+                    return json.dumps({"success": True, "data": {}})
+                return json.dumps({"success": True, "data": self._printer.get_status()})
+
             # ── Order Workspace ───────────────────────────────────────────────
             elif action in ("new_order", "get_current_order", "add_item", "change_item_quantity",
                             "remove_item", "set_item_note", "set_table", "change_table", "set_customer_info",
