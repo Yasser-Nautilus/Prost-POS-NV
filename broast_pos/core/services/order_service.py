@@ -351,10 +351,31 @@ class OrderService:
                     },
                 )
 
-        # Apply changes
-        # Remove items from order
-        remove_ids = {i.product_id for i in removed_items}
-        order.items = [i for i in order.items if i.product_id not in remove_ids]
+        # Apply removals as quantity deltas, keyed on (product_id, notes) so that
+        # lines with the same product but different notes are addressed independently.
+        if removed_items:
+            remove_deltas: dict[tuple[int, str], int] = {
+                (i.product_id, i.notes or ""): i.quantity for i in removed_items
+            }
+            new_items: list[OrderItem] = []
+            for item in order.items:
+                key = (item.product_id, item.notes or "")
+                delta = remove_deltas.get(key, 0)
+                if delta:
+                    new_qty = item.quantity - delta
+                    if new_qty > 0:
+                        # Partial reduction — keep the line with the lower qty.
+                        new_items.append(OrderItem(
+                            product_id=item.product_id,
+                            product_name=item.product_name,
+                            unit_price=item.unit_price,
+                            quantity=new_qty,
+                            notes=item.notes,
+                        ))
+                    # else: fully removed — do not add to new_items
+                else:
+                    new_items.append(item)
+            order.items = new_items
 
         # Add new items (prices locked at this moment) — check availability first
         self._check_items_available(added_items)
