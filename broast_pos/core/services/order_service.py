@@ -338,6 +338,12 @@ class OrderService:
         if order.status in (OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED):
             raise ValueError("لا يمكن تعديل طلب في هذه الحالة (مكتمل، ملغي، أو خارج للتوصيل)")
 
+        # H03: a paid order must never change total after payment — a
+        # takeaway order stays ACTIVE (not COMPLETED) while already paid,
+        # so the status check above does not catch this on its own.
+        if order.is_paid:
+            raise ValueError("لا يمكن تعديل طلب مدفوع بالفعل")
+
         # Removing items requires manager override
         if removed_items:
             if not manager_pin:
@@ -422,6 +428,13 @@ class OrderService:
                     shift = fin_repo.get_by_id(order.shift_id)
             if shift is not None and not shift.is_active:
                 raise ValueError("لا يمكن الدفع على وردية مغلقة")
+
+        # H03: an already-paid active order (e.g. a takeaway paid with
+        # finalize=False) must not be payable again — a second payment
+        # attempt silently overwrote payment_method/amount_paid while
+        # leaving the order's recorded total free to change elsewhere.
+        if order.is_paid:
+            raise ValueError("الطلب مدفوع بالفعل")
 
         payment = self._payments.calculate(
             total=order.total,

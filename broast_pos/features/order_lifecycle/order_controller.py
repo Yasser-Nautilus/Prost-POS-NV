@@ -146,6 +146,10 @@ class OrderController:
         """
         if self._current_order is None:
             return
+        # H03: a paid order's total must never change — even just on screen —
+        # once payment has been recorded.
+        if self._current_order.is_paid:
+            return
 
         if self._products is None:
             raise ValueError("خدمة المنتجات غير مهيأة")
@@ -176,6 +180,9 @@ class OrderController:
         """Change item quantity by delta (+/-)."""
         if self._current_order is None:
             return
+        # H03: a paid order's total must never change after payment.
+        if self._current_order.is_paid:
+            return
         if 0 <= index < len(self._current_order.items):
             self._current_order.items[index].quantity += delta
             if self._current_order.items[index].quantity <= 0:
@@ -193,6 +200,10 @@ class OrderController:
         """
         if self._current_order is None:
             return False, "لا يوجد طلب حالي"
+
+        # H03: a paid order's total must never change after payment.
+        if self._current_order.is_paid:
+            return False, "لا يمكن تعديل طلب مدفوع بالفعل"
 
         if 0 <= index < len(self._current_order.items):
             # If order is already saved, require manager PIN
@@ -282,6 +293,10 @@ class OrderController:
             payment_method: For delivery, either 'cash' (driver collects) or
                             'online' (pre-paid). Defaults to 'cash' if omitted.
         """
+        if self._current_order and self._current_order.is_paid:
+            # H03: delivery_fee feeds directly into total — must not change
+            # the displayed total of an order that is already paid.
+            return
         if self._current_order:
             resolved_zone = self._current_order.customer_zone
             resolved_fee = self._current_order.delivery_fee
