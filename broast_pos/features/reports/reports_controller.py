@@ -280,21 +280,37 @@ class ReportsController:
         try:
             summary = self.generate_daily_summary(target_date, shift_id)
 
-            # Build shift period for header
+            # H16: the template expects top-level "breakdown"/"grand_total",
+            # but generate_daily_summary nests the sales breakdown under
+            # "sales_by_type" — adapt once, here, instead of in the template.
+            sales = summary.get("sales_by_type") or {}
+            report_payload = {
+                "breakdown": sales.get("breakdown", []),
+                "grand_total": sales.get("grand_total", {"count": 0, "revenue": 0.0}),
+            }
+
+            # Build shift period for header — the template expects separate
+            # from/to date and time keys, not opened_at/closed_at timestamps.
             shift_period = None
             try:
                 shift = self._financial_svc._financial.get_by_id(shift_id)
                 if shift:
+                    opened = shift.opened_at or ""
+                    closed = shift.closed_at or datetime.now().isoformat()
+                    from_date, from_time = self._split_date_time(opened)
+                    to_date, to_time = self._split_date_time(closed)
                     shift_period = {
-                        "opened_at": shift.opened_at or "",
-                        "closed_at": shift.closed_at or datetime.now().isoformat(),
+                        "from_date": from_date,
+                        "from_time": from_time,
+                        "to_date": to_date,
+                        "to_time": to_time,
                     }
             except Exception:
                 # Checkup-Fix: shift period is optional for the summary, but log failures.
                 logger.warning("Loading shift period for report failed", exc_info=True)
 
             printed = self._printer.print_shift_summary(
-                summary, cashier_slot=cashier_slot, shift_period=shift_period,
+                report_payload, cashier_slot=cashier_slot, shift_period=shift_period,
             )
 
             if printed:
@@ -309,6 +325,16 @@ class ReportsController:
         except Exception as exc:
             logger.error("Daily summary print failed: %s", exc)
             return False
+
+    @staticmethod
+    def _split_date_time(timestamp: str) -> tuple[str, str]:
+        """H16: split a stored "YYYY-MM-DD HH:MM:SS" timestamp into
+        separate date/time strings for the print template's header."""
+        try:
+            dt = datetime.fromisoformat(timestamp)
+            return dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M")
+        except ValueError:
+            return (timestamp[:10] if len(timestamp) >= 10 else ""), ""
 
     # ------------------------------------------------------------------
     # Task 4: Consistency Checks
