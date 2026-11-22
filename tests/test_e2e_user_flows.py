@@ -450,6 +450,7 @@ class TestFullUserSimulation:
             "zone_id": zone_entag["id"],
         })
         assert res["success"] is True
+        address_id = res["data"]["id"]
 
         # Create delivery order
         res = client.call("new_order", {"order_type": "delivery"})
@@ -460,8 +461,7 @@ class TestFullUserSimulation:
             "name": "محمود إبراهيم",
             "phone": "01099887766",
             "address": "عمارة 15 الدور الثالث",
-            "zone": zone_entag["name"],
-            "delivery_fee": zone_entag["delivery_fee"],  # 15.00
+            "address_id": address_id,  # H19: backend resolves zone/fee from this
             "payment_method": "cash",
         })
         assert res["success"] is True

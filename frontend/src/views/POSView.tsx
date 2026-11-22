@@ -344,8 +344,11 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
         name: customer.name,
         phone: customer.phone,
         address: isPickup ? "استلام محل" : address.street_name,
+        // H19: the backend resolves zone/delivery_fee from address_id —
+        // these are display-only fallbacks, never trusted for the charge.
         zone: isPickup ? "" : address.zone_name,
         delivery_fee: isPickup ? 0 : address.delivery_fee,
+        address_id: isPickup ? undefined : address.id,
         // B-02: include the selected payment mode for delivery orders
         payment_method: currentOrder?.order_type === "delivery" ? deliveryPaymentMode : undefined,
       });

@@ -25,8 +25,10 @@ from broast_pos.core.models.order import (
 )
 from broast_pos.core.policies.discount import compute_discount
 from broast_pos.core.services.auth_service import AuthService
+from broast_pos.core.services.customer_service import CustomerService
 from broast_pos.core.services.financial_service import FinancialService
 from broast_pos.core.services.order_service import OrderService
+from broast_pos.core.services.product_service import ProductService
 from broast_pos.features.order_lifecycle.amendment_tracker import AmendmentTracker
 from broast_pos.infrastructure.printing.print_triggers import PrintTriggers
 
@@ -57,12 +59,18 @@ class OrderController:
         auth_service: AuthService,
         print_triggers: PrintTriggers,
         cashier_slot: int = 1,
+        product_service: ProductService | None = None,
+        customer_service: CustomerService | None = None,
     ) -> None:
         self._order_svc = order_service
         self._financial_svc = financial_service
         self._auth_svc = auth_service
         self._print = print_triggers
         self._cashier_slot = cashier_slot
+        # H19: resolve product price/name and zone delivery fee here, never
+        # trust the client's numbers.
+        self._products = product_service
+        self._customers = customer_service
 
         # In-memory state
         self._current_order: Order | None = None
@@ -117,17 +125,33 @@ class OrderController:
     def add_item(
         self,
         product_id: int,
-        product_name: str,
-        unit_price: float,
+        product_name: str = "",
+        unit_price: float = 0.0,
         quantity: int = 1,
         notes: str = "",
     ) -> None:
         """Add an item to the current in-memory order.
 
         If the product already exists, increment quantity.
+
+        H19: product_name/unit_price are accepted for backward-compatible
+        call shapes but are ALWAYS ignored — the name and price come from
+        the product catalogue by product_id, never from the caller. This
+        closes the bridge-boundary gap where a client could set its own
+        price for an active product.
+
+        Raises:
+            ValueError: if product_service isn't wired, or the product
+                        doesn't exist / isn't active.
         """
         if self._current_order is None:
             return
+
+        if self._products is None:
+            raise ValueError("خدمة المنتجات غير مهيأة")
+        product = self._products.get_product(product_id)
+        if product is None or not product.is_active:
+            raise ValueError("المنتج غير موجود أو غير متاح")
 
         # Check if already in order
         for item in self._current_order.items:
@@ -139,8 +163,8 @@ class OrderController:
 
         item = OrderItem(
             product_id=product_id,
-            product_name=product_name,
-            unit_price=unit_price,
+            product_name=product.name,
+            unit_price=product.price,
             quantity=quantity,
             notes=notes,
         )
@@ -242,21 +266,45 @@ class OrderController:
         address: str = "",
         zone: str = "",
         delivery_fee: float = 0.0,
+        address_id: int | None = None,
         payment_method: str | None = None,
     ) -> None:
         """Set customer info for delivery/pickup orders.
 
         Args:
+            address_id: The customer's saved address id. When given, the
+                        zone name and delivery fee are resolved from it on
+                        the backend (H19) — the zone/delivery_fee
+                        parameters below are then ignored. When omitted
+                        (e.g. a payment-method-only re-send, or a pickup
+                        order), the order's existing zone/fee are kept
+                        as-is rather than trusting the client's numbers.
             payment_method: For delivery, either 'cash' (driver collects) or
                             'online' (pre-paid). Defaults to 'cash' if omitted.
         """
         if self._current_order:
+            resolved_zone = self._current_order.customer_zone
+            resolved_fee = self._current_order.delivery_fee
+            if address_id is not None:
+                if self._customers is None:
+                    raise ValueError("خدمة العملاء غير مهيأة")
+                saved_address = self._customers.get_address(address_id)
+                if saved_address is None or saved_address.customer_id != customer_id:
+                    raise ValueError("عنوان العميل غير موجود")
+                resolved_zone = saved_address.zone_name
+                resolved_fee = saved_address.delivery_fee
+            elif self._current_order.customer_id is None:
+                # No address resolved yet (first call, e.g. pickup): never
+                # trust the client's delivery_fee — default to zero.
+                resolved_zone = ""
+                resolved_fee = 0.0
+
             self._current_order.customer_id = customer_id
             self._current_order.customer_phone = phone
             self._current_order.customer_name = name
             self._current_order.customer_address = address
-            self._current_order.customer_zone = zone
-            self._current_order.delivery_fee = delivery_fee
+            self._current_order.customer_zone = resolved_zone
+            self._current_order.delivery_fee = resolved_fee
 
             # B-02: delivery payment method defaults to CASH
             if payment_method is not None:
