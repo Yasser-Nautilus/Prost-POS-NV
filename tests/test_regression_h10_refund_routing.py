@@ -198,3 +198,39 @@ class TestH10RefundRoutingAfterSessionClosed:
         assert ledger_repo.get_session_balance_pt(session_a.id) == 0
         reversal = ledger_repo.get_entry_by_order(order.id, LedgerEntryType.REVERSAL)
         assert reversal.session_id == session_a.id
+
+    def test_cancel_rejected_outright_when_no_session_open_at_all(self):
+        """H10 addendum: with no open till anywhere, the cancellation must
+        fail completely — not cancel the order while silently skipping the
+        refund."""
+        db = _fresh_db()
+        svc, ledger_repo, session_repo = _build_service(db)
+
+        # Sale was recorded against a session that has since closed, and no
+        # new session was opened — there is nowhere to post the refund.
+        session_a = session_repo.create(
+            CashierSession(id=None, day_id=1, user_id=2, station=Station.ALL, opening_float_pt=0)
+        )
+        order = svc._orders.save(_paid_active_order(shift_id=1))
+        ledger_repo.append(CashLedgerEntry(
+            id=None, day_id=1, session_id=session_a.id,
+            entry_type=LedgerEntryType.SALE_CASH, amount_pt=7000,
+            order_id=order.id, actor_id=2,
+        ))
+        session_repo.close_session(
+            session_id=session_a.id,
+            counted_cash_pt=7000, expected_cash_pt=7000, variance_pt=0,
+        )
+
+        with pytest.raises(ValueError):
+            svc.cancel_order(order.id, manager_pin="1234", reason="تست")
+
+        unchanged_order = svc._orders.get_by_id(order.id)
+        assert unchanged_order.status == OrderStatus.NEW, (
+            "H10 regression: the order was cancelled even though no refund "
+            "could be posted anywhere"
+        )
+        assert ledger_repo.get_entry_by_order(order.id, LedgerEntryType.REVERSAL) is None
+        assert ledger_repo.get_session_balance_pt(session_a.id) == 7000, (
+            "The closed session's sealed balance must remain untouched"
+        )

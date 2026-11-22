@@ -859,11 +859,13 @@ class OrderService:
 
         target_session_id = self._resolve_refund_session_id(sale_entry)
         if target_session_id is None:
-            logger.warning(
-                "No open cashier session available to route cancel-refund "
-                "for order %s — reversal not posted", order.id,
+            # H10: no open till to absorb the outflow — the cancellation
+            # must fail outright (the caller wraps this in a transaction),
+            # not silently cancel the order without ever posting a refund.
+            raise ValueError(
+                f"لا يمكن إلغاء الطلب #{order.invoice_no} — لا توجد وردية "
+                "صندوق مفتوحة لتسجيل المبلغ المرتجع"
             )
-            return
 
         reversal_amount_pt = -abs(sale_entry.amount_pt)
         self._ledger.append(CashLedgerEntry(
