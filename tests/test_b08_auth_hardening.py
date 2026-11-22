@@ -215,11 +215,10 @@ class TestLoginByPinThrottle:
         pin_hash = AuthService.hash_pin("5678")
         svc = _auth_svc(users_by_pin={pin_hash: user})
 
-        # Some failures with a different PIN (same key prefix won't match)
         # Then success
         svc.login_by_pin("5678")
         # No lockout expected
-        _, locked = svc.get_throttle_state(f"pin:{pin_hash[:8]}")
+        _, locked = svc.get_throttle_state("pin-only-login")
         assert not locked
 
 
@@ -244,7 +243,7 @@ class TestVerifyPinThrottle:
         svc = _auth_svc(users_by_pin={pin_hash: cashier})
         result = svc.verify_pin("1111")
         assert result is None   # wrong role — not authorized
-        count, _ = svc.get_throttle_state(f"override:{pin_hash[:8]}")
+        count, _ = svc.get_throttle_state("manager-override")
         assert count >= 1
 
     def test_verify_pin_success_resets_throttle(self):
@@ -257,7 +256,7 @@ class TestVerifyPinThrottle:
         # Now succeed
         result = svc.verify_pin("9999")
         assert result is not None
-        _, locked = svc.get_throttle_state(f"override:{pin_hash[:8]}")
+        _, locked = svc.get_throttle_state("manager-override")
         assert not locked
 
 
