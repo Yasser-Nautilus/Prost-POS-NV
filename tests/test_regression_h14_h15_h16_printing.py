@@ -28,7 +28,6 @@ import pytest
 
 from broast_pos.infrastructure.printing.printer_manager import PrinterManager
 
-
 # ---------------------------------------------------------------------------
 # Fake printer helpers
 # ---------------------------------------------------------------------------
