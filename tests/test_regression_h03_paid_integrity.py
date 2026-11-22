@@ -73,12 +73,13 @@ def _fresh_db() -> DatabaseConnection:
 
 
 def _open_session(db: DatabaseConnection, user_id: int, float_egp: float) -> int:
+    from datetime import datetime
+
     from broast_pos.core.models.cashier_session import (
-        CashLedgerEntry,
         CashierSession,
+        CashLedgerEntry,
         LedgerEntryType,
     )
-    from datetime import datetime
 
     repo = CashierSessionRepository(db=db)
     ledger = CashLedgerRepository(db=db)
@@ -166,6 +167,7 @@ class TestH03PaidOrderIntegrity:
     def test_total_changing_amendment_on_paid_order_rejected(self):
         """An amendment that would change the total of a paid order must be rejected."""
         from unittest.mock import MagicMock
+
         from broast_pos.core.models.user import User, UserRole
 
         db = _fresh_db()
