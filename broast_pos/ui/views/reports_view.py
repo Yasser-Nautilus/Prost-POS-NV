@@ -693,17 +693,13 @@ class ReportsView(QWidget):
 
     def _on_print_daily(self) -> None:
         """Trigger print for the daily summary."""
-        shift_id = self._ctrl.get_active_shift_id()
-        if shift_id is None:
-            # Fallback to 1 if no active shift exists in database for this moment
-            shift_id = 1
-
+        # H16: this tab shows one calendar day, so print that same day — not the
+        # active shift's totals next to another day's sales.
         qdate = self._daily_date.date()
         target = date(qdate.year(), qdate.month(), qdate.day())
 
         # Execute printing via controller
         success = self._ctrl.print_daily_summary(
-            shift_id=shift_id,
             cashier_slot=self._cashier_slot,
             target_date=target,
         )

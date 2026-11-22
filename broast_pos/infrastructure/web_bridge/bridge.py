@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import date
 from typing import Any
 
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
@@ -126,6 +127,29 @@ class POSBridge(QObject):
         self._financial_ctrl = None
         self._reports_ctrl = None
         self._session_ctrl = None
+
+    @staticmethod
+    def _report_scope(payload: dict[str, Any]) -> tuple[date | None, int | None]:
+        """H16: read the report scope from a payload → (target_date, shift_id).
+
+        ``shift_id`` selects one shift, ``date`` ("YYYY-MM-DD") one calendar
+        day; neither means today. Whether both together are allowed is decided
+        by ReportsController.validate_scope().
+
+        Raises:
+            ValueError: shift_id is not an integer or date is not YYYY-MM-DD.
+        """
+        shift_id = payload.get("shift_id")
+        if shift_id is not None and (isinstance(shift_id, bool) or not isinstance(shift_id, int)):
+            raise ValueError("رقم الوردية غير صحيح")
+        raw_date = payload.get("date")
+        target_date = None
+        if raw_date:
+            try:
+                target_date = date.fromisoformat(str(raw_date))
+            except ValueError:
+                raise ValueError("التاريخ غير صحيح — الصيغة YYYY-MM-DD")
+        return target_date, shift_id
 
     def _on_order_changed_cb(self):
         order = self._order_ctrl._current_order if self._order_ctrl else None
@@ -590,10 +614,12 @@ class POSBridge(QObject):
                 # Manager/Admin only — matches the hidden "التقارير المالية" tab
                 if not self._current_user or not self._current_user.is_manager_or_above():
                     return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
-                # Correct method: generate_daily_summary on ReportsController
+                # H16: payload "shift_id" → that shift's report; payload "date"
+                # (YYYY-MM-DD) → that calendar day; neither → today. Not both.
                 try:
+                    target_date, shift_id = self._report_scope(payload)
                     data = self._reports_ctrl.generate_daily_summary(
-                        target_date=None, shift_id=payload.get("shift_id")
+                        target_date=target_date, shift_id=shift_id
                     )
                 except ValueError as e:
                     return json.dumps({"success": False, "error": str(e)})
@@ -605,8 +631,14 @@ class POSBridge(QObject):
                 # Manager/Admin only — matches the hidden "التقارير المالية" tab
                 if not self._current_user or not self._current_user.is_manager_or_above():
                     return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
-                # Correct method: get_bestsellers on ReportsController
-                data = self._reports_ctrl.get_bestsellers()[:payload.get("limit", 20)]
+                # H16: same scope as get_report_daily_sales (shift_id | date | today)
+                try:
+                    target_date, shift_id = self._report_scope(payload)
+                    self._reports_ctrl.validate_scope(target_date, shift_id)
+                except ValueError as e:
+                    return json.dumps({"success": False, "error": str(e)})
+                data = self._reports_ctrl.get_bestsellers(target_date, shift_id)
+                data = data[:payload.get("limit", 20)]
                 return json.dumps({"success": True, "data": data})
 
             elif action == "print_shift_summary":
@@ -631,6 +663,13 @@ class POSBridge(QObject):
                 if not printed:
                     return json.dumps({"success": False, "error": "فشل في طباعة تقرير الوردية"})
                 return json.dumps({"success": True})
+
+            elif action == "get_printer_status":
+                # H14: visible readiness per printer — the UI can show a
+                # warning badge instead of only finding out on a failed print.
+                if not self._printer:
+                    return json.dumps({"success": True, "data": {}})
+                return json.dumps({"success": True, "data": self._printer.get_status()})
 
             # ── Order Workspace ───────────────────────────────────────────────
             elif action in ("new_order", "get_current_order", "add_item", "change_item_quantity",
