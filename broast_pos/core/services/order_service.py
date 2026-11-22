@@ -121,6 +121,15 @@ class OrderService:
         """Public accessor for the audit service (used by controllers)."""
         return self._audit_svc
 
+    def can_transition(self, order: Order, new_status: OrderStatus) -> bool:
+        """Read-only check: would new_status be a legal transition for order?
+
+        Lets a caller validate a whole batch of orders before writing
+        anything (H13), without going through change_order_status's
+        side effects.
+        """
+        return new_status in _allowed_targets(order)
+
     # ------------------------------------------------------------------
     # Create order
     # ------------------------------------------------------------------
