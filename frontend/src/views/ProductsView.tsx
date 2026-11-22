@@ -305,6 +305,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                   e.stopPropagation();
                   openEditCategory(cat);
                 }}
+                aria-label="تعديل الفئة"
+                title="تعديل الفئة"
                 className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-brand-gold transition-all"
               >
                 <Edit3 size={12} />
@@ -343,6 +345,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => openEditProduct(prod)}
+                          aria-label="تعديل المنتج"
+                          title="تعديل المنتج"
                           className="h-7 w-7 rounded-lg bg-brand-gold/10 text-brand-gold flex items-center justify-center hover:bg-brand-gold/20 transition-all"
                         >
                           <Edit3 size={12} />
@@ -350,6 +354,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                         {prod.is_active && (
                           <button
                             onClick={() => handleDeactivateProduct(prod.id, prod.name)}
+                            aria-label="إيقاف تفعيل المنتج"
+                            title="إيقاف تفعيل المنتج"
                             className="h-7 w-7 rounded-lg bg-red-950/30 text-red-400 flex items-center justify-center hover:bg-red-950/60 transition-all"
                           >
                             <EyeOff size={12} />
@@ -380,6 +386,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
               </h3>
               <button
                 onClick={() => setShowProductForm(false)}
+                aria-label="إغلاق النموذج"
+                title="إغلاق"
                 className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-brand-border/30"
               >
                 <X size={20} />
@@ -471,6 +479,8 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
               </h3>
               <button
                 onClick={() => setShowCatForm(false)}
+                aria-label="إغلاق النموذج"
+                title="إغلاق"
                 className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-brand-border/30"
               >
                 <X size={20} />

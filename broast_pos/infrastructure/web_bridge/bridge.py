@@ -761,19 +761,21 @@ class POSBridge(QObject):
                 return json.dumps({"success": True, "data": {
                     "invoice_no": res.invoice_no,
                     "needs_immediate_payment": res.needs_immediate_payment,
-                    "order_id": res.order_id
+                    "order_id": res.order_id,
+                    "print_failed": not res.print_ok,
                 }})
             return json.dumps({"success": False, "error": str(res)})
         elif action == "complete_payment":
             # keep_open=True pays the order but leaves it active (takeaway).
-            ok, msg = ctrl.complete_payment(
+            ok, msg, print_ok = ctrl.complete_payment(
                 order_id=payload.get("order_id"),
                 payment_method=payload.get("payment_method"),
                 amount_paid=payload.get("amount_paid", 0.0),
                 finalize=not payload.get("keep_open", False),
             )
             if ok:
-                return json.dumps({"success": True, "message": msg})
+                return json.dumps({"success": True, "message": msg,
+                                   "data": {"print_failed": not print_ok}})
             return json.dumps({"success": False, "message": msg, "error": msg})
         elif action == "get_order_history":
             return json.dumps({"success": True, "data": [self._order_to_dict(o) for o in ctrl.get_order_history()]})
@@ -790,9 +792,10 @@ class POSBridge(QObject):
                 return json.dumps({"success": True, "data": self._order_to_dict(order)})
             return json.dumps({"success": False, "error": "لا يوجد طلب لهذه الطاولة"})
         elif action == "save_amendment":
-            ok, msg = ctrl.save_amendment(payload.get("manager_pin"))
+            ok, msg, print_ok = ctrl.save_amendment(payload.get("manager_pin"))
             if ok:
-                return json.dumps({"success": True, "message": msg})
+                return json.dumps({"success": True, "message": msg,
+                                   "data": {"print_failed": not print_ok}})
             return json.dumps({"success": False, "error": msg})
         elif action == "get_active_orders":
             return json.dumps({"success": True, "data": [self._order_to_dict(o) for o in ctrl.get_active_orders()]})

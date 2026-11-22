@@ -213,7 +213,7 @@ class TestCompletePaymentClearsCurrentOrder:
         ctrl = _ctrl_stub(order, order_svc=svc)
         ctrl._occupied_tables = {2: "#55"}
 
-        ok, _msg = ctrl.complete_payment(
+        ok, _msg, _print_ok = ctrl.complete_payment(
             order_id=7,
             payment_method="cash",
             amount_paid=150.0,
@@ -240,7 +240,7 @@ class TestCompletePaymentClearsCurrentOrder:
         svc.complete_order.return_value = takeaway
         ctrl = _ctrl_stub(takeaway, order_svc=svc)
 
-        ok, _msg = ctrl.complete_payment(
+        ok, _msg, _print_ok = ctrl.complete_payment(
             order_id=12,
             payment_method="cash",
             amount_paid=100.0,

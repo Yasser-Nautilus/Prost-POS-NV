@@ -40,6 +40,7 @@ class ConfirmResult:
     invoice_no: int
     needs_immediate_payment: bool = False
     order_id: int | None = None
+    print_ok: bool = True
 
 
 class OrderController:
@@ -366,7 +367,7 @@ class OrderController:
 
         # Print kitchen ticket (silent — never blocks)
         order_dict = self._order_to_dict(saved)
-        self._print.on_order_created(order_dict)
+        kitchen_ok = bool(self._print.on_order_created(order_dict))
 
         # B-02: ONLINE delivery orders are already marked is_paid=True by
         # create_order (atomically). No secondary complete_order() call needed.
@@ -393,6 +394,7 @@ class OrderController:
                 saved.order_type == OrderType.TAKEAWAY
             ),
             order_id=saved.id,
+            print_ok=kitchen_ok,
         )
 
     # ------------------------------------------------------------------
@@ -424,13 +426,13 @@ class OrderController:
                 order_id, method, amount_paid, finalize=finalize
             )
         except Exception as exc:
-            return False, f"فشل في الدفع: {exc}"
+            return False, f"فشل في الدفع: {exc}", True
 
-        # Print customer receipt
+        # Print customer receipt (never blocks payment — only informs)
         order_dict = self._order_to_dict(completed)
         order_dict["amount_paid"] = amount_paid
         order_dict["change_given"] = max(0, amount_paid - completed.total)
-        self._print.on_order_completed(order_dict, self._cashier_slot)
+        receipt_ok = bool(self._print.on_order_completed(order_dict, self._cashier_slot))
 
         # Free table if dine-in
         if completed.order_type == OrderType.DINE_IN and completed.table_no:
@@ -444,7 +446,7 @@ class OrderController:
                 self._notify_order_changed()
 
         logger.info("Payment completed for order #%s", completed.invoice_no)
-        return True, "تم الدفع بنجاح"
+        return True, "تم الدفع بنجاح", receipt_ok
 
     # ------------------------------------------------------------------
     # 5. Edit Saved Order (Amendment)
@@ -537,19 +539,19 @@ class OrderController:
                 manager_pin,
             )
         except PermissionError as exc:
-            return False, str(exc)
+            return False, str(exc), True
         except Exception as exc:
-            return False, f"فشل في حفظ التعديل: {exc}"
+            return False, f"فشل في حفظ التعديل: {exc}", True
 
-        # Print amendment ticket
+        # Print amendment kitchen ticket (never blocks save — only informs)
         order_dict = self._order_to_dict(self._current_order)
-        self._print.on_order_amended(order_dict, changes)
+        amendment_ok = bool(self._print.on_order_amended(order_dict, changes))
 
         # Clear tracker
         self._amendment_tracker.clear()
 
         logger.info("Amendment saved for order #%s", self._current_order.invoice_no)
-        return True, "تم حفظ التعديل"
+        return True, "تم حفظ التعديل", amendment_ok
 
     # ------------------------------------------------------------------
     # 6. Cancel Order
@@ -638,7 +640,7 @@ class OrderController:
             self._notify_order_changed()
 
             # B-03: audit every money-touching operation, even before first save
-            self._order_svc._audit_svc.log(
+            self._order_svc.audit_svc.log(
                 event_type=AuditEventType.DISCOUNT_APPLIED,
                 user_id=manager.id,
                 user_name=manager.display_name or manager.username or "",

@@ -85,10 +85,12 @@ class FinancialService:
 
         saved = self._financial.open_shift(user_id)
 
+        user = self._auth.get_user_by_id(user_id) if self._auth else None
         self._audit.log(
             event_type="shift_opened",
             user_id=user_id,
-            user_name="",
+            user_name=user.display_name if user else "",
+            action="فتح الوردية",
             details={"shift_id": saved.id},
         )
 
@@ -137,10 +139,12 @@ class FinancialService:
             json.loads(snapshot),
         )
 
+        from_user = self._auth.get_user_by_id(from_user_id) if self._auth else None
         self._audit.log(
             event_type="shift_transferred",
             user_id=from_user_id,
-            user_name="",
+            user_name=from_user.display_name if from_user else "",
+            action="تحويل الوردية",
             details={
                 "shift_id": shift.id,
                 "from_user_id": from_user_id,
@@ -209,6 +213,7 @@ class FinancialService:
                 event_type="shift_closed",
                 user_id=manager.id,
                 user_name=manager.display_name,
+                action="إغلاق الوردية",
                 details={"shift_id": shift_id},
             )
 

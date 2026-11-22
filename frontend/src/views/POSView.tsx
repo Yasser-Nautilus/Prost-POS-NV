@@ -398,7 +398,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
     // same for every order type.
     if (isAmending) {
       try {
-        await bridge.call("save_amendment");
+        const amendRes = await bridge.call<{ print_failed?: boolean }>("save_amendment");
         setIsAmending(false);
         setSelectedTable(null);
         // CHANGED: start a fresh empty order instead of re-fetching the just-saved
@@ -410,6 +410,9 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
         fetchParkedCount();
         fetchTableState();
         alert("تم حفظ تعديلات الطلب بنجاح!");
+        if (amendRes?.print_failed) {
+          alert("تعذّرت طباعة تذكرة التعديل — يرجى إبلاغ المدير");
+        }
       } catch (e: any) {
         alert("فشل حفظ التعديلات: " + e.message);
       }
@@ -427,7 +430,12 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
         invoice_no: string;
         needs_immediate_payment: boolean;
         order_id: number;
+        print_failed?: boolean;
       }>("confirm_order");
+
+      if (confirmRes.print_failed) {
+        alert("تعذّرت طباعة تذكرة المطبخ — يرجى إبلاغ المدير");
+      }
 
       if (confirmRes.needs_immediate_payment) {
         // Step 2A: Takeaway/pickup — show PaymentDialog to collect payment
@@ -465,7 +473,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
     const keepOpen = pendingOrderType === "takeaway";
     try {
       // complete_payment — records payment, prints customer receipt
-      await bridge.call("complete_payment", {
+      const payRes = await bridge.call<{ print_failed?: boolean }>("complete_payment", {
         order_id: pendingOrderId,
         payment_method: paymentMethod,
         amount_paid: amountPaid,
@@ -485,6 +493,10 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
       alert(keepOpen
         ? "تم تسجيل الدفع — الطلب في قائمة الانتظار حتى الاستلام"
         : "تم تأكيد الطلب وتسجيل الدفع بنجاح!");
+
+      if (payRes?.print_failed) {
+        alert("تعذّرت طباعة الفاتورة — يرجى إبلاغ المدير");
+      }
     } catch (e: any) {
       alert("فشل تسجيل الدفع: " + e.message);
     }

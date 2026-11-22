@@ -247,6 +247,8 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
                 {user.is_active && (
                   <button
                     onClick={() => handleDeactivate(user.id, user.display_name)}
+                    aria-label="تعطيل الحساب"
+                    title="تعطيل الحساب"
                     className="py-1.5 px-3 text-xs font-bold text-red-400 border border-red-900/30 bg-red-950/20 hover:bg-red-950/40 rounded-lg flex items-center justify-center transition-all"
                   >
                     <UserX size={12} />
@@ -268,6 +270,8 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
               </h3>
               <button
                 onClick={() => setShowForm(false)}
+                aria-label="إغلاق النموذج"
+                title="إغلاق"
                 className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-brand-border/30"
               >
                 <X size={20} />
