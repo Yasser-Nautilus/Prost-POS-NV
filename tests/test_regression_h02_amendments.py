@@ -26,13 +26,11 @@ from broast_pos.core.models.order import (
     OrderItem,
     OrderStatus,
     OrderType,
-    PaymentMethod,
 )
 from broast_pos.data.database.connection import DatabaseConnection
 from broast_pos.data.database.migrations import initialise_database
 from broast_pos.data.repositories.order_repository import OrderRepository
 from broast_pos.features.order_lifecycle.amendment_tracker import AmendmentTracker
-
 
 # ---------------------------------------------------------------------------
 # DB bootstrap
@@ -148,6 +146,7 @@ class TestAmendmentTrackerDiff:
 def _svc_with_mock_auth(db: DatabaseConnection):
     """OrderService with a mock auth that accepts any PIN as manager."""
     from unittest.mock import MagicMock
+
     from broast_pos.core.models.user import User, UserRole
     from broast_pos.core.services.order_service import OrderService
     from broast_pos.data.repositories.order_repository import OrderRepository
@@ -228,6 +227,7 @@ class TestSaveAmendmentResultShape:
 
     def _make_controller(self, db: DatabaseConnection):
         from unittest.mock import MagicMock
+
         from broast_pos.core.services.audit_service import AuditService
         from broast_pos.core.services.order_service import OrderService
         from broast_pos.data.repositories.audit_repository import AuditRepository
