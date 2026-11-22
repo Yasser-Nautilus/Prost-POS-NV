@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+ import { useState, useEffect } from "react";
 import { 
   ShoppingBag, Truck, BarChart3, LogOut, User, Calendar, 
   Loader2, Eye, Package, Users, Wallet, Shield
@@ -12,11 +12,10 @@ import { ProductsView } from "./views/ProductsView";
 import { UsersView } from "./views/UsersView";
 import { DriverSettlementView } from "./views/DriverSettlementView";
 import { AuditLogView } from "./views/AuditLogView";
-import { SessionsView } from "./views/SessionsView";
 import { ShiftDialog } from "./components/ShiftDialog";
 import { bridge } from "./bridge";
 
-type Tab = "pos" | "delivery" | "tracking" | "reports" | "products" | "users" | "settlement" | "audit" | "sessions";
+type Tab = "pos" | "delivery" | "tracking" | "reports" | "products" | "users" | "settlement" | "audit";
 
 // ── Confirm Dialog (replaces window.confirm) ────────────────────────────────
 
@@ -146,7 +145,6 @@ function App() {
     { id: "pos",        label: "شاشة البيع (POS)",    icon: ShoppingBag, visible: true },
     { id: "delivery",  label: "توصيل الطلبات",       icon: Truck,       visible: true },
     { id: "tracking",  label: "متابعة الطلبات",      icon: Eye,         visible: true },
-    { id: "sessions",  label: "ورديات الصندوق",      icon: Wallet,      visible: true },
     { id: "settlement",label: "تسوية السائقين",      icon: Wallet,      visible: isManagerOrAbove },
     { id: "reports",   label: "التقارير المالية",    icon: BarChart3,   visible: isManagerOrAbove },
     { id: "products",  label: "إدارة المنتجات",      icon: Package,     visible: isManagerOrAbove },
@@ -265,7 +263,6 @@ function App() {
             }}
           />
         )}
-        {activeTab === "sessions"   && <SessionsView currentUser={currentUser} />}
         {activeTab === "reports"    && isManagerOrAbove && <ReportsView key={activeShift?.id ?? "closed"} currentUser={currentUser} />}
         {activeTab === "products"   && isManagerOrAbove && <ProductsView currentUser={currentUser} />}
         {activeTab === "settlement" && isManagerOrAbove && <DriverSettlementView currentUser={currentUser} />}
