@@ -272,3 +272,86 @@ class TestSaveAmendmentResultShape:
         assert len(result) == 3, f"Expected 3 values, got {len(result)}: {result}"
         ok, msg, _ = result
         assert ok is True, f"Expected success, got: {msg}"
+
+    def test_no_order_branch_returns_three_values(self):
+        """save_amendment with no current order must return a 3-tuple."""
+        db = _fresh_db()
+        ctrl = self._make_controller(db)
+        # No load_order call — _current_order is None
+        result = ctrl.save_amendment()
+        assert len(result) == 3, f"Expected 3 values, got {len(result)}: {result}"
+        ok, _msg, print_ok = result
+        assert ok is False
+        assert print_ok is False
+
+
+class TestNoteOnlyAmendment:
+    """Note-only edits (same product, same qty, different notes) must persist."""
+
+    def _make_controller(self, db: DatabaseConnection):
+        from unittest.mock import MagicMock
+
+        from broast_pos.core.services.audit_service import AuditService
+        from broast_pos.core.services.order_service import OrderService
+        from broast_pos.data.repositories.audit_repository import AuditRepository
+        from broast_pos.data.repositories.order_repository import OrderRepository
+        from broast_pos.data.repositories.order_status_history_repository import (
+            OrderStatusHistoryRepository,
+        )
+        from broast_pos.features.order_lifecycle.order_controller import OrderController
+
+        mock_auth = MagicMock()
+        mock_auth.verify_pin.return_value = MagicMock()  # truthy → PIN accepted
+        svc = OrderService(
+            order_repo=OrderRepository(db=db),
+            audit_service=AuditService(AuditRepository(db=db)),
+            status_history_repo=OrderStatusHistoryRepository(db=db),
+            auth_service=mock_auth,
+        )
+        ctrl = OrderController(
+            order_service=svc,
+            financial_service=MagicMock(),
+            auth_service=mock_auth,
+            print_triggers=MagicMock(),
+        )
+        return ctrl
+
+    def test_note_only_edit_persists_to_db(self):
+        """Changing only the note of a line must persist after DB reload."""
+        from broast_pos.data.repositories.order_repository import OrderRepository
+
+        db = _fresh_db()
+        order = _saved_order(db, [(1, "وجبة", 70.0, 1, "بدون بصل")])
+        ctrl = self._make_controller(db)
+        ctrl.load_order(order.id)
+
+        # Change note, same product and qty — requires manager_pin because
+        # the diff sees old-note line as removed and new-note line as added.
+        ctrl._current_order.items[0].notes = "مع صوص"
+        ok, _msg, _print_ok = ctrl.save_amendment(manager_pin="1234")
+        assert ok is True, f"Note-only save must succeed: {_msg}"
+
+        reloaded = OrderRepository(db).get_by_id(order.id)
+        assert reloaded.items[0].notes == "مع صوص", (
+            f"Note must persist to DB, got: {reloaded.items[0].notes}"
+        )
+
+    def test_controller_state_matches_db_after_save(self):
+        """After save_amendment, controller's _current_order must match DB."""
+        from broast_pos.data.repositories.order_repository import OrderRepository
+
+        db = _fresh_db()
+        order = _saved_order(db, [(1, "وجبة", 70.0, 1, "")])
+        ctrl = self._make_controller(db)
+        ctrl.load_order(order.id)
+
+        ctrl.add_item(product_id=2, product_name="مشروب", unit_price=20.0, quantity=1)
+        ok, _msg, _print_ok = ctrl.save_amendment()
+        assert ok is True
+
+        reloaded = OrderRepository(db).get_by_id(order.id)
+        ctrl_ids = {i.product_id for i in ctrl._current_order.items}
+        db_ids = {i.product_id for i in reloaded.items}
+        assert ctrl_ids == db_ids, (
+            f"Controller state must match DB after save. ctrl={ctrl_ids} db={db_ids}"
+        )

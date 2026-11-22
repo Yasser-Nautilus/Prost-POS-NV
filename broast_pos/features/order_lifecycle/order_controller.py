@@ -483,10 +483,10 @@ class OrderController:
         Removing items requires manager PIN.
 
         Returns:
-            (success, message)
+            (success, message, print_ok)
         """
         if self._current_order is None or self._current_order.id is None:
-            return False, "لا يوجد طلب محفوظ للتعديل"
+            return False, "لا يوجد طلب محفوظ للتعديل", False
 
         # Compute diff from snapshot — each change now carries product_id and notes.
         changes = self._amendment_tracker.diff(self._current_order.items)
