@@ -98,7 +98,9 @@ class AuthService:
         self._users = user_repo or UserRepository()
         self._current_user: User | None = None
         # B-08: in-memory throttle store — {identifier: (failure_count, first_failure_ts)}
-        # Identifier: str(user_id) for login(), pin_hash[:8] for pin-only paths.
+        # H18: identifier is a stable, non-guess-derived label — str(user_id)
+        # for login(), a fixed per-surface label for the pin-only paths
+        # (never a hash of the guessed PIN; see login_by_pin/verify_pin).
         # Resets on process restart (acceptable for a local POS).
         self._throttle: dict[str, tuple[int, float]] = {}
         # Optional audit repository for recording failed attempts
@@ -144,15 +146,16 @@ class AuthService:
     def login_by_pin(self, pin: str) -> User:
         """Authenticate by PIN only — no user_id required.
 
-        B-08: throttled by a stable key derived from the entered PIN.
+        H18: throttled by a single key for this whole login surface, NOT by
+        the guessed PIN — a guess-derived key lets an attacker reset their
+        attempt count just by trying a different wrong PIN each time. With
+        no user_id known yet, the device/surface itself is the only stable
+        identity to rate-limit against.
         Looks up the user by PIN hash directly. Any active role can log in.
         Raises:
             ValueError: if PIN not found, user is inactive, or throttled.
         """
-        # Use first 8 chars of the legacy hash as the throttle key
-        # (stable across hashing schemes, not reversible)
-        pin_hash = self.hash_pin(pin)
-        key = f"pin:{pin_hash[:8]}"
+        key = "pin-only-login"
         self._check_throttle(key)
 
         user = self._find_user_by_pin(pin)
@@ -184,15 +187,16 @@ class AuthService:
     def verify_pin(self, pin: str) -> User | None:
         """Verify a PIN belongs to a MANAGER or ADMIN user.
 
-        B-08: throttled to prevent manager-PIN brute-force during overrides.
-        Used for override actions: cashier types the manager's PIN,
-        system identifies the manager and authorizes the action.
+        H18: throttled by a single key for this override surface, not by
+        the guessed PIN (see login_by_pin for why a guess-derived key
+        defeats the lockout). Used for override actions: cashier types the
+        manager's PIN, system identifies the manager and authorizes the
+        action.
 
         Returns:
             The manager/admin User if PIN is valid, None otherwise.
         """
-        pin_hash = self.hash_pin(pin)
-        key = f"override:{pin_hash[:8]}"
+        key = "manager-override"
         self._check_throttle(key)
 
         user = self._find_user_by_pin(pin)
