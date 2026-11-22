@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Lock, Users, ShieldAlert, Loader2 } from "lucide-react";
 import { Numpad } from "../components/Numpad";
 import { bridge } from "../bridge";
+import loginBackground from "../assets/fried-chicken-login.webp";
 
 interface LoginViewProps {
   onLoginSuccess: (user: any) => void;
@@ -41,29 +42,40 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   };
 
   return (
-    <div className="min-h-screen bg-brand-dark flex flex-col md:flex-row items-center justify-center p-6 gap-8">
+    <main
+      className="relative min-h-screen overflow-y-auto bg-brand-dark bg-cover bg-right bg-no-repeat"
+      style={{ backgroundImage: `url(${loginBackground})` }}
+    >
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: "linear-gradient(90deg, rgba(7, 9, 14, 0.97) 0%, rgba(7, 9, 14, 0.89) 33%, rgba(7, 9, 14, 0.62) 52%, rgba(7, 9, 14, 0.12) 78%, rgba(7, 9, 14, 0.08) 100%)",
+        }}
+      />
+      <div className="relative z-10 mr-auto ml-0 flex min-h-screen w-full max-w-[900px] flex-col items-center justify-center gap-6 px-6 py-8 md:flex-row md:gap-8 md:px-12" dir="rtl">
 
       {/* Right column: Branding & Cashier Tiles */}
       <div
         role="region"
         aria-label="قائمة الموظفين — اختر حسابك"
-        className="flex-1 max-w-xl text-right space-y-6 flex flex-col justify-center"
+        className="w-full min-w-0 flex-1 text-right space-y-6 flex flex-col justify-center"
       >
         <div className="space-y-2">
           <div className="inline-block py-1.5 px-4 bg-brand-gold/10 border border-brand-gold/30 rounded-full text-brand-gold text-sm font-bold">
             نظام إدارة المبيعات الذكي v1.0
           </div>
-          <h1 className="text-4xl md:text-5xl font-black text-white leading-tight">
+          <h1 className="text-4xl font-black text-white leading-tight drop-shadow-lg">
             بروستد <span className="gold-gradient-text">البروست</span>
           </h1>
-          <p className="text-gray-400 text-lg">
+          <p className="text-gray-200 text-base leading-relaxed">
             قم باختيار حسابك أو إدخال رمز PIN الخاص بك مباشرة للوصول إلى لوحة المبيعات.
           </p>
         </div>
 
         {/* User Tiles Grid */}
         <div className="space-y-3">
-          <h3 className="text-xs font-bold text-gray-500 flex items-center gap-1.5 justify-end">
+          <h3 className="text-xs font-bold text-gray-300 flex items-center gap-1.5 justify-end">
             الموظفون المتاحون بالوردية
             <Users size={14} />
           </h3>
@@ -75,7 +87,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
                 <div
                   key={u.id}
                   onClick={handleUserTileClick}
-                  className="p-4 bg-brand-card hover:bg-brand-border/20 border border-brand-border/40 rounded-2xl cursor-pointer text-right transition-all hover:scale-[1.02] active:scale-[0.98] group"
+                  className="p-4 bg-brand-card/85 backdrop-blur-md hover:bg-brand-border/70 border border-brand-border/60 rounded-2xl cursor-pointer text-right transition-all hover:scale-[1.02] active:scale-[0.98] group"
                 >
                   <span className="text-white font-bold block text-base group-hover:text-brand-gold transition-colors">
                     {u.display_name}
@@ -113,7 +125,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       <div
         role="region"
         aria-label="لوحة PIN — أدخل رمز الدخول"
-        className="w-full max-w-sm p-6 bg-brand-card border border-brand-border/60 rounded-3xl shadow-2xl flex flex-col items-center"
+        className="w-full max-w-sm shrink-0 p-6 bg-brand-card/90 backdrop-blur-xl border border-brand-gold/25 rounded-3xl shadow-2xl shadow-black/50 flex flex-col items-center"
       >
         <div className="h-16 w-16 rounded-full bg-brand-gold/10 text-brand-gold flex items-center justify-center mb-4">
           {loading ? (
@@ -156,6 +168,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         />
       </div>
 
-    </div>
+      </div>
+    </main>
   );
 };
