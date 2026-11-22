@@ -75,13 +75,14 @@ class UserRepository(BaseRepository[User]):
         return [self._row_to_user(r) for r in rows]
 
     def get_drivers(self) -> list[User]:
-        """All active users with cashier_slot IS NULL (drivers).
+        """Active cashier-role users with cashier_slot IS NULL (delivery drivers).
 
-        Drivers don't have a cashier slot assigned — they don't print receipts.
+        Managers and admins are excluded: they may also have no cashier slot but
+        are not delivery staff and must not appear in driver lists or trip flows.
         """
         rows = self._db.fetch_all(
             """SELECT * FROM users
-               WHERE is_active = 1 AND cashier_slot IS NULL
+               WHERE is_active = 1 AND cashier_slot IS NULL AND role = 'cashier'
                ORDER BY display_name"""
         )
         return [self._row_to_user(r) for r in rows]
