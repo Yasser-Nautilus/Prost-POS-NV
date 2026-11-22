@@ -537,6 +537,9 @@ class POSBridge(QObject):
             elif action == "get_report_daily_sales":
                 if not self._reports_ctrl:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
+                # Manager/Admin only — matches the hidden "التقارير المالية" tab
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
                 # Correct method: generate_daily_summary on ReportsController
                 try:
                     data = self._reports_ctrl.generate_daily_summary(
@@ -549,6 +552,9 @@ class POSBridge(QObject):
             elif action == "get_report_product_sales":
                 if not self._reports_ctrl:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
+                # Manager/Admin only — matches the hidden "التقارير المالية" tab
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
                 # Correct method: get_bestsellers on ReportsController
                 data = self._reports_ctrl.get_bestsellers()[:payload.get("limit", 20)]
                 return json.dumps({"success": True, "data": data})
