@@ -422,8 +422,15 @@ class OrderController:
         """
         try:
             method = PaymentMethod(payment_method)
+            # Resolve the authenticated cashier for the ledger entry.
+            actor = self._auth_svc.get_current_user()
+            actor_id = actor.id if actor else None
+            actor_name = (actor.display_name or actor.username or "نظام") if actor else "نظام"
             completed = self._order_svc.complete_order(
-                order_id, method, amount_paid, finalize=finalize
+                order_id, method, amount_paid,
+                actor_id=actor_id,
+                actor_name=actor_name,
+                finalize=finalize,
             )
         except Exception as exc:
             return False, f"فشل في الدفع: {exc}", True

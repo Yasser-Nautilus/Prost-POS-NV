@@ -875,12 +875,12 @@ class OrderService:
         """
         Append a SALE_CASH entry to the active cashier session's ledger.
 
-        Strategy:
-          1. If CashierSessionRepository is wired in, look up the open session
-             for this cashier on this shift (day_id = shift_id).
-          2. If no session found (legacy mode), skip silently.
-          3. Amount is in PIASTERS = round(total * 100).
+        When CashierSessionRepository is wired (session mode), both a valid
+        actor_id and an open session for that cashier are required — missing
+        either raises ValueError and the caller's transaction rolls back.
+        When the repo is not wired (legacy mode), the entry is skipped.
 
+        Amount is in PIASTERS = round(total * 100).
         Called only for CASH payments from complete_order().
         """
         import datetime as _dt
@@ -892,18 +892,26 @@ class OrderService:
 
         # Resolve session_id
         session_id: int | None = None
-        if self._cashier_sessions is not None and cashier_id is not None:
+        if self._cashier_sessions is not None:
+            # Session mode is active — actor_id is required.
+            if cashier_id is None:
+                raise ValueError(
+                    "actor_id مطلوب لتسجيل دفع النقد في وضع الجلسة"
+                )
             open_sessions = self._cashier_sessions.get_open_sessions_for_day(
                 day_id=shift_id
             )
             cashier_session = next(
                 (s for s in open_sessions if s.user_id == cashier_id), None
             )
-            if cashier_session:
-                session_id = cashier_session.id
+            if cashier_session is None:
+                raise ValueError(
+                    f"لا توجد جلسة مفتوحة للكاشير #{cashier_id} — لا يمكن تسجيل الدفع"
+                )
+            session_id = cashier_session.id
 
         if session_id is None:
-            # No active session → skip (graceful legacy fallback)
+            # Legacy mode (no session repo wired) — skip ledger entry.
             return
 
         amount_pt = round(order.total * 100)
