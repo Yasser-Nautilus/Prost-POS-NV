@@ -14,6 +14,7 @@ import { DriverSettlementView } from "./views/DriverSettlementView";
 import { AuditLogView } from "./views/AuditLogView";
 import { ShiftDialog } from "./components/ShiftDialog";
 import { bridge } from "./bridge";
+import prostshP from "./assets/prostsh-p.png";
 
 type Tab = "pos" | "delivery" | "tracking" | "reports" | "products" | "users" | "settlement" | "audit";
 
@@ -57,6 +58,9 @@ function App() {
   const [isShiftOpen, setIsShiftOpen] = useState(false);
   const [activeShift, setActiveShift] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  // H17: native-bridge connection state — "blocked" means no native shell
+  // and demo mode isn't enabled, so no transaction may be allowed to run.
+  const [bridgeMode, setBridgeMode] = useState<"native" | "mock" | "blocked">("native");
   // CHANGED: pickup order handed to POS for payment on handover ("تسليم").
   const [handoverOrder, setHandoverOrder] = useState<any | null>(null);
   // White-label branding loaded from backend config
@@ -76,6 +80,15 @@ function App() {
 
   const checkAuth = async () => {
     try {
+      // H17: resolve the native-bridge connection state before doing
+      // anything else — a blocked bridge must never silently answer calls.
+      const mode = await bridge.getConnectionMode();
+      setBridgeMode(mode);
+      if (mode === "blocked") {
+        setLoading(false);
+        return;
+      }
+
       // Load config (white-label branding) on startup
       try {
         const cfg = await bridge.call("get_config");
@@ -126,14 +139,41 @@ function App() {
   if (loading) {
     return (
       <div className="min-h-screen bg-brand-dark flex flex-col items-center justify-center text-white space-y-4">
-        <Loader2 className="animate-spin text-brand-gold" size={48} />
+        <Loader2 className="animate-spin text-brand-red" size={48} />
         <p className="text-gray-400 font-medium">جاري تحميل نظام البيع...</p>
       </div>
     );
   }
 
+  if (bridgeMode === "blocked") {
+    // H17: no native shell and demo mode is off — block everything rather
+    // than let the cashier believe a payment went through with no system
+    // actually behind it.
+    return (
+      <div className="min-h-screen bg-brand-dark flex flex-col items-center justify-center text-white space-y-4 px-6 text-center" dir="rtl">
+        <Shield className="text-red-500" size={48} />
+        <h1 className="text-xl font-bold">تعذر الاتصال بنظام التشغيل الأساسي</h1>
+        <p className="text-gray-400 max-w-md">
+          لا يمكن معالجة أي عملية بيع أو دفع بدون هذا الاتصال. أعد تشغيل البرنامج،
+          وإذا استمرت المشكلة اتصل بالدعم الفني.
+        </p>
+      </div>
+    );
+  }
+
+  const demoModeBanner = bridgeMode === "mock" && (
+    <div className="h-7 bg-amber-500 text-black text-xs font-bold flex items-center justify-center shrink-0 z-30">
+      ⚠️ وضع تجريبي (Demo) — لا يوجد اتصال حقيقي بالنظام، البيانات غير حقيقية
+    </div>
+  );
+
   if (!currentUser) {
-    return <LoginView onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <>
+        {demoModeBanner}
+        <LoginView onLoginSuccess={handleLoginSuccess} />
+      </>
+    );
   }
 
   const isManagerOrAbove =
@@ -154,25 +194,23 @@ function App() {
 
   // Derive brand display — first word as icon, rest as highlight
   const brandParts = brandName ? brandName.split(" ") : [];
-  const brandIcon = brandParts[0]?.[0] || "P";
-  const brandFirst = brandParts[0] || "Prost";
-  const brandRest = brandParts.slice(1).join(" ") || "POS";
+  const brandFirst = brandParts[0] || "بروستش";
+  const brandRest = brandParts.slice(1).join(" ") || "Prostsh";
 
   return (
     <div className="h-screen bg-brand-dark flex flex-col overflow-hidden text-white font-cairo">
-      
+      {demoModeBanner}
+
       {/* Top Premium Navbar Header */}
       <header className="h-16 bg-brand-surface border-b border-brand-border/60 flex items-center justify-between px-6 z-20">
-        
+
         {/* Right side: Logo & Navigation */}
         <div className="flex items-center gap-6">
           {/* Logo */}
           <div className="flex items-center gap-2">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-brand-gold to-yellow-500 flex items-center justify-center text-brand-dark font-black text-lg shadow-lg">
-              {brandIcon}
-            </div>
+            <img src={prostshP} alt={brandFirst} className="h-9 w-auto drop-shadow" />
             <span className="font-extrabold text-lg text-white">
-              {brandFirst} <span className="gold-gradient-text">{brandRest}</span>
+              {brandFirst} <span className="red-gradient-text">{brandRest}</span>
             </span>
           </div>
 
@@ -188,7 +226,7 @@ function App() {
                     onClick={() => setActiveTab(n.id)}
                     className={`flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-bold transition-all ${
                       activeTab === n.id
-                        ? "bg-brand-gold/10 text-brand-gold border border-brand-gold/30"
+                        ? "bg-brand-red/10 text-brand-red border border-brand-red/30"
                         : "text-gray-400 hover:text-white hover:bg-brand-card/40 border border-transparent"
                     }`}
                   >
@@ -217,7 +255,7 @@ function App() {
 
           {/* User profile */}
           <div className="flex items-center gap-2 bg-brand-card/80 py-1.5 px-3 rounded-xl border border-brand-border/40">
-            <div className="h-6 w-6 rounded-full bg-brand-gold/20 text-brand-gold flex items-center justify-center">
+            <div className="h-6 w-6 rounded-full bg-brand-red/20 text-brand-red flex items-center justify-center">
               <User size={14} />
             </div>
             <div className="text-right">

@@ -84,7 +84,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
   if (loading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-white space-y-2 h-[calc(100vh-64px)] bg-brand-dark">
-        <RefreshCw className="animate-spin text-brand-gold" size={32} />
+        <RefreshCw className="animate-spin text-brand-red" size={32} />
         <p className="text-gray-400 text-xs">جاري تحميل التقارير...</p>
       </div>
     );
@@ -103,7 +103,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
               {(salesSummary?.total_sales || 0).toFixed(2)} ج.م
             </span>
           </div>
-          <div className="h-12 w-12 rounded-xl bg-brand-gold/10 text-brand-gold flex items-center justify-center">
+          <div className="h-12 w-12 rounded-xl bg-brand-red/10 text-brand-red flex items-center justify-center">
             <TrendingUp size={24} />
           </div>
         </div>
@@ -150,7 +150,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
       {/* Today's Sales Panel */}
       <div className="bg-brand-card p-6 rounded-3xl border border-brand-border/50 space-y-6">
         <div className="flex flex-wrap justify-between items-center gap-3 border-b border-brand-border/60 pb-4">
-          <h3 className="text-xl font-bold text-brand-gold flex items-center gap-2">
+          <h3 className="text-xl font-bold text-brand-red flex items-center gap-2">
             <TrendingUp size={22} />
             مبيعات اليوم
           </h3>
@@ -221,13 +221,13 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
       {/* Main Reports Panel */}
       <div className="bg-brand-card p-6 rounded-3xl border border-brand-border/50 space-y-6">
         <div className="flex justify-between items-center border-b border-brand-border/60 pb-4">
-          <h3 className="text-xl font-bold text-brand-gold flex items-center gap-2">
+          <h3 className="text-xl font-bold text-brand-red flex items-center gap-2">
             <BarChart3 size={22} />
             سجل تقارير الورديات السابقة
           </h3>
           <button
             onClick={fetchReportData}
-            className="p-2 bg-brand-surface border border-brand-border/60 hover:border-brand-gold text-white rounded-lg active:scale-95 transition-all"
+            className="p-2 bg-brand-surface border border-brand-border/60 hover:border-brand-red text-white rounded-lg active:scale-95 transition-all"
           >
             <RefreshCw size={16} />
           </button>
@@ -276,7 +276,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
                       {!shift.is_active && (
                         <button
                           onClick={(e) => { e.stopPropagation(); handleReprintShiftReport(shift.id); }}
-                          className="py-1.5 px-3 bg-brand-card hover:bg-brand-border/40 text-brand-gold border border-brand-gold/30 hover:border-brand-gold rounded-lg text-xs font-semibold flex items-center gap-1 active:translate-y-0.5 btn-hover-active"
+                          className="py-1.5 px-3 bg-brand-card hover:bg-brand-border/40 text-brand-red border border-brand-red/30 hover:border-brand-red rounded-lg text-xs font-semibold flex items-center gap-1 active:translate-y-0.5 btn-hover-active"
                         >
                           <Printer size={12} />
                           إعادة طباعة التقرير
@@ -304,7 +304,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex justify-between items-center px-6 py-4 border-b border-brand-border/60 bg-brand-card">
-            <h3 className="font-bold text-lg text-brand-gold flex items-center gap-2">
+            <h3 className="font-bold text-lg text-brand-red flex items-center gap-2">
               <BarChart3 size={20} />
               تفاصيل الوردية #{detailShift.id}
             </h3>
@@ -337,7 +337,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
 
             {detailLoading ? (
               <div className="py-12 flex justify-center">
-                <Loader2 className="animate-spin text-brand-gold" size={28} />
+                <Loader2 className="animate-spin text-brand-red" size={28} />
               </div>
             ) : detailSummary ? (
               <>
@@ -368,9 +368,9 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
                   </div>
                 </div>
 
-                <div className="bg-brand-card p-4 rounded-xl border border-brand-gold/30 bg-gradient-to-r from-brand-card to-brand-gold/5">
-                  <span className="text-brand-gold text-xs block font-bold">المفروض بالدرج (كاش متوقع — بدون جرد فعلي)</span>
-                  <span className="text-3xl font-black text-brand-gold mt-1 block">
+                <div className="bg-brand-card p-4 rounded-xl border border-brand-red/30 bg-gradient-to-r from-brand-card to-brand-red/5">
+                  <span className="text-brand-red text-xs block font-bold">المفروض بالدرج (كاش متوقع — بدون جرد فعلي)</span>
+                  <span className="text-3xl font-black text-brand-red mt-1 block">
                     {(detailSummary.expected_cash || 0).toFixed(2)} ج.م
                   </span>
                 </div>

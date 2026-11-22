@@ -198,7 +198,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
 
           {/* Header */}
           <div className="flex justify-between items-center px-6 py-4 border-b border-brand-border/60 bg-brand-card">
-            <h3 className="font-bold text-lg text-brand-gold flex items-center gap-2">
+            <h3 className="font-bold text-lg text-brand-red flex items-center gap-2">
               <Calendar size={20} />
               إدارة وردية الصندوق
             </h3>
@@ -219,7 +219,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                 /* Shift transfer / handover page — manager only, printable reconciliation */
                 <div className="space-y-5">
                   <div className="flex items-center justify-between">
-                    <h4 className="font-bold text-brand-gold flex items-center gap-2">
+                    <h4 className="font-bold text-brand-red flex items-center gap-2">
                       <ArrowLeftRight size={18} />
                       نقل وردية (تغيير الشفت)
                     </h4>
@@ -256,9 +256,9 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                           {((summary.pending_dinein || 0) + (summary.pending_kitchen || 0) + (summary.pending_delivery || 0)).toFixed(2)} ج.م
                         </span>
                       </div>
-                      <div className="bg-brand-card p-4 rounded-xl border border-brand-gold/30 col-span-2 bg-gradient-to-r from-brand-card to-brand-gold/5">
-                        <span className="text-brand-gold text-xs block font-bold">المفروض تسليمه نقداً بالدرج</span>
-                        <span className="text-3xl font-black text-brand-gold mt-1 block">
+                      <div className="bg-brand-card p-4 rounded-xl border border-brand-red/30 col-span-2 bg-gradient-to-r from-brand-card to-brand-red/5">
+                        <span className="text-brand-red text-xs block font-bold">المفروض تسليمه نقداً بالدرج</span>
+                        <span className="text-3xl font-black text-brand-red mt-1 block">
                           {(summary.expected_cash || 0).toFixed(2)} ج.م
                         </span>
                       </div>
@@ -269,7 +269,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                     <select
                       value={transferTarget}
                       onChange={(e) => setTransferTarget(e.target.value)}
-                      className="w-full bg-brand-card border border-brand-border/50 rounded-lg p-2.5 text-white focus:outline-none focus:border-brand-gold"
+                      className="w-full bg-brand-card border border-brand-border/50 rounded-lg p-2.5 text-white focus:outline-none focus:border-brand-red"
                     >
                       <option value="">اختر الكاشير المستلم...</option>
                       {transferUsers.map((u) => (
@@ -283,7 +283,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                   <button
                     onClick={performTransfer}
                     disabled={!transferTarget || loading}
-                    className="w-full py-3 bg-brand-gold text-brand-dark hover:bg-opacity-90 font-bold rounded-xl flex items-center justify-center gap-2 active:translate-y-0.5 btn-hover-active disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full py-3 bg-brand-red text-brand-dark hover:bg-opacity-90 font-bold rounded-xl flex items-center justify-center gap-2 active:translate-y-0.5 btn-hover-active disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? <Loader2 size={18} className="animate-spin" /> : <ArrowRight size={18} />}
                     تأكيد النقل وطباعة التقرير
@@ -346,10 +346,10 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                       </div>
 
                       {isManagerOrAbove ? (
-                        <div className="bg-brand-card p-4 rounded-xl border border-brand-gold/30 col-span-2 flex justify-between items-center bg-gradient-to-r from-brand-card to-brand-gold/5">
+                        <div className="bg-brand-card p-4 rounded-xl border border-brand-red/30 col-span-2 flex justify-between items-center bg-gradient-to-r from-brand-card to-brand-red/5">
                           <div>
-                            <span className="text-brand-gold text-xs block font-bold">الكاش المتوقع بالدرج (كاش فقط — لا يشمل فيزا/أونلاين)</span>
-                            <span className="text-3xl font-black text-brand-gold mt-1 block">
+                            <span className="text-brand-red text-xs block font-bold">الكاش المتوقع بالدرج (كاش فقط — لا يشمل فيزا/أونلاين)</span>
+                            <span className="text-3xl font-black text-brand-red mt-1 block">
                               {(summary.expected_cash || 0).toFixed(2)} ج.م
                             </span>
                           </div>
@@ -361,7 +361,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                               className={`py-2 px-4 font-bold rounded-xl flex items-center gap-1.5 text-sm transition-all ${
                                 summaryPrinted
                                   ? "bg-brand-teal/10 text-brand-teal border border-brand-teal/30 cursor-not-allowed"
-                                  : "bg-brand-card border border-brand-gold/30 text-brand-gold hover:border-brand-gold active:translate-y-0.5 btn-hover-active"
+                                  : "bg-brand-card border border-brand-red/30 text-brand-red hover:border-brand-red active:translate-y-0.5 btn-hover-active"
                               } disabled:opacity-60`}
                             >
                               {summaryPrinted ? <CheckCircle2 size={16} /> : <Printer size={16} />}
@@ -432,7 +432,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                   <button
                     onClick={handleOpenShift}
                     disabled={loading}
-                    className="py-3 px-6 bg-brand-gold text-brand-dark hover:bg-opacity-90 font-bold rounded-xl active:translate-y-0.5 btn-hover-active disabled:opacity-50 flex items-center gap-2"
+                    className="py-3 px-6 bg-brand-red text-brand-dark hover:bg-opacity-90 font-bold rounded-xl active:translate-y-0.5 btn-hover-active disabled:opacity-50 flex items-center gap-2"
                   >
                     {loading ? <Loader2 size={18} className="animate-spin" /> : <Power size={18} />}
                     فتح وردية صندوق جديدة
@@ -447,7 +447,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                 <>
                   {/* Expense Form */}
                   <form onSubmit={handleAddExpense} className="space-y-4">
-                    <h4 className="text-sm font-bold text-brand-gold flex items-center gap-1">
+                    <h4 className="text-sm font-bold text-brand-red flex items-center gap-1">
                       <Plus size={16} />
                       تسجيل مصروفات خارجة (نثريات)
                     </h4>
@@ -462,7 +462,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                           placeholder="0.00"
                           value={expAmount}
                           onChange={(e) => setExpAmount(e.target.value)}
-                          className="w-full bg-brand-card border border-brand-border/50 rounded-lg p-2 text-white focus:outline-none focus:border-brand-gold text-center font-mono font-bold"
+                          className="w-full bg-brand-card border border-brand-border/50 rounded-lg p-2 text-white focus:outline-none focus:border-brand-red text-center font-mono font-bold"
                         />
                       </div>
                       <div>
@@ -470,7 +470,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                         <select
                           value={expCat}
                           onChange={(e) => setExpCat(e.target.value)}
-                          className="w-full bg-brand-card border border-brand-border/50 rounded-lg p-2 text-white focus:outline-none focus:border-brand-gold"
+                          className="w-full bg-brand-card border border-brand-border/50 rounded-lg p-2 text-white focus:outline-none focus:border-brand-red"
                         >
                           <option value="supplies">مستلزمات وخامات</option>
                           <option value="delivery_fees">رسوم توصيل</option>
@@ -485,13 +485,13 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                           placeholder="مثال: شراء كراتين كول سلو..."
                           value={expDesc}
                           onChange={(e) => setExpDesc(e.target.value)}
-                          className="w-full bg-brand-card border border-brand-border/50 rounded-lg p-2 text-white focus:outline-none focus:border-brand-gold"
+                          className="w-full bg-brand-card border border-brand-border/50 rounded-lg p-2 text-white focus:outline-none focus:border-brand-red"
                         />
                       </div>
                     </div>
                     <button
                       type="submit"
-                      className="w-full py-2 bg-brand-card hover:bg-brand-border/40 text-brand-gold border border-brand-gold/30 hover:border-brand-gold rounded-lg font-semibold text-sm active:translate-y-0.5 btn-hover-active"
+                      className="w-full py-2 bg-brand-card hover:bg-brand-border/40 text-brand-red border border-brand-red/30 hover:border-brand-red rounded-lg font-semibold text-sm active:translate-y-0.5 btn-hover-active"
                     >
                       تسجيل وحفظ المصروف
                     </button>

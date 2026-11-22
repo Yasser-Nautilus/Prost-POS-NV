@@ -19,7 +19,7 @@ const StatCard: React.FC<{
   value: string;
   icon: React.ReactNode;
   color?: string;
-}> = ({ label, value, icon, color = "text-brand-gold" }) => (
+}> = ({ label, value, icon, color = "text-brand-red" }) => (
   <div className="bg-brand-card p-5 rounded-2xl border border-brand-border/40 flex justify-between items-center">
     <div>
       <span className="text-gray-400 text-xs block">{label}</span>
@@ -75,7 +75,7 @@ const OpenSessionDialog: React.FC<{
       <div className="bg-brand-surface border border-brand-border/60 rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200" dir="rtl">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <Plus size={20} className="text-brand-gold" />
+            <Plus size={20} className="text-brand-red" />
             فتح وردية صندوق
           </h2>
           <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
@@ -93,7 +93,7 @@ const OpenSessionDialog: React.FC<{
                 onClick={() => setStation(s.value)}
                 className={`p-3 rounded-xl border text-center transition-all ${
                   station === s.value
-                    ? "bg-brand-gold/10 border-brand-gold/40 text-brand-gold"
+                    ? "bg-brand-red/10 border-brand-red/40 text-brand-red"
                     : "bg-brand-card border-brand-border/30 text-gray-400 hover:text-white hover:border-brand-border"
                 }`}
               >
@@ -113,7 +113,7 @@ const OpenSessionDialog: React.FC<{
               value={floatStr}
               onChange={(e) => setFloatStr(e.target.value)}
               placeholder="0.00"
-              className="flex-1 bg-brand-card border border-brand-border/40 rounded-xl px-4 py-3 text-white text-lg font-bold text-center outline-none focus:border-brand-gold/50 transition-colors"
+              className="flex-1 bg-brand-card border border-brand-border/40 rounded-xl px-4 py-3 text-white text-lg font-bold text-center outline-none focus:border-brand-red/50 transition-colors"
               autoFocus
             />
           </div>
@@ -122,7 +122,7 @@ const OpenSessionDialog: React.FC<{
               <button
                 key={v}
                 onClick={() => setFloatStr(String(v))}
-                className="px-3 py-1.5 bg-brand-card border border-brand-border/30 rounded-lg text-xs text-gray-300 hover:text-brand-gold hover:border-brand-gold/30 transition-all"
+                className="px-3 py-1.5 bg-brand-card border border-brand-border/30 rounded-lg text-xs text-gray-300 hover:text-brand-red hover:border-brand-red/30 transition-all"
               >
                 {v} ج.م
               </button>
@@ -140,7 +140,7 @@ const OpenSessionDialog: React.FC<{
         <button
           onClick={handleSubmit}
           disabled={loading}
-          className="w-full py-3 bg-gradient-to-l from-brand-gold to-yellow-600 text-brand-dark font-bold rounded-xl hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+          className="w-full py-3 bg-gradient-to-l from-brand-red to-yellow-600 text-brand-dark font-bold rounded-xl hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {loading ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
           فتح الوردية
@@ -232,7 +232,7 @@ const CloseSessionDialog: React.FC<{
               value={countStr}
               onChange={(e) => setCountStr(e.target.value)}
               placeholder="أدخل المبلغ الفعلي"
-              className="w-full bg-brand-card border border-brand-border/40 rounded-xl px-4 py-3 text-white text-lg font-bold text-center outline-none focus:border-brand-gold/50"
+              className="w-full bg-brand-card border border-brand-border/40 rounded-xl px-4 py-3 text-white text-lg font-bold text-center outline-none focus:border-brand-red/50"
               autoFocus
             />
           </div>
@@ -430,7 +430,7 @@ const HandoverDialog: React.FC<{
                   onClick={() => setStation(s.value)}
                   className={`flex-1 py-2 rounded-xl border text-sm font-bold transition-all ${
                     station === s.value
-                      ? "bg-brand-gold/10 border-brand-gold/40 text-brand-gold"
+                      ? "bg-brand-red/10 border-brand-red/40 text-brand-red"
                       : "bg-brand-card border-brand-border/30 text-gray-400 hover:text-white"
                   }`}
                 >
@@ -454,7 +454,7 @@ const HandoverDialog: React.FC<{
               value={countStr}
               onChange={(e) => setCountStr(e.target.value)}
               placeholder="أدخل المبلغ المعدود"
-              className="w-full bg-brand-card border border-brand-border/40 rounded-xl px-4 py-2.5 text-white text-lg font-bold text-center outline-none focus:border-brand-gold/50"
+              className="w-full bg-brand-card border border-brand-border/40 rounded-xl px-4 py-2.5 text-white text-lg font-bold text-center outline-none focus:border-brand-red/50"
             />
           </div>
 
@@ -466,7 +466,7 @@ const HandoverDialog: React.FC<{
               value={cashDropStr}
               onChange={(e) => setCashDropStr(e.target.value)}
               placeholder="0"
-              className="w-full bg-brand-card border border-brand-border/40 rounded-xl px-4 py-2.5 text-white font-bold text-center outline-none focus:border-brand-gold/50"
+              className="w-full bg-brand-card border border-brand-border/40 rounded-xl px-4 py-2.5 text-white font-bold text-center outline-none focus:border-brand-red/50"
             />
           </div>
 
@@ -484,7 +484,7 @@ const HandoverDialog: React.FC<{
               </div>
               <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 text-center">
                 <span className="text-[10px] text-gray-500 block">عهدة الوردية الجديدة</span>
-                <span className="text-sm font-bold text-brand-gold">{incomingFloat.toFixed(2)} ج.م</span>
+                <span className="text-sm font-bold text-brand-red">{incomingFloat.toFixed(2)} ج.م</span>
               </div>
             </div>
           )}
@@ -595,7 +595,7 @@ const CloseDayDialog: React.FC<{
 
           {loading && (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="animate-spin text-brand-gold" size={32} />
+              <Loader2 className="animate-spin text-brand-red" size={32} />
             </div>
           )}
 
@@ -626,7 +626,7 @@ const CloseDayDialog: React.FC<{
                 </div>
                 <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 text-center">
                   <span className="text-[10px] text-gray-400 block">مبيعات نقدية</span>
-                  <span className="text-lg font-black text-brand-gold">{xReport.totals.cash_sales_egp.toFixed(2)}</span>
+                  <span className="text-lg font-black text-brand-red">{xReport.totals.cash_sales_egp.toFixed(2)}</span>
                 </div>
                 <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 text-center">
                   <span className="text-[10px] text-gray-400 block">تحصيل سائقين</span>
@@ -687,7 +687,7 @@ const CloseDayDialog: React.FC<{
                 </div>
                 <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 text-center">
                   <span className="text-[10px] text-gray-400 block">مبيعات نقدية</span>
-                  <span className="text-lg font-black text-brand-gold">{zReport.totals.cash_sales_egp.toFixed(2)}</span>
+                  <span className="text-lg font-black text-brand-red">{zReport.totals.cash_sales_egp.toFixed(2)}</span>
                 </div>
                 <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 text-center">
                   <span className="text-[10px] text-gray-400 block">مصروفات</span>
@@ -787,7 +787,7 @@ const XReportDialog: React.FC<{
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="animate-spin text-brand-gold" size={32} />
+            <Loader2 className="animate-spin text-brand-red" size={32} />
           </div>
         ) : report ? (
           <>
@@ -799,7 +799,7 @@ const XReportDialog: React.FC<{
               </div>
               <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 text-center">
                 <span className="text-[10px] text-gray-400 block">مبيعات نقدية</span>
-                <span className="text-lg font-black text-brand-gold">{report.totals.cash_sales_egp.toFixed(2)}</span>
+                <span className="text-lg font-black text-brand-red">{report.totals.cash_sales_egp.toFixed(2)}</span>
               </div>
               <div className="bg-brand-card rounded-xl p-3 border border-brand-border/30 text-center">
                 <span className="text-[10px] text-gray-400 block">تحصيل سائقين</span>
@@ -891,7 +891,7 @@ const SessionCard: React.FC<{
   onHandover: (s: CashierSession) => void;
 }> = ({ session, onClose, onHandover }) => {
   const stationColors: Record<string, string> = {
-    ALL: "from-brand-gold/20 to-yellow-900/20 border-brand-gold/30",
+    ALL: "from-brand-red/20 to-yellow-900/20 border-brand-red/30",
     COUNTER: "from-blue-900/20 to-indigo-900/20 border-blue-800/30",
     DELIVERY: "from-purple-900/20 to-fuchsia-900/20 border-purple-800/30",
   };
@@ -907,7 +907,7 @@ const SessionCard: React.FC<{
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-xl bg-white/5 flex items-center justify-center">
-            <Wallet size={20} className="text-brand-gold" />
+            <Wallet size={20} className="text-brand-red" />
           </div>
           <div>
             <span className="text-sm font-bold text-white block">{stationLabels[session.station]} #{session.id}</span>
@@ -1012,7 +1012,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ currentUser }) => {
   if (loading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-white space-y-2 h-[calc(100vh-64px)] bg-brand-dark">
-        <RefreshCw className="animate-spin text-brand-gold" size={32} />
+        <RefreshCw className="animate-spin text-brand-red" size={32} />
         <p className="text-gray-400 text-xs">جاري تحميل ورديات الصندوق...</p>
       </div>
     );
@@ -1039,7 +1039,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ currentUser }) => {
           label="إجمالي النقدية المتوقعة"
           value={`${totalExpected.toFixed(2)} ج.م`}
           icon={<BarChart3 size={24} />}
-          color="text-brand-gold"
+          color="text-brand-red"
         />
         <StatCard
           label="المستخدم الحالي"
@@ -1053,7 +1053,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ currentUser }) => {
       <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={() => setShowOpen(true)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-l from-brand-gold to-yellow-600 text-brand-dark font-bold rounded-xl hover:brightness-110 active:scale-[0.98] transition-all text-sm"
+          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-l from-brand-red to-yellow-600 text-brand-dark font-bold rounded-xl hover:brightness-110 active:scale-[0.98] transition-all text-sm"
         >
           <Plus size={16} />
           فتح وردية جديدة
@@ -1103,7 +1103,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ currentUser }) => {
             <p className="text-gray-500 text-sm">لا توجد ورديات مفتوحة حالياً</p>
             <button
               onClick={() => setShowOpen(true)}
-              className="text-brand-gold text-sm font-bold hover:underline"
+              className="text-brand-red text-sm font-bold hover:underline"
             >
               فتح وردية جديدة ←
             </button>

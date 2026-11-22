@@ -29,6 +29,9 @@ APP_VERSION: str = "1.0.0"
 ENVIRONMENT: str = os.getenv("APP_ENV", os.getenv("ENVIRONMENT", "dev")).lower()       # "dev" | "prod"
 DEBUG: bool = os.getenv("DEBUG", "true" if ENVIRONMENT == "dev" else "false").lower() in ("true", "1", "yes")
 LANGUAGE: str = os.getenv("LANGUAGE", "ar")           # Arabic primary
+# Set PROST_PRINTER_SIMULATE=1 to run without hardware: prints succeed and
+# output is written to PRINTER_SIMULATE_OUTPUT_DIR as timestamped JSON files.
+PRINTER_SIMULATE: bool = os.getenv("PROST_PRINTER_SIMULATE", "0").strip() in ("1", "true", "yes")
 
 # ============================================================================
 # 2. Business Rules (Task 4)
@@ -54,6 +57,7 @@ _PROJECT_ROOT = Path(__file__).resolve().parent.parent  # broast_pos/
 DATABASE_PATH: str = str(_PROJECT_ROOT / "data" / "broast_pos.db")
 LOGS_PATH: str = str(_PROJECT_ROOT.parent / "logs")
 PRINTER_CONFIG_PATH: str = str(_PROJECT_ROOT / "config" / "printers.json")
+PRINTER_SIMULATE_OUTPUT_DIR: str = str(_PROJECT_ROOT.parent / "printouts")
 RESTAURANT_CONFIG_PATH: str = str(_PROJECT_ROOT / "config" / "restaurant.json")
 FONTS_PATH: str = str(_PROJECT_ROOT.parent / "assets" / "fonts")
 BRANDING_PATH: str = str(_PROJECT_ROOT.parent / "assets" / "branding")

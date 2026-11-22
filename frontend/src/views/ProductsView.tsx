@@ -216,7 +216,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
   if (loading && categories.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-white space-y-2 h-[calc(100vh-64px)] bg-brand-dark">
-        <Loader2 className="animate-spin text-brand-gold" size={32} />
+        <Loader2 className="animate-spin text-brand-red" size={32} />
         <p className="text-gray-400 text-xs">جاري تحميل المنتجات...</p>
       </div>
     );
@@ -228,7 +228,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
       {/* Header */}
       <div className="p-6 pb-0 flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl bg-brand-gold/10 text-brand-gold flex items-center justify-center">
+          <div className="h-10 w-10 rounded-2xl bg-brand-red/10 text-brand-red flex items-center justify-center">
             <Package size={20} />
           </div>
           <div>
@@ -241,7 +241,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
         <div className="flex items-center gap-2">
           <button
             onClick={openNewCategory}
-            className="py-2 px-3 bg-brand-card border border-brand-border/40 hover:border-brand-gold text-gray-300 hover:text-brand-gold rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
+            className="py-2 px-3 bg-brand-card border border-brand-border/40 hover:border-brand-red text-gray-300 hover:text-brand-red rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
           >
             <Plus size={14} />
             فئة جديدة
@@ -249,7 +249,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
           {isManagerOrAbove && (
             <button
               onClick={openNewProduct}
-              className="py-2 px-4 bg-brand-gold text-brand-dark hover:bg-opacity-90 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
+              className="py-2 px-4 bg-brand-red text-brand-dark hover:bg-opacity-90 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
             >
               <Plus size={14} />
               منتج جديد
@@ -257,7 +257,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
           )}
           <button
             onClick={fetchAll}
-            className="p-2 bg-brand-card border border-brand-border/40 hover:border-brand-gold text-gray-400 hover:text-brand-gold rounded-xl transition-all"
+            className="p-2 bg-brand-card border border-brand-border/40 hover:border-brand-red text-gray-400 hover:text-brand-red rounded-xl transition-all"
           >
             <RefreshCw size={16} />
           </button>
@@ -284,13 +284,13 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
               onDrop={handleCatDrop}
               className={`flex justify-between items-center gap-2 p-3 rounded-xl border cursor-grab active:cursor-grabbing transition-all group ${
                 selectedCatId === cat.id
-                  ? "bg-brand-gold/10 border-brand-gold text-brand-gold"
+                  ? "bg-brand-red/10 border-brand-red text-brand-red"
                   : "bg-brand-card/40 border-brand-border/30 text-gray-300 hover:border-brand-border"
               } ${!cat.is_active ? "opacity-50" : ""} ${
                 dragIndex === index ? "opacity-40" : ""
               } ${
                 overIndex === index && dragIndex !== null && dragIndex !== index
-                  ? "border-brand-gold border-dashed"
+                  ? "border-brand-red border-dashed"
                   : ""
               }`}
               onClick={() => setSelectedCatId(cat.id)}
@@ -307,7 +307,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                 }}
                 aria-label="تعديل الفئة"
                 title="تعديل الفئة"
-                className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-brand-gold transition-all"
+                className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-brand-red transition-all"
               >
                 <Edit3 size={12} />
               </button>
@@ -327,7 +327,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                   }`}
                 >
                   <div>
-                    <h4 className="text-white font-bold text-sm leading-snug group-hover:text-brand-gold transition-colors">
+                    <h4 className="text-white font-bold text-sm leading-snug group-hover:text-brand-red transition-colors">
                       {prod.name}
                     </h4>
                     {!prod.is_active && (
@@ -337,7 +337,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                     )}
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-brand-gold font-extrabold text-base">
+                    <span className="text-brand-red font-extrabold text-base">
                       {prod.price}{" "}
                       <span className="text-[10px] font-semibold">ج.م</span>
                     </span>
@@ -347,7 +347,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                           onClick={() => openEditProduct(prod)}
                           aria-label="تعديل المنتج"
                           title="تعديل المنتج"
-                          className="h-7 w-7 rounded-lg bg-brand-gold/10 text-brand-gold flex items-center justify-center hover:bg-brand-gold/20 transition-all"
+                          className="h-7 w-7 rounded-lg bg-brand-red/10 text-brand-red flex items-center justify-center hover:bg-brand-red/20 transition-all"
                         >
                           <Edit3 size={12} />
                         </button>
@@ -381,7 +381,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md">
           <div className="w-full max-w-md mx-4 bg-brand-surface border border-brand-border rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="p-5 border-b border-brand-border/40 flex items-center justify-between">
-              <h3 className="font-bold text-lg text-brand-gold">
+              <h3 className="font-bold text-lg text-brand-red">
                 {editingProduct ? "تعديل المنتج" : "إضافة منتج جديد"}
               </h3>
               <button
@@ -402,7 +402,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   placeholder="مثال: دجاج مشوي كامل..."
-                  className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-gold text-right"
+                  className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-red text-right"
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -416,7 +416,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                     value={formPrice}
                     onChange={(e) => setFormPrice(e.target.value)}
                     placeholder="0.00"
-                    className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-3 text-white focus:outline-none focus:border-brand-gold text-center font-mono font-bold"
+                    className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-3 text-white focus:outline-none focus:border-brand-red text-center font-mono font-bold"
                   />
                 </div>
                 <div>
@@ -426,7 +426,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                     min="1"
                     value={formSortOrder}
                     onChange={(e) => setFormSortOrder(e.target.value)}
-                    className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-3 text-white focus:outline-none focus:border-brand-gold text-center font-mono"
+                    className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-3 text-white focus:outline-none focus:border-brand-red text-center font-mono"
                   />
                 </div>
               </div>
@@ -436,7 +436,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                   required
                   value={formCatId || ""}
                   onChange={(e) => setFormCatId(parseInt(e.target.value))}
-                  className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-3 text-white focus:outline-none focus:border-brand-gold"
+                  className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-3 text-white focus:outline-none focus:border-brand-red"
                 >
                   <option value="">-- اختر الفئة --</option>
                   {categories
@@ -458,7 +458,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 bg-brand-gold text-brand-dark hover:bg-opacity-90 rounded-xl font-bold flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-brand-red text-brand-dark hover:bg-opacity-90 rounded-xl font-bold flex items-center justify-center gap-2"
                 >
                   <Check size={18} />
                   حفظ المنتج
@@ -474,7 +474,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md">
           <div className="w-full max-w-sm mx-4 bg-brand-surface border border-brand-border rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="p-5 border-b border-brand-border/40 flex items-center justify-between">
-              <h3 className="font-bold text-lg text-brand-gold">
+              <h3 className="font-bold text-lg text-brand-red">
                 {editingCat ? "تعديل الفئة" : "فئة جديدة"}
               </h3>
               <button
@@ -495,7 +495,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                   value={catFormName}
                   onChange={(e) => setCatFormName(e.target.value)}
                   placeholder="مثال: وجبات مشوية..."
-                  className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-gold text-right"
+                  className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-3 text-white placeholder-gray-600 focus:outline-none focus:border-brand-red text-right"
                 />
               </div>
               <div>
@@ -505,7 +505,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                   min="1"
                   value={catFormSortOrder}
                   onChange={(e) => setCatFormSortOrder(e.target.value)}
-                  className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-3 text-white focus:outline-none focus:border-brand-gold text-center font-mono"
+                  className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-3 text-white focus:outline-none focus:border-brand-red text-center font-mono"
                 />
               </div>
               <div className="flex gap-3">
@@ -518,7 +518,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 bg-brand-gold text-brand-dark hover:bg-opacity-90 rounded-xl font-bold"
+                  className="flex-1 py-3 bg-brand-red text-brand-dark hover:bg-opacity-90 rounded-xl font-bold"
                 >
                   حفظ
                 </button>
