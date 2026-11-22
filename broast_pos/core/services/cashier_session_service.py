@@ -157,6 +157,12 @@ class CashierSessionService:
         if not session.is_open:
             raise ValueError("الوردية مغلقة بالفعل")
 
+        # H05: Only session owner or manager/admin can close a session
+        if self._auth is not None and actor_id is not None:
+            actor = self._auth.get_user_by_id(actor_id)
+            if actor is not None and not actor.is_manager_or_above() and session.user_id != actor_id:
+                raise ValueError("لا يمكن إغلاق درج كاشير آخر")
+
         expected_pt = self._ledger.get_session_balance_pt(session_id)
         variance_pt = counted_cash_pt - expected_pt
 
@@ -245,6 +251,15 @@ class CashierSessionService:
             raise ValueError(f"وردية التسليم رقم {from_session_id} غير موجودة")
         if not outgoing.is_open:
             raise ValueError("وردية التسليم مغلقة بالفعل")
+
+        # H05: Only session owner or manager/admin can handover a session
+        if self._auth is not None and actor_id is not None:
+            actor = self._auth.get_user_by_id(actor_id)
+            if actor is not None and not actor.is_manager_or_above() and outgoing.user_id != actor_id:
+                raise ValueError("لا يمكن تسليم درج كاشير آخر")
+            to_user = self._auth.get_user_by_id(to_user_id)
+            if to_user is not None and to_user.cashier_slot is None:
+                raise ValueError("المستخدم المستلم ليس كاشيراً مسجلاً — لا يمكن نقل الوردية لسائق توصيل")
 
         if cash_drop_pt < 0:
             raise ValueError("مبلغ التحويل للخزينة لا يمكن أن يكون سالباً")

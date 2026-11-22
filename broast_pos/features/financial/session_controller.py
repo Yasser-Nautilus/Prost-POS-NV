@@ -73,6 +73,11 @@ class SessionController:
             )
 
         float_pt = round(opening_float_egp * 100)
+        # H05: Only manager can open on behalf of another user
+        if self._auth is not None and actor_id is not None:
+            actor = self._auth.get_user_by_id(actor_id)
+            if actor is not None and not actor.is_manager_or_above() and user_id != actor_id:
+                raise ValueError("لا يمكن فتح وردية لكاشير آخر")
         session = self._svc.open_session(
             day_id=day_id,
             user_id=user_id,
@@ -95,6 +100,14 @@ class SessionController:
 
         Large variances (> EGP 20) require variance_reason + manager PIN.
         """
+        # H05: Cashiers may only close their own session
+        if self._auth is not None and actor_id is not None:
+            actor = self._auth.get_user_by_id(actor_id)
+            if actor is not None and not actor.is_manager_or_above():
+                session = self._svc.get_session_by_id(session_id)
+                if session is not None and session.user_id != actor_id:
+                    raise ValueError("لا يمكن إغلاق درج كاشير آخر")
+
         counted_pt = round(counted_cash_egp * 100)
         session = self._svc.close_session(
             session_id=session_id,
@@ -121,6 +134,17 @@ class SessionController:
 
         Returns {'closed': {...}, 'new': {...}}.
         """
+        # H05: Cashiers may only handover their own session; recipient cannot be a driver
+        if self._auth is not None and actor_id is not None:
+            actor = self._auth.get_user_by_id(actor_id)
+            if actor is not None and not actor.is_manager_or_above():
+                outgoing = self._svc.get_session_by_id(from_session_id)
+                if outgoing is not None and outgoing.user_id != actor_id:
+                    raise ValueError("لا يمكن تسليم درج كاشير آخر")
+            to_user = self._auth.get_user_by_id(to_user_id)
+            if to_user is not None and to_user.cashier_slot is None:
+                raise ValueError("المستخدم المستلم ليس كاشيراً مسجلاً — لا يمكن نقل الوردية لسائق توصيل")
+
         try:
             st = Station(station)
         except ValueError:
@@ -155,18 +179,42 @@ class SessionController:
     # Queries
     # ------------------------------------------------------------------
 
-    def get_active_sessions(self, day_id: int) -> list[dict[str, Any]]:
-        """All open sessions for a business day."""
+    def get_active_sessions(
+        self, day_id: int, actor_id: int | None = None
+    ) -> list[dict[str, Any]]:
+        """All open sessions for a business day (filtered for cashier)."""
         sessions = self._svc.get_active_sessions(day_id)
+        if self._auth is not None:
+            actor = self._auth.get_user_by_id(actor_id) if actor_id else self._auth.get_current_user()
+            if actor is not None and not actor.is_manager_or_above():
+                sessions = [s for s in sessions if s.user_id == actor.id]
         return [self._session_to_dict(s) for s in sessions]
 
-    def get_all_sessions(self, day_id: int) -> list[dict[str, Any]]:
-        """All sessions (open + closed) for a business day."""
+    def get_all_sessions(
+        self, day_id: int, actor_id: int | None = None
+    ) -> list[dict[str, Any]]:
+        """All sessions (open + closed) for a business day (filtered for cashier)."""
         sessions = self._svc.get_all_sessions_for_day(day_id)
+        if self._auth is not None:
+            actor = self._auth.get_user_by_id(actor_id) if actor_id else self._auth.get_current_user()
+            if actor is not None and not actor.is_manager_or_above():
+                sessions = [s for s in sessions if s.user_id == actor.id]
         return [self._session_to_dict(s) for s in sessions]
 
-    def get_session_balance(self, session_id: int) -> dict[str, Any]:
+    def get_session_balance(
+        self, session_id: int, actor_id: int | None = None
+    ) -> dict[str, Any]:
         """Current expected cash balance for a session (from ledger)."""
+        # H05: Cashiers cannot read another cashier's balance or open session expected cash
+        if self._auth is not None:
+            actor = self._auth.get_user_by_id(actor_id) if actor_id else self._auth.get_current_user()
+            if actor is not None and not actor.is_manager_or_above():
+                session = self._svc.get_session_by_id(session_id)
+                if session is None or session.user_id != actor.id:
+                    raise ValueError("لا يمكن قراءة رصيد درج كاشير آخر")
+                if session.is_open:
+                    raise ValueError("لا يمكن قراءة الرصيد المتوقع قبل إجراء الجرد")
+
         balance_pt = self._svc.get_session_expected_cash_pt(session_id)
         session = self._svc.get_session_by_id(session_id)
         return {
@@ -180,11 +228,19 @@ class SessionController:
     # Reports
     # ------------------------------------------------------------------
 
-    def generate_x_report(self, day_id: int) -> dict[str, Any]:
+    def generate_x_report(
+        self, day_id: int, actor_id: int | None = None
+    ) -> dict[str, Any]:
         """
         X-Report: live snapshot of all sessions for the business day.
         Can be called any number of times without closing anything.
+        Manager only.
         """
+        if self._auth is not None:
+            actor = self._auth.get_user_by_id(actor_id) if actor_id else self._auth.get_current_user()
+            if actor is not None and not actor.is_manager_or_above():
+                raise ValueError("تقرير X متاح للمدير فقط")
+
         report = self._day.generate_x_report(day_id)
         return self._x_report_to_dict(report)
 
@@ -192,16 +248,17 @@ class SessionController:
         self,
         day_id: int,
         manager_pin: str | None = None,
+        actor_id: int | None = None,
     ) -> dict[str, Any]:
         """
         Close the business day and generate Z-Report.
-
-        Pre-checks:
-          1. All cashier sessions must be closed.
-          2. FinancialService pre-checks (no drivers in transit, no open orders, etc.)
-
-        Returns the Z-Report as a dict.
+        Manager only (or with valid manager PIN).
         """
+        if self._auth is not None:
+            actor = self._auth.get_user_by_id(actor_id) if actor_id else self._auth.get_current_user()
+            if actor is not None and not actor.is_manager_or_above() and not manager_pin:
+                raise ValueError("إغلاق اليوم متاح للمدير فقط")
+
         z = self._day.close_business_day(day_id=day_id, manager_pin=manager_pin)
         result = self._x_report_to_dict(z)
         result.update({

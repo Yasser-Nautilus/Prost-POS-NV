@@ -156,6 +156,11 @@ class BusinessDayService:
         Fetches ALL sessions (open and closed) for this day_id,
         computes expected_cash from the ledger, and returns a snapshot.
         """
+        if self._auth is not None:
+            curr = self._auth.get_current_user()
+            if curr is not None and not curr.is_manager_or_above():
+                raise PermissionError("تقرير X متاح للمدير فقط")
+
         sessions = self._sessions.get_sessions_for_day(day_id)
         snapshots = [self._build_session_snapshot(s) for s in sessions]
 
@@ -208,6 +213,15 @@ class BusinessDayService:
                 )
                 closed_at = closed_shift.closed_at or datetime.now().isoformat()
             else:
+                # H05: no FinancialService wired — still enforce manager
+                # authorization before closing, instead of closing silently.
+                if self._auth is not None:
+                    if manager_pin:
+                        self._auth.verify_manager_pin(manager_pin)
+                    else:
+                        curr = self._auth.get_current_user()
+                        if not (curr and curr.is_manager_or_above()):
+                            raise PermissionError("إغلاق اليوم متاح للمدير فقط")
                 closed_at = datetime.now().isoformat()
 
         # FR-DAY-3: Build Z-Report from final ledger state
