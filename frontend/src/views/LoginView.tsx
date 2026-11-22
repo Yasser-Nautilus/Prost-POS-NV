@@ -42,9 +42,13 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
   return (
     <div className="min-h-screen bg-brand-dark flex flex-col md:flex-row items-center justify-center p-6 gap-8">
-      
+
       {/* Right column: Branding & Cashier Tiles */}
-      <div className="flex-1 max-w-xl text-right space-y-6 flex flex-col justify-center">
+      <div
+        role="region"
+        aria-label="قائمة الموظفين — اختر حسابك"
+        className="flex-1 max-w-xl text-right space-y-6 flex flex-col justify-center"
+      >
         <div className="space-y-2">
           <div className="inline-block py-1.5 px-4 bg-brand-gold/10 border border-brand-gold/30 rounded-full text-brand-gold text-sm font-bold">
             نظام إدارة المبيعات الذكي v1.0
@@ -98,8 +102,19 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         </div>
       </div>
 
+      {/* Separator */}
+      <div className="hidden md:flex flex-col items-center gap-3 select-none" role="separator" aria-hidden="true">
+        <div className="w-px flex-1 bg-brand-border/30" />
+        <span className="text-gray-500 text-xs font-bold tracking-widest">أو</span>
+        <div className="w-px flex-1 bg-brand-border/30" />
+      </div>
+
       {/* Left column: Security lock & Numpad block */}
-      <div className="w-full max-w-sm p-6 bg-brand-card border border-brand-border/60 rounded-3xl shadow-2xl flex flex-col items-center">
+      <div
+        role="region"
+        aria-label="لوحة PIN — أدخل رمز الدخول"
+        className="w-full max-w-sm p-6 bg-brand-card border border-brand-border/60 rounded-3xl shadow-2xl flex flex-col items-center"
+      >
         <div className="h-16 w-16 rounded-full bg-brand-gold/10 text-brand-gold flex items-center justify-center mb-4">
           {loading ? (
             <Loader2 size={28} className="animate-spin" />
