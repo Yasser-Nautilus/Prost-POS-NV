@@ -94,6 +94,15 @@ class XReport:
         """Total outflows (EXPENSE entries) — negative amounts, return abs value."""
         return abs(sum(s.breakdown.get("EXPENSE", 0) for s in self.sessions))
 
+    @property
+    def total_cash_drops_pt(self) -> int:
+        """Total outflows to safe (CASH_DROP entries) — negative amounts, return abs value."""
+        return abs(sum(s.breakdown.get("CASH_DROP", 0) for s in self.sessions))
+
+    @property
+    def total_cash_drops_egp(self) -> float:
+        return self.total_cash_drops_pt / 100
+
 
 @dataclass
 class ZReport(XReport):

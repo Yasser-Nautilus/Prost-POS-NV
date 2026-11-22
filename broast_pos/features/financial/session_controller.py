@@ -126,6 +126,13 @@ class SessionController:
         except ValueError:
             raise ValueError(f"محطة غير صحيحة: {station!r}")
 
+        if cash_drop_egp < 0:
+            raise ValueError("مبلغ التحويل للخزينة لا يمكن أن يكون سالباً")
+        if counted_cash_egp < 0:
+            raise ValueError("المبلغ المعدود لا يمكن أن يكون سالباً")
+        if cash_drop_egp > counted_cash_egp:
+            raise ValueError("مبلغ التحويل للخزينة لا يمكن أن يتجاوز المبلغ المعدود")
+
         counted_pt = round(counted_cash_egp * 100)
         drop_pt = round(cash_drop_egp * 100)
 

@@ -253,6 +253,12 @@ class CashierSessionService:
         # Outgoing cashier counts the drawer (blind)
         # If not provided explicitly, default to the expected (no variance)
         counted_pt = to_user_counted_pt if to_user_counted_pt is not None else expected_pt
+        if counted_pt < 0:
+            raise ValueError("المبلغ المعدود لا يمكن أن يكون سالباً")
+
+        if cash_drop_pt > counted_pt:
+            raise ValueError("مبلغ التحويل للخزينة لا يمكن أن يتجاوز المبلغ المعدود")
+
         variance_pt = counted_pt - expected_pt
 
         if abs(variance_pt) > variance_threshold_pt:
@@ -274,7 +280,7 @@ class CashierSessionService:
 
         now = datetime.now().isoformat()
         actor = actor_id or to_user_id
-        incoming_float_pt = max(0, counted_pt - cash_drop_pt)
+        incoming_float_pt = counted_pt - cash_drop_pt
 
         # All writes are atomic: if create() or set_handover_link() fail after
         # close_session(), the outgoing session would be permanently closed with
@@ -294,13 +300,26 @@ class CashierSessionService:
                     reason=variance_reason or ("عجز في التسليم" if variance_pt < 0 else "زيادة في التسليم"),
                 ))
 
-            # HANDOVER_OUT: counted cash leaves the outgoing drawer
+            # CASH_DROP: cash transferred to safe if cash_drop_pt > 0
+            if cash_drop_pt > 0:
+                self._ledger.append(CashLedgerEntry(
+                    id=None,
+                    day_id=outgoing.day_id,
+                    session_id=from_session_id,
+                    entry_type=LedgerEntryType.CASH_DROP,
+                    amount_pt=-cash_drop_pt,              # negative: cash leaves drawer to safe
+                    actor_id=actor,
+                    approved_by=manager_id,
+                    reason=f"تحويل للخزينة عند التسليم لـ user_id={to_user_id}",
+                ))
+
+            # HANDOVER_OUT: remaining counted cash leaves outgoing drawer for next session
             self._ledger.append(CashLedgerEntry(
                 id=None,
                 day_id=outgoing.day_id,
                 session_id=from_session_id,
                 entry_type=LedgerEntryType.HANDOVER_OUT,
-                amount_pt=-counted_pt,              # negative: cash leaves drawer
+                amount_pt=-incoming_float_pt,         # negative: cash transferred to new session
                 actor_id=actor,
                 reason=f"تسليم الوردية لـ user_id={to_user_id}",
             ))
