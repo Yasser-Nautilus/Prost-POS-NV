@@ -546,56 +546,50 @@ class OrderController:
         Removing items requires manager PIN.
 
         Returns:
-            (success, message)
+            (success, message, print_ok)
         """
         if self._current_order is None or self._current_order.id is None:
-            return False, "لا يوجد طلب محفوظ للتعديل"
+            return False, "لا يوجد طلب محفوظ للتعديل", False
 
-        # Compute diff from snapshot
+        # Compute diff from snapshot — each change now carries product_id and notes.
         changes = self._amendment_tracker.diff(self._current_order.items)
         if not changes:
-            return True, "لا توجد تغييرات"
+            return True, "لا توجد تغييرات", True
 
-        # Build lookup maps from the current order's actual items
-        current_items_by_name: dict = {
-            item.product_name: item for item in self._current_order.items
+        # Build add/remove lists directly from the stable diff identity fields.
+        # Look up unit_price for additions from the current in-memory order.
+        current_by_key: dict = {
+            (item.product_id, item.notes or ""): item
+            for item in self._current_order.items
         }
-        # Build lookup map from snapshot (for removed items — they no longer exist
-        # in current_order but were in the original)
-        snapshot_items_by_name: dict = {}
-        if self._amendment_tracker._original_names:
-            for (pid, _notes), name in self._amendment_tracker._original_names.items():
-                snapshot_items_by_name[name] = pid
 
         added_items: list[OrderItem] = []
         removed_items: list[OrderItem] = []
         for change in changes:
-            name = change["product_name"]
+            pid = change["product_id"]
+            notes = change["notes"]
             qty = int(change["quantity"])
 
             if change["action"] == "added":
-                # Get the real item from current order
-                real_item = current_items_by_name.get(name)
-                product_id = real_item.product_id if real_item else 0
-                unit_price = real_item.unit_price if real_item else 0.0
+                real_item = current_by_key.get((pid, notes))
                 added_items.append(OrderItem(
-                    product_id=product_id,
-                    product_name=name,
-                    unit_price=unit_price,
+                    product_id=pid,
+                    product_name=change["product_name"],
+                    unit_price=real_item.unit_price if real_item else 0.0,
                     quantity=qty,
+                    notes=notes,
                 ))
             elif change["action"] == "removed":
-                # Get product_id from snapshot
-                product_id = snapshot_items_by_name.get(name, 0)
                 removed_items.append(OrderItem(
-                    product_id=product_id,
-                    product_name=name,
+                    product_id=pid,
+                    product_name=change["product_name"],
                     unit_price=0,
                     quantity=qty,
+                    notes=notes,
                 ))
 
         try:
-            self._order_svc.amend_order(
+            saved = self._order_svc.amend_order(
                 self._current_order.id,
                 added_items,
                 removed_items,
@@ -605,6 +599,9 @@ class OrderController:
             return False, str(exc), True
         except Exception as exc:
             return False, f"فشل في حفظ التعديل: {exc}", True
+
+        # Reload from service so controller state matches what was persisted.
+        self._current_order = saved
 
         # Print amendment kitchen ticket (never blocks save — only informs)
         order_dict = self._order_to_dict(self._current_order)
