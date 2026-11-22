@@ -212,22 +212,23 @@ class TestSaleCashLedgerEntry:
         assert result.is_paid
 
     def test_no_sale_cash_when_no_session_open(self):
-        """No active session → SALE_CASH skipped, order still completes."""
+        """H01 fail-closed: cash payment must be rejected when no cashier session is open.
+        The transaction rolls back so the order stays unpaid and no ledger entry is written."""
         db = _fresh_db()
-        # No session opened
         svc = _make_order_svc(db, with_ledger=True)
         saved = self._create_saved_order(db, svc)
 
-        result = svc.complete_order(
-            order_id=saved.id,
-            payment_method=PaymentMethod.CASH,
-            amount_received=200.0,
-            actor_id=2,
-        )
-        db.commit()
-        assert result.is_paid
+        with pytest.raises(ValueError, match="لا توجد جلسة مفتوحة"):
+            svc.complete_order(
+                order_id=saved.id,
+                payment_method=PaymentMethod.CASH,
+                amount_received=200.0,
+                actor_id=2,
+            )
 
-        CashLedgerRepository(db=db)
+        from broast_pos.data.repositories.order_repository import OrderRepository
+        order = OrderRepository(db).get_by_id(saved.id)
+        assert not order.is_paid, "order must stay unpaid after a rolled-back payment"
         count = db.fetch_one("SELECT COUNT(*) AS c FROM cash_ledger")["c"]
         assert count == 0
 
