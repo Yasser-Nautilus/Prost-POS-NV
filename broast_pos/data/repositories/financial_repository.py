@@ -256,12 +256,24 @@ class FinancialRepository(BaseRepository[Shift]):
 
         B-01 fix: add 'ready' to the status filter — a READY order has not
         been paid yet and the money is not in the drawer.
+
+        H04 fix: exclude dine_in orders (already counted in pending_dinein)
+        and orders already assigned to unsettled delivery trips (already
+        counted in pending_delivery) so the three pending buckets never
+        overlap. Also ensure is_paid = 0 so paid orders are never counted as pending.
         """
         row = self._db.fetch_one(
             """SELECT COALESCE(SUM(total), 0) AS pending
                FROM orders
                WHERE shift_id = ? AND status IN ('new', 'preparing', 'ready')
-                 AND (payment_method = 'cash' OR payment_method IS NULL)""",
+                 AND is_paid = 0
+                 AND (payment_method = 'cash' OR payment_method IS NULL)
+                 AND order_type != 'dine_in'
+                 AND id NOT IN (
+                     SELECT dto.order_id FROM delivery_trip_orders dto
+                     JOIN delivery_trips dt ON dt.id = dto.trip_id
+                     WHERE dt.is_settled = 0
+                 )""",
             (shift_id,),
         )
         return row["pending"] if row else 0.0
