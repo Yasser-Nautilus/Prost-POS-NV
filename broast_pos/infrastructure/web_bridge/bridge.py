@@ -504,6 +504,15 @@ class POSBridge(QObject):
                     shift_id = active.id if active else None
                 if shift_id is None:
                     return json.dumps({"success": False, "error": "لا توجد وردية مفتوحة"})
+                # H08: route through business_day_svc when available to enforce
+                # FR-DAY-1 (all sessions closed) before marking the shift closed.
+                if self._session_ctrl is not None:
+                    data = self._session_ctrl.close_business_day(
+                        day_id=shift_id,
+                        manager_pin=payload.get("manager_pin", ""),
+                    )
+                    self._trigger_shift_status_changed()
+                    return json.dumps({"success": True, "data": data})
                 ok = self._financial_ctrl.close_shift(
                     shift_id=shift_id,
                     manager_pin=payload.get("manager_pin", "")
@@ -970,6 +979,15 @@ class POSBridge(QObject):
 
         try:
             if action == "open":
+                # H09: reject session open against a closed/inactive business day
+                open_day_id = day_id or payload.get("day_id")
+                if open_day_id is not None and self._financial is not None:
+                    shift = self._financial._financial.get_by_id(open_day_id)
+                    if shift is None or not shift.is_active:
+                        return json.dumps({
+                            "success": False,
+                            "error": "لا يمكن فتح وردية في يوم عمل مغلق",
+                        })
                 data = ctrl.open_session(
                     day_id=day_id or payload["day_id"],
                     user_id=payload.get("user_id", self._current_user.id),

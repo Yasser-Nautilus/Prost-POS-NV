@@ -182,18 +182,20 @@ class BusinessDayService:
         # FR-DAY-1: All sessions must be closed
         self._guard_all_sessions_closed(day_id)
 
-        # FR-DAY-2: Batch DRIVER_FEE_PAYOUT before closing shift
-        self._batch_driver_fee_payouts(day_id)
+        # FR-DAY-2 + close_shift are atomic: if close_shift fails (e.g. a guard
+        # fires), the DRIVER_FEE_PAYOUT entries must roll back with it.
+        db = self._sessions._db
+        with db.transaction():
+            self._batch_driver_fee_payouts(day_id)
 
-        # Close the shift via FinancialService (handles its own pre-checks)
-        if self._financial is not None:
-            closed_shift = self._financial.close_shift(
-                shift_id=day_id,
-                manager_pin=manager_pin,
-            )
-            closed_at = closed_shift.closed_at or datetime.now().isoformat()
-        else:
-            closed_at = datetime.now().isoformat()
+            if self._financial is not None:
+                closed_shift = self._financial.close_shift(
+                    shift_id=day_id,
+                    manager_pin=manager_pin,
+                )
+                closed_at = closed_shift.closed_at or datetime.now().isoformat()
+            else:
+                closed_at = datetime.now().isoformat()
 
         # FR-DAY-3: Build Z-Report from final ledger state
         sessions = self._sessions.get_sessions_for_day(day_id)

@@ -257,6 +257,11 @@ class FinancialService:
         Raises:
             ValueError: if amount is invalid or category is unknown.
         """
+        # H09: reject expenses against a closed business day
+        shift = self._financial.get_by_id(shift_id)
+        if shift is None or not shift.is_active:
+            raise ValueError("لا يمكن تسجيل مصروف في وردية مغلقة")
+
         if amount <= 0:
             raise ValueError("المبلغ يجب أن يكون أكبر من صفر")
 
