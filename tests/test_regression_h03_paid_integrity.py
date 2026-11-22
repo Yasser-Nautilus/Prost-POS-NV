@@ -205,3 +205,145 @@ class TestH03PaidOrderIntegrity:
         )
         assert len(rows) == 1, f"Exact retry must not create second SALE_CASH, found {len(rows)}"
         assert result.is_paid is True
+
+    def test_discount_on_paid_order_rejected_service(self):
+        """Applying a discount to an already-paid order must be rejected."""
+        from unittest.mock import MagicMock
+
+        from broast_pos.core.models.user import User, UserRole
+
+        db = _fresh_db()
+        svc = _make_svc(db)
+        order = _paid_active_order(db, svc, total=70.0)
+
+        manager = User(
+            id=1, username="cashier1", display_name="كاشير 1",
+            role=UserRole.MANAGER, pin_hash="", is_active=True,
+        )
+        auth = MagicMock()
+        auth.verify_pin.return_value = manager
+        svc._auth = auth
+
+        with pytest.raises(ValueError, match="مدفوع"):
+            svc.apply_discount(order, value=10.0, discount_type="flat", manager_pin="1234")
+
+    def test_discount_on_paid_order_rejected_controller(self):
+        """OrderController.apply_discount on paid order returns False."""
+        from unittest.mock import MagicMock
+
+        from broast_pos.features.order_lifecycle.order_controller import OrderController
+
+        db = _fresh_db()
+        svc = _make_svc(db)
+        order = _paid_active_order(db, svc, total=70.0)
+
+        ctrl = OrderController(
+            order_service=svc,
+            financial_service=MagicMock(),
+            auth_service=MagicMock(),
+            print_triggers=MagicMock(),
+        )
+        ctrl.load_order(order.id)
+
+        ok, msg = ctrl.apply_discount(value=10.0, discount_type="flat", manager_pin="1234")
+        assert ok is False
+        assert "مدفوع" in msg
+
+    def test_delivery_fee_change_on_paid_order_rejected(self):
+        """Changing delivery fee on a paid order must be rejected."""
+        from unittest.mock import MagicMock
+
+        from broast_pos.features.order_lifecycle.order_controller import OrderController
+
+        db = _fresh_db()
+        svc = _make_svc(db)
+        order = _paid_active_order(db, svc, total=70.0)
+
+        ctrl = OrderController(
+            order_service=svc,
+            financial_service=MagicMock(),
+            auth_service=MagicMock(),
+            print_triggers=MagicMock(),
+        )
+        ctrl.load_order(order.id)
+
+        with pytest.raises(ValueError, match="رسوم التوصيل"):
+            ctrl.set_customer_info(delivery_fee=25.0)
+
+    def test_payment_method_change_in_customer_info_rejected(self):
+        """Changing payment method via set_customer_info on a paid order must be rejected."""
+        from unittest.mock import MagicMock
+
+        from broast_pos.features.order_lifecycle.order_controller import OrderController
+
+        db = _fresh_db()
+        svc = _make_svc(db)
+        order = _paid_active_order(db, svc, total=70.0, method=PaymentMethod.CASH)
+
+        ctrl = OrderController(
+            order_service=svc,
+            financial_service=MagicMock(),
+            auth_service=MagicMock(),
+            print_triggers=MagicMock(),
+        )
+        ctrl.load_order(order.id)
+
+        with pytest.raises(ValueError, match="طريقة الدفع"):
+            ctrl.set_customer_info(payment_method="online")
+
+    def test_order_type_change_on_paid_order_rejected(self):
+        """Changing order_type on a paid order must be rejected at repository level."""
+        db = _fresh_db()
+        svc = _make_svc(db)
+        order = _paid_active_order(db, svc, total=70.0)
+
+        repo = OrderRepository(db=db)
+        loaded = repo.get_by_id(order.id)
+        loaded.order_type = OrderType.DELIVERY
+
+        with pytest.raises(ValueError, match="نوع طلب مدفوع"):
+            repo.save(loaded)
+
+    def test_total_change_on_paid_order_rejected_by_repository(self):
+        """Direct total mutation on a paid order must be rejected by repository."""
+        db = _fresh_db()
+        svc = _make_svc(db)
+        order = _paid_active_order(db, svc, total=70.0)
+
+        repo = OrderRepository(db=db)
+        loaded = repo.get_by_id(order.id)
+        loaded.total = 150.0
+
+        with pytest.raises(ValueError, match="إجمالي طلب مدفوع"):
+            repo.save(loaded)
+
+    def test_controller_item_modifications_on_paid_order_rejected(self):
+        """add_item, change_quantity, remove_item on paid order must be rejected."""
+        from unittest.mock import MagicMock
+
+        from broast_pos.features.order_lifecycle.order_controller import OrderController
+
+        db = _fresh_db()
+        svc = _make_svc(db)
+        order = _paid_active_order(db, svc, total=70.0)
+
+        ctrl = OrderController(
+            order_service=svc,
+            financial_service=MagicMock(),
+            auth_service=MagicMock(),
+            print_triggers=MagicMock(),
+        )
+        ctrl.load_order(order.id)
+
+        # 1) add_item
+        with pytest.raises(ValueError, match="مدفوع"):
+            ctrl.add_item(product_id=2, product_name="مشروب", unit_price=20.0, quantity=1)
+
+        # 2) change_quantity
+        with pytest.raises(ValueError, match="مدفوع"):
+            ctrl.change_quantity(index=0, delta=1)
+
+        # 3) remove_item
+        ok, msg = ctrl.remove_item(index=0, manager_pin="1234")
+        assert ok is False
+        assert "مدفوع" in msg

@@ -129,6 +129,10 @@ class OrderController:
         if self._current_order is None:
             return
 
+        # H03: reject item additions on a paid active order
+        if self._current_order.is_paid:
+            raise ValueError("لا يمكن إضافة عناصر إلى طلب مدفوع")
+
         # Check if already in order
         for item in self._current_order.items:
             if item.product_id == product_id and item.notes == notes:
@@ -152,6 +156,9 @@ class OrderController:
         """Change item quantity by delta (+/-)."""
         if self._current_order is None:
             return
+        # H03: reject item quantity changes on a paid active order
+        if self._current_order.is_paid:
+            raise ValueError("لا يمكن تعديل كمية عناصر طلب مدفوع")
         if 0 <= index < len(self._current_order.items):
             self._current_order.items[index].quantity += delta
             if self._current_order.items[index].quantity <= 0:
@@ -169,6 +176,10 @@ class OrderController:
         """
         if self._current_order is None:
             return False, "لا يوجد طلب حالي"
+
+        # H03: reject item removals on a paid active order
+        if self._current_order.is_paid:
+            return False, "لا يمكن حذف عنصر من طلب مدفوع"
 
         if 0 <= index < len(self._current_order.items):
             # If order is already saved, require manager PIN
@@ -251,6 +262,19 @@ class OrderController:
                             'online' (pre-paid). Defaults to 'cash' if omitted.
         """
         if self._current_order:
+            # H03: on a paid order, do not allow changing delivery_fee or payment_method
+            if self._current_order.is_paid:
+                if delivery_fee is not None and abs(self._current_order.delivery_fee - delivery_fee) > 0.001:
+                    raise ValueError("لا يمكن تعديل رسوم التوصيل لطلب مدفوع")
+                if payment_method is not None:
+                    current_pm = (
+                        self._current_order.payment_method.value
+                        if self._current_order.payment_method
+                        else None
+                    )
+                    if payment_method != current_pm:
+                        raise ValueError("لا يمكن تعديل طريقة الدفع لطلب مدفوع")
+
             self._current_order.customer_id = customer_id
             self._current_order.customer_phone = phone
             self._current_order.customer_name = name
@@ -606,6 +630,10 @@ class OrderController:
         """
         if self._current_order is None:
             return False, "لا يوجد طلب نشط"
+
+        # H03: reject discount on paid active order
+        if self._current_order.is_paid:
+            return False, "لا يمكن تطبيق خصم على طلب مدفوع بالفعل"
 
         if self._current_order.id is not None:
             try:
