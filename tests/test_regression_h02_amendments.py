@@ -33,6 +33,32 @@ from broast_pos.data.repositories.order_repository import OrderRepository
 from broast_pos.features.order_lifecycle.amendment_tracker import AmendmentTracker
 
 # ---------------------------------------------------------------------------
+# Fake product catalogue (H19: add_item resolves name/price from here, not
+# from the caller) — every test in this file only ever uses these two.
+# ---------------------------------------------------------------------------
+
+_CATALOGUE = {
+    1: ("وجبة", 70.0),
+    2: ("مشروب", 20.0),
+}
+
+
+def _fake_product_service():
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    def _get_product(product_id):
+        entry = _CATALOGUE.get(product_id)
+        if entry is None:
+            return None
+        name, price = entry
+        return SimpleNamespace(id=product_id, name=name, price=price, is_active=True)
+
+    products = MagicMock()
+    products.get_product.side_effect = _get_product
+    return products
+
+# ---------------------------------------------------------------------------
 # DB bootstrap
 # ---------------------------------------------------------------------------
 
@@ -247,6 +273,7 @@ class TestSaveAmendmentResultShape:
             financial_service=MagicMock(),
             auth_service=MagicMock(),
             print_triggers=MagicMock(),
+            product_service=_fake_product_service(),
         )
         return ctrl
 
@@ -313,6 +340,7 @@ class TestNoteOnlyAmendment:
             financial_service=MagicMock(),
             auth_service=mock_auth,
             print_triggers=MagicMock(),
+            product_service=_fake_product_service(),
         )
         return ctrl
 
@@ -390,7 +418,7 @@ def _make_bridge_h02(db: DatabaseConnection):
 
     bridge = POSBridge(
         auth_service=auth_svc,
-        product_service=MagicMock(),
+        product_service=_fake_product_service(),
         customer_service=MagicMock(),
         delivery_service=MagicMock(),
         financial_service=fin_svc,

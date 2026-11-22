@@ -551,14 +551,19 @@ class TestFullUserSimulation:
         # ------------------------------------------------------------------
         # H08: close the cashier session before testing shift-close guards.
         # close_business_day now rejects if any cashier session is still open.
-        # Ledger movements that reach the session (session_id-keyed entries):
-        #   OPENING_FLOAT +500, DRIVER_REMITTANCE +125 = 625.00 EGP.
-        # (SALE_CASH and EXPENSE are not recorded here because complete_payment
-        #  doesn't forward actor_id, so the session-lookup guard skips them;
-        #  that is a separate limitation, not an H08/H09 issue.)
+        # Ledger movements that reach the session (session_id-keyed entries),
+        # now that H01 forwards the authenticated actor through to cash
+        # posting (the dine-in cash sale is properly attributed instead of
+        # being skipped by the session-lookup guard):
+        #   OPENING_FLOAT +500.00 (opening float)
+        #   SALE_CASH     +235.00 (dine-in order, paid cash)
+        #   DRIVER_REMITTANCE +125.00 (delivery order, cash collected by driver)
+        #   = 860.00 EGP.
+        # (The takeaway order was paid by card, so it posts no cash entry;
+        # EXPENSE is booked at the business-day level, not this session.)
         res = client.call("session.close", {
             "session_id": cashier_session_id,
-            "counted_cash_egp": 625.0,
+            "counted_cash_egp": 860.0,
         })
         assert res["success"] is True
         assert res["data"]["variance_egp"] == 0.0
