@@ -196,6 +196,7 @@ def main() -> int:
     # 4. Printing infrastructure
     # ------------------------------------------------------------------
     printer_manager = PrinterManager()
+    printer_manager.initialise()
     print_triggers = PrintTriggers(printer_manager)
 
     # ------------------------------------------------------------------

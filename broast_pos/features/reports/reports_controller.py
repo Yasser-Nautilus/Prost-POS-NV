@@ -273,42 +273,56 @@ class ReportsController:
         Returns:
             True if print succeeded (or printer unavailable), False on error.
         """
+        # H15: raise instead of returning False so the bridge can propagate the reason
         if self._printer is None:
-            logger.warning("PrinterManager not configured — skipping print")
-            return False
+            raise RuntimeError("الطابعة غير مهيأة — يرجى الاتصال بالدعم الفني")
 
+        summary = self.generate_daily_summary(target_date, shift_id)
+
+        # H16: template expects the sales_by_type subdict (has "breakdown" / "grand_total"),
+        # not the full daily-summary wrapper.
+        sales_data = summary.get("sales_by_type", summary)
+
+        # H16: convert opened_at/closed_at to the keys the template expects
+        shift_period = None
         try:
-            summary = self.generate_daily_summary(target_date, shift_id)
+            shift = self._financial_svc._financial.get_by_id(shift_id)
+            if shift:
+                opened = shift.opened_at or ""
+                closed = shift.closed_at or datetime.now().isoformat()
 
-            # Build shift period for header
-            shift_period = None
+                def _split(ts: str) -> tuple[str, str]:
+                    """Return (date, time) from an ISO timestamp or empty strings."""
+                    try:
+                        dt = datetime.fromisoformat(ts)
+                        return dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M")
+                    except Exception:
+                        return ts[:10] if len(ts) >= 10 else "", ""
+
+                from_date, from_time = _split(opened)
+                to_date, to_time = _split(closed)
+                shift_period = {
+                    "from_time": from_time,
+                    "from_date": from_date,
+                    "to_time": to_time,
+                    "to_date": to_date,
+                }
+        except Exception:
+            logger.warning("Loading shift period for report failed", exc_info=True)
+
+        # H15: let exceptions propagate — the bridge's outer except clause
+        # captures str(e) and returns {"success": False, "error": str(e)}.
+        printed = self._printer.print_shift_summary(
+            sales_data, cashier_slot=cashier_slot, shift_period=shift_period,
+        )
+
+        if printed:
             try:
-                shift = self._financial_svc._financial.get_by_id(shift_id)
-                if shift:
-                    shift_period = {
-                        "opened_at": shift.opened_at or "",
-                        "closed_at": shift.closed_at or datetime.now().isoformat(),
-                    }
-            except Exception:
-                # Checkup-Fix: shift period is optional for the summary, but log failures.
-                logger.warning("Loading shift period for report failed", exc_info=True)
+                self._financial_svc.mark_summary_printed(shift_id)
+            except Exception as exc:
+                logger.warning("Summary printed but mark failed: %s", exc)
 
-            printed = self._printer.print_shift_summary(
-                summary, cashier_slot=cashier_slot, shift_period=shift_period,
-            )
-
-            if printed:
-                # Mark as printed — prerequisite for shift close
-                try:
-                    self._financial_svc.mark_summary_printed(shift_id)
-                except Exception as exc:
-                    logger.warning("Summary printed but mark failed: %s", exc)
-
-            return printed
-
-        except Exception as exc:
-            logger.error("Daily summary print failed: %s", exc)
-            return False
+        return printed
 
     # ------------------------------------------------------------------
     # Task 4: Consistency Checks
