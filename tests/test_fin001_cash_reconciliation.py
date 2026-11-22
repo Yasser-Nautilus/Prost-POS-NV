@@ -39,7 +39,8 @@ class TestShiftSummaryExpectedCash:
         assert s.expected_cash == pytest.approx(-30.0)
 
     def test_all_cash_shift_matches_legacy_formula(self):
-        """When all orders are cash, cash_sales == total_sales → same result."""
+        """H04: pending_delivery is an unpaid receivable, not deducted from drawer.
+        expected_cash = cash_sales(800) − expenses(100) = 700."""
         s = ShiftSummary(
             total_sales=800.0,
             cash_sales=800.0,
@@ -48,10 +49,11 @@ class TestShiftSummaryExpectedCash:
             pending_dinein=0.0,
             pending_kitchen=0.0,
         )
-        assert s.expected_cash == pytest.approx(650.0)
+        assert s.expected_cash == pytest.approx(700.0)
 
     def test_mixed_payment_shift(self):
-        """Realistic mixed shift: some cash, some Visa, some pending."""
+        """H04: pending amounts are unpaid receivables, not deducted from drawer.
+        expected_cash = cash_sales(1400) − expenses(200) = 1200."""
         s = ShiftSummary(
             total_sales=2000.0,
             cash_sales=1400.0,   # 600 was Visa
@@ -60,8 +62,8 @@ class TestShiftSummaryExpectedCash:
             pending_dinein=50.0,
             pending_kitchen=0.0,
         )
-        # 1400 - 200 - (100 + 50) = 1050
-        assert s.expected_cash == pytest.approx(1050.0)
+        # 1400 - 200 = 1200 (pending NOT deducted — they're unpaid receivables)
+        assert s.expected_cash == pytest.approx(1200.0)
 
     def test_total_sales_preserved_for_reporting(self):
         """total_sales must remain unchanged — it's used for revenue reporting."""

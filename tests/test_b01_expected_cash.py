@@ -34,23 +34,24 @@ class TestExpectedCashFormula:
         s = ShiftSummary(cash_sales=500.0, total_expenses=100.0)
         assert s.expected_cash == pytest.approx(400.0)
 
-    def test_pending_delivery_reduces_expected_cash(self):
-        """Unsettled CASH delivery reduces expected_cash (driver holds it)."""
+    def test_pending_delivery_does_not_reduce_expected_cash(self):
+        """H04 fix: pending_delivery is an unpaid receivable (is_paid=0), never in drawer.
+        expected_cash = cash_sales − expenses only."""
         s = ShiftSummary(cash_sales=500.0, total_expenses=50.0, pending_delivery=120.0)
-        assert s.expected_cash == pytest.approx(330.0)
+        assert s.expected_cash == pytest.approx(450.0)
 
-    def test_pending_dinein_reduces_expected_cash(self):
-        """Unpaid dine-in reduces expected_cash."""
+    def test_pending_dinein_does_not_reduce_expected_cash(self):
+        """H04 fix: pending_dinein is an unpaid receivable, never counted in cash_sales."""
         s = ShiftSummary(cash_sales=400.0, total_expenses=0.0, pending_dinein=80.0)
-        assert s.expected_cash == pytest.approx(320.0)
+        assert s.expected_cash == pytest.approx(400.0)
 
-    def test_pending_kitchen_reduces_expected_cash(self):
-        """Orders still in kitchen reduce expected_cash."""
+    def test_pending_kitchen_does_not_reduce_expected_cash(self):
+        """H04 fix: pending_kitchen is an unpaid receivable, not deducted from drawer."""
         s = ShiftSummary(cash_sales=300.0, total_expenses=0.0, pending_kitchen=60.0)
-        assert s.expected_cash == pytest.approx(240.0)
+        assert s.expected_cash == pytest.approx(300.0)
 
     def test_all_pending_combined(self):
-        """Full formula: cash_sales − expenses − (delivery + dinein + kitchen)."""
+        """H04: pending amounts are shown via total_pending, NOT deducted from drawer."""
         s = ShiftSummary(
             cash_sales=1000.0,
             total_expenses=100.0,
@@ -58,14 +59,14 @@ class TestExpectedCashFormula:
             pending_dinein=50.0,
             pending_kitchen=30.0,
         )
-        # expected = 1000 - 100 - (200 + 50 + 30) = 620
-        assert s.expected_cash == pytest.approx(620.0)
+        # expected = 1000 - 100 = 900 (pending amounts NOT deducted)
+        assert s.expected_cash == pytest.approx(900.0)
 
     def test_expected_cash_never_negative_in_model(self):
-        """The model does not clamp, but we document the expected behavior:
-        if more is pending than sold it's negative (shift issue, show it honestly)."""
+        """The model does not clamp — negative expected_cash means expenses exceed cash sales."""
         s = ShiftSummary(cash_sales=100.0, total_expenses=0.0, pending_delivery=150.0)
-        assert s.expected_cash == pytest.approx(-50.0)
+        # pending_delivery NOT deducted → expected = 100 - 0 = 100
+        assert s.expected_cash == pytest.approx(100.0)
 
     def test_online_sales_do_not_appear_in_cash_sales(self):
         """B-01 regression: online revenue must NOT inflate expected_cash.
@@ -211,17 +212,11 @@ class TestRegressionScenarios:
     """Verify the four audit-report bugs are fixed in the formula."""
 
     def test_F01a_delivered_cash_not_in_expected(self):
-        """F-01a: DELIVERED orders (driver still has cash) must not appear in cash_sales.
-        Instead they appear in pending_delivery and cancel each other out."""
-        # Scenario: 1 order of 200 CASH, driver OUT (DELIVERED, unsettled)
-        # Correct: cash_sales=0, pending_delivery=200 → expected=-200+200=0? No.
-        # Actually: cash_sales=0 (not is_paid), pending_delivery=200 (CASH unsettled)
-        # expected = 0 - 0 - 200 = -200 … which correctly shows the cash isn't here yet.
-        # OLD bug: cash_sales=200 AND pending_delivery=200 → expected=0 (masks the gap)
-        # After fix: they're handled symmetrically.
+        """F-01a + H04: DELIVERED orders (is_paid=0) are NOT in cash_sales.
+        pending_delivery is an unpaid receivable, NOT deducted from drawer either.
+        expected_cash = cash_sales(0) − expenses(0) = 0."""
         s = ShiftSummary(cash_sales=0.0, total_expenses=0.0, pending_delivery=200.0)
-        assert s.expected_cash == pytest.approx(-200.0)
-        # This negative is correct: the cashier should NOT have that 200 in the drawer yet
+        assert s.expected_cash == pytest.approx(0.0)
 
     def test_F01b_online_delivery_not_deducted_from_expected(self):
         """F-01b: ONLINE delivery orders must NOT appear in pending_delivery.
@@ -235,11 +230,11 @@ class TestRegressionScenarios:
         assert s.expected_cash == pytest.approx(0.0)
 
     def test_F01c_ready_orders_reduce_expected_cash(self):
-        """F-01c: 'ready' orders must appear in pending_kitchen."""
-        # A READY order: food done but not yet paid → cash not in drawer
+        """F-01c + H04: READY orders (is_paid=0) are NOT in cash_sales.
+        pending_kitchen is an unpaid receivable, NOT deducted from drawer.
+        expected_cash = cash_sales(200) − expenses(0) = 200."""
         s = ShiftSummary(cash_sales=200.0, total_expenses=0.0, pending_kitchen=80.0)
-        assert s.expected_cash == pytest.approx(120.0)
-        # OLD bug: ready was excluded → expected would be 200 (overstates what's in drawer)
+        assert s.expected_cash == pytest.approx(200.0)
 
     def test_F01d_unpaid_orders_not_in_total_sales(self):
         """F-01d: in-progress orders must not count in total_sales / cash_sales."""
