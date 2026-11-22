@@ -23,7 +23,7 @@ Real USB/network printer behaviour stays for separate hardware testing.
 from __future__ import annotations
 
 import json
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from broast_pos.core.models.user import User, UserRole
 from broast_pos.infrastructure.printing.printer_config import PrinterEntry
@@ -123,6 +123,9 @@ class TestH14BridgeExposesReadiness:
             pm.initialise()
         bridge._printer = pm
         bridge._current_user = _cashier()
+        # H20: dispatch() revalidates the session from the DB on every call.
+        bridge._auth = MagicMock()
+        bridge._auth.refresh_current_user.return_value = bridge._current_user
 
         resp = json.loads(bridge.dispatch("get_printer_status", json.dumps({})))
 
@@ -133,6 +136,8 @@ class TestH14BridgeExposesReadiness:
         bridge = bridge_module.POSBridge.__new__(bridge_module.POSBridge)
         bridge._printer = None
         bridge._current_user = _cashier()
+        bridge._auth = MagicMock()
+        bridge._auth.refresh_current_user.return_value = bridge._current_user
 
         resp = json.loads(bridge.dispatch("get_printer_status", json.dumps({})))
 

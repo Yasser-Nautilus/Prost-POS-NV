@@ -50,7 +50,10 @@ class _StubReportsController:
         self.calls.append("generate_daily_summary")
         return {"gross_revenue": 12500.0}
 
-    def get_bestsellers(self):
+    def validate_scope(self, target_date=None, shift_id=None):
+        self.calls.append("validate_scope")
+
+    def get_bestsellers(self, target_date=None, shift_id=None):
         self.calls.append("get_bestsellers")
         return [{"product_name": "برجر", "quantity": 10, "revenue": 700.0}]
 
@@ -107,7 +110,7 @@ class TestH06ReportPermissions:
         resp = json.loads(bridge.dispatch("get_report_product_sales", json.dumps({})))
         assert resp["success"] is True, f"Manager must receive the product sales report: {resp}"
         assert resp["data"][0]["product_name"] == "برجر"
-        assert ctrl.calls == ["get_bestsellers"]
+        assert ctrl.calls == ["validate_scope", "get_bestsellers"]
 
     def test_cashier_cannot_print_shift_summary(self):
         bridge, ctrl = _make_bridge(_cashier())

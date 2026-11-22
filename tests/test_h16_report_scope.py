@@ -295,6 +295,9 @@ class TestBridgeFilter:
         bridge = POSBridge.__new__(POSBridge)
         bridge._reports_ctrl = ctrl
         bridge._current_user = MagicMock()
+        # H20: dispatch() revalidates the session from the DB on every call.
+        bridge._auth = MagicMock()
+        bridge._auth.refresh_current_user.return_value = bridge._current_user
         raw = POSBridge.dispatch(bridge, action, json.dumps(payload or {}))
         return json.loads(raw)
 
