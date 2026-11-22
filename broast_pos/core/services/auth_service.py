@@ -97,6 +97,8 @@ class AuthService:
     def __init__(self, user_repo: UserRepository | None = None) -> None:
         self._users = user_repo or UserRepository()
         self._current_user: User | None = None
+        # H20: PIN fingerprint the active session logged in with
+        self._session_credential: tuple[str, str | None] | None = None
         # B-08: in-memory throttle store — {identifier: (failure_count, first_failure_ts)}
         # Identifier: str(user_id) for login(), pin_hash[:8] for pin-only paths.
         # Resets on process restart (acceptable for a local POS).
@@ -138,7 +140,7 @@ class AuthService:
 
         self._reset_throttle(key)
         self._upgrade_if_legacy(user, pin)
-        self._current_user = user
+        self._start_session(user)
         return user
 
     def login_by_pin(self, pin: str) -> User:
@@ -162,12 +164,51 @@ class AuthService:
 
         self._reset_throttle(key)
         self._upgrade_if_legacy(user, pin)
-        self._current_user = user
+        self._start_session(user)
         return user
 
     def logout(self) -> None:
         """Clear the active session — return to login screen."""
         self._current_user = None
+        self._session_credential = None
+
+    # H20: a session is only valid while the user's PIN is unchanged -----
+
+    @staticmethod
+    def _credential_fingerprint(user: User) -> tuple[str, str | None]:
+        """Identity of a user's current PIN (hash + salt).
+
+        Every PIN change writes a fresh salt and hash, so the pair differs
+        after any change — even if the new PIN equals the old one.
+        """
+        return (user.pin_hash or "", user.pin_salt)
+
+    def _start_session(self, user: User) -> None:
+        """Make *user* the active session and remember the PIN it started with."""
+        self._current_user = user
+        self._session_credential = self._credential_fingerprint(user)
+
+    def validate_session(self) -> bool:
+        """Check the active session against the database.
+
+        Returns False — and ends the session — when the user was deactivated
+        or deleted, or when their PIN was changed after this session logged in
+        (for example by another admin on another station). Call this before
+        serving any protected request.
+        """
+        user = self._current_user
+        if user is None:
+            return False
+        stored = self._users.get_by_id(user.id) if user.id is not None else None
+        if (
+            stored is None
+            or not stored.is_active
+            or self._credential_fingerprint(stored) != self._session_credential
+        ):
+            logger.info("Session of user id=%s ended: PIN changed or user inactive", user.id)
+            self.logout()
+            return False
+        return True
 
     def get_current_user(self) -> User | None:
         """Return the currently logged-in user, or None."""
@@ -421,6 +462,10 @@ class AuthService:
         # the new role/active status right away, not after another login.
         if is_self:
             self._current_user = saved if saved.is_active else None
+            # H20: an own PIN change re-fingerprints this session; every
+            # other session of this user is rejected by validate_session().
+            if pin is not None and self._current_user is not None:
+                self._start_session(saved)
 
         return saved
 
