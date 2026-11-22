@@ -9,9 +9,15 @@ Root cause:
   the bridge and receive full gross revenue / product-sales figures,
   bypassing the UI restriction entirely.
 
+  print_shift_summary had the same gap: the frontend only ever renders its
+  print button inside the isManagerOrAbove branch of ShiftDialog/ReportsView,
+  but the backend action itself had no role check, so a cashier calling it
+  directly could trigger printing of the full financial report.
+
 Fix verified here:
-  - Cashier calling get_report_daily_sales / get_report_product_sales →
-    rejected with a manager-required error, no report data returned.
+  - Cashier calling get_report_daily_sales / get_report_product_sales /
+    print_shift_summary → rejected with a manager-required error, nothing
+    generated or printed.
   - Manager/Admin calling the same actions → succeeds as before.
 """
 from __future__ import annotations
@@ -47,12 +53,17 @@ class _StubReportsController:
         self.calls.append("get_bestsellers")
         return [{"product_name": "برجر", "quantity": 10, "revenue": 700.0}]
 
+    def print_daily_summary(self, shift_id, cashier_slot=1, target_date=None):
+        self.calls.append("print_daily_summary")
+        return True
+
 
 def _make_bridge(current_user: User) -> tuple[POSBridge, _StubReportsController]:
     bridge = POSBridge.__new__(POSBridge)
     reports_ctrl = _StubReportsController()
     bridge._reports_ctrl = reports_ctrl
     bridge._current_user = current_user
+    bridge._financial = None
     return bridge, reports_ctrl
 
 
@@ -92,3 +103,15 @@ class TestH06ReportPermissions:
         assert resp["success"] is True, f"Manager must receive the product sales report: {resp}"
         assert resp["data"][0]["product_name"] == "برجر"
         assert ctrl.calls == ["get_bestsellers"]
+
+    def test_cashier_cannot_print_shift_summary(self):
+        bridge, ctrl = _make_bridge(_cashier())
+        resp = json.loads(bridge.dispatch("print_shift_summary", json.dumps({"shift_id": 1})))
+        assert resp["success"] is False, "Cashier must not be able to print the financial report"
+        assert ctrl.calls == [], "Report must not be printed for an unauthorized caller"
+
+    def test_manager_can_print_shift_summary(self):
+        bridge, ctrl = _make_bridge(_manager())
+        resp = json.loads(bridge.dispatch("print_shift_summary", json.dumps({"shift_id": 1})))
+        assert resp["success"] is True, f"Manager must be able to print the financial report: {resp}"
+        assert ctrl.calls == ["print_daily_summary"]

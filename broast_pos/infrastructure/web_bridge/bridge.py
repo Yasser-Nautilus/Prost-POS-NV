@@ -562,6 +562,11 @@ class POSBridge(QObject):
             elif action == "print_shift_summary":
                 if not self._reports_ctrl or not self._current_user:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
+                # Manager/Admin only — the frontend only ever renders this
+                # button for isManagerOrAbove; a cashier must not be able to
+                # reach the full financial report by calling the bridge directly.
+                if not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
                 # Auto-resolve shift_id if not provided (mirrors other shift actions)
                 shift_id = payload.get("shift_id")
                 if shift_id is None and self._financial:
