@@ -77,6 +77,8 @@ class POSBridge(QObject):
             auth_service=self._auth,
             print_triggers=self._print,
             cashier_slot=user.cashier_slot or 1,
+            product_service=self._product,
+            customer_service=self._customer,
         )
         self._order_ctrl.on_order_changed(self._on_order_changed_cb)
         self._order_ctrl.on_parked_changed(self._on_parked_changed_cb)
@@ -707,13 +709,17 @@ class POSBridge(QObject):
         elif action == "get_current_order":
             return json.dumps({"success": True, "data": self._order_to_dict(ctrl.current_order)})
         elif action == "add_item":
-            ctrl.add_item(
-                product_id=payload.get("product_id"),
-                product_name=payload.get("product_name"),
-                unit_price=payload.get("unit_price"),
-                quantity=payload.get("quantity", 1),
-                notes=payload.get("notes", "")
-            )
+            # H19: product_name/unit_price from the client are accepted but
+            # ignored by the controller — price/name always come from the
+            # catalogue via product_id.
+            try:
+                ctrl.add_item(
+                    product_id=payload.get("product_id"),
+                    quantity=payload.get("quantity", 1),
+                    notes=payload.get("notes", "")
+                )
+            except ValueError as e:
+                return json.dumps({"success": False, "error": str(e)})
             return json.dumps({"success": True})
         elif action == "change_item_quantity":
             ctrl.change_quantity(index=payload.get("index"), delta=payload.get("delta"))
@@ -735,16 +741,23 @@ class POSBridge(QObject):
                 return json.dumps({"success": True, "message": msg})
             return json.dumps({"success": False, "error": msg})
         elif action == "set_customer_info":
-            ctrl.set_customer_info(
-                customer_id=payload.get("customer_id"),
-                phone=payload.get("phone", ""),
-                name=payload.get("name", ""),
-                address=payload.get("address", ""),
-                zone=payload.get("zone", ""),
-                delivery_fee=payload.get("delivery_fee", 0.0),
-                # B-02: pass payment_method so delivery cash/online is recorded
-                payment_method=payload.get("payment_method"),
-            )
+            # H19: zone/delivery_fee from the client are accepted but ignored
+            # whenever address_id is given — the fee is resolved from the
+            # customer's saved address on the backend.
+            try:
+                ctrl.set_customer_info(
+                    customer_id=payload.get("customer_id"),
+                    phone=payload.get("phone", ""),
+                    name=payload.get("name", ""),
+                    address=payload.get("address", ""),
+                    zone=payload.get("zone", ""),
+                    delivery_fee=payload.get("delivery_fee", 0.0),
+                    address_id=payload.get("address_id"),
+                    # B-02: pass payment_method so delivery cash/online is recorded
+                    payment_method=payload.get("payment_method"),
+                )
+            except ValueError as e:
+                return json.dumps({"success": False, "error": str(e)})
             return json.dumps({"success": True})
         elif action == "park_order":
             return json.dumps({"success": ctrl.park_current()})

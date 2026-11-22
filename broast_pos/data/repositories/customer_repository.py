@@ -82,6 +82,15 @@ class CustomerRepository(BaseRepository[Customer]):
         )
         return [self._row_to_address(r) for r in rows]
 
+    def get_address_by_id(self, address_id: int) -> CustomerAddress | None:
+        """A single saved address — the authoritative source for its zone
+        fee (H19: never trust a client-supplied delivery fee)."""
+        row = self._db.fetch_one(
+            "SELECT * FROM customer_addresses WHERE id = ?",
+            (address_id,),
+        )
+        return self._row_to_address(row) if row else None
+
     def save_address(self, address: CustomerAddress) -> CustomerAddress:
         """Create a new address (street_name + zone_id + copied fee)."""
         if address.id is None:
