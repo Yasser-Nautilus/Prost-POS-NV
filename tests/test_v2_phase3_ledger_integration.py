@@ -279,7 +279,7 @@ class TestDriverRemittanceLedgerEntry:
         # Add trip returned (eligible for settlement)
         db.execute(
             "INSERT INTO delivery_trips (id, driver_id, driver_name, is_settled, returned_at, created_at) "
-            "VALUES (10, 3, 'Driver', 0, datetime('now'), datetime('now'))"
+            "VALUES (10, 3, 'Driver', 0, datetime('now','localtime'), datetime('now','localtime'))"
         )
         # Add a cash order on that trip
         db.execute(
@@ -349,7 +349,7 @@ class TestDriverRemittanceLedgerEntry:
         )
         db.execute(
             "INSERT INTO delivery_trips (id, driver_id, driver_name, is_settled, returned_at, created_at) "
-            "VALUES (10, 3, 'Driver', 0, datetime('now'), datetime('now'))"
+            "VALUES (10, 3, 'Driver', 0, datetime('now','localtime'), datetime('now','localtime'))"
         )
         db.execute(
             "INSERT INTO orders (id, invoice_no, shift_id, order_type, status, subtotal, total, "
