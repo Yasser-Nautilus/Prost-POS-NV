@@ -121,7 +121,7 @@ export function CustomerHistoryModal({
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-brand-border">
           <div className="flex items-center gap-3">
-            <div className="h-11 w-11 rounded-xl bg-brand-gold/10 border border-brand-gold/20 flex items-center justify-center text-lg font-black text-brand-gold">
+            <div className="h-11 w-11 rounded-xl bg-brand-red/10 border border-brand-red/20 flex items-center justify-center text-lg font-black text-brand-red">
               {loading ? "…" : (customer?.name || customerName || "?").charAt(0)}
             </div>
             <div>
@@ -154,7 +154,7 @@ export function CustomerHistoryModal({
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center h-40">
-              <Loader2 className="animate-spin text-brand-gold" size={28} />
+              <Loader2 className="animate-spin text-brand-red" size={28} />
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center h-40 gap-3 text-center p-8">
@@ -298,7 +298,7 @@ function TabBtn({ active, onClick, icon: Icon, label }: any) {
       onClick={onClick}
       className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-semibold transition-all border-b-2 ${
         active
-          ? "text-brand-gold border-brand-gold"
+          ? "text-brand-red border-brand-red"
           : "text-gray-400 border-transparent hover:text-white hover:border-brand-border"
       }`}
     >
