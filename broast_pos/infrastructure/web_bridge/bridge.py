@@ -961,6 +961,10 @@ class POSBridge(QObject):
 
         ctrl = self._session_ctrl
 
+        # Resolve actor from authentication — never trust caller-supplied ids
+        actor = self._current_user
+        actor_is_manager = actor is not None and actor.is_manager_or_above()
+
         # Resolve day_id from payload, or fall back to active shift
         day_id = payload.get("day_id")
         if day_id is None and self._financial:
@@ -970,20 +974,35 @@ class POSBridge(QObject):
 
         try:
             if action == "open":
+                # H05: cashiers may only open their own session; managers can
+                # supply a user_id to open on behalf of another cashier.
+                if actor_is_manager:
+                    target_user_id = payload.get("user_id", actor.id)
+                else:
+                    target_user_id = actor.id
                 data = ctrl.open_session(
                     day_id=day_id or payload["day_id"],
-                    user_id=payload.get("user_id", self._current_user.id),
+                    user_id=target_user_id,
                     station=payload.get("station", "ALL"),
                     opening_float_egp=float(payload.get("opening_float_egp", 0)),
-                    actor_id=self._current_user.id,
+                    actor_id=actor.id,
                 )
                 return json.dumps({"success": True, "data": data})
 
             elif action == "close":
+                # H05: cashiers may only close their own session.
+                session_id = payload["session_id"]
+                if not actor_is_manager and self._session_svc is not None:
+                    owned = self._session_svc.get_session_by_id(session_id)
+                    if owned is None or owned.user_id != actor.id:
+                        return json.dumps({
+                            "success": False,
+                            "error": "لا يمكن إغلاق درج كاشير آخر",
+                        })
                 data = ctrl.close_session(
-                    session_id=payload["session_id"],
+                    session_id=session_id,
                     counted_cash_egp=float(payload.get("counted_cash_egp", 0)),
-                    actor_id=self._current_user.id,
+                    actor_id=actor.id,
                     variance_reason=payload.get("variance_reason"),
                     manager_pin=payload.get("manager_pin"),
                 )
@@ -996,7 +1015,7 @@ class POSBridge(QObject):
                     station=payload.get("station", "ALL"),
                     counted_cash_egp=float(payload.get("counted_cash_egp", 0)),
                     cash_drop_egp=float(payload.get("cash_drop_egp", 0)),
-                    actor_id=self._current_user.id,
+                    actor_id=actor.id,
                     variance_reason=payload.get("variance_reason"),
                     manager_pin=payload.get("manager_pin"),
                 )
@@ -1015,7 +1034,23 @@ class POSBridge(QObject):
                 return json.dumps({"success": True, "data": data})
 
             elif action == "get_balance":
-                data = ctrl.get_session_balance(payload["session_id"])
+                # H05: cashiers cannot read another cashier's balance; and
+                # cannot see their own open-session expected cash before the
+                # blind count is committed (prevents "counting to target").
+                session_id = payload["session_id"]
+                if not actor_is_manager and self._session_svc is not None:
+                    owned = self._session_svc.get_session_by_id(session_id)
+                    if owned is None or owned.user_id != actor.id:
+                        return json.dumps({
+                            "success": False,
+                            "error": "لا يمكن قراءة رصيد درج كاشير آخر",
+                        })
+                    if owned.is_open:
+                        return json.dumps({
+                            "success": False,
+                            "error": "لا يمكن قراءة الرصيد المتوقع قبل إجراء الجرد",
+                        })
+                data = ctrl.get_session_balance(session_id)
                 return json.dumps({"success": True, "data": data})
 
             elif action == "x_report":
