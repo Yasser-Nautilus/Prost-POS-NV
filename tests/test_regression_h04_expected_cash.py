@@ -176,6 +176,48 @@ class TestNoPendingOverlapInDatabase:
         assert summary.pending_dinein == 0.0
         assert summary.total_pending == 80.0
 
+    def test_paid_delivery_order_on_unsettled_trip_not_in_pending_delivery(self):
+        """H04 regression: Delivery orders already paid in cash (is_paid=1) on an unsettled
+        trip must NOT be counted in pending_delivery. Only unpaid cash orders (is_paid=0) count.
+
+        Reproduced scenario:
+          Order 1 (unpaid cash delivery): 200 EGP -> pending_delivery
+          Order 2 (paid cash delivery):   150 EGP -> cash_sales, NOT pending_delivery
+          Expected pending_delivery: 200.0 (NOT 350.0).
+        """
+        from broast_pos.data.repositories.financial_repository import (
+            FinancialRepository,
+        )
+
+        db = self._setup_db()
+        repo = FinancialRepository(db=db)
+
+        # Order 1: 200 EGP, unpaid cash delivery on trip 1
+        db.execute(
+            """INSERT INTO orders
+                   (id, invoice_no, order_type, status, total, is_paid, payment_method, shift_id, created_by_id, created_by_name, cashier_slot)
+               VALUES (101, 1, 'delivery', 'delivered', 200.0, 0, 'cash', 1, 1, 'admin', 1)"""
+        )
+        # Order 2: 150 EGP, already paid cash delivery on trip 1
+        db.execute(
+            """INSERT INTO orders
+                   (id, invoice_no, order_type, status, total, is_paid, payment_method, shift_id, created_by_id, created_by_name, cashier_slot)
+               VALUES (102, 2, 'delivery', 'delivered', 150.0, 1, 'cash', 1, 1, 'admin', 1)"""
+        )
+        # Trip 1: unsettled
+        db.execute(
+            """INSERT INTO delivery_trips (id, driver_id, driver_name, is_settled)
+               VALUES (1, 1, 'سائق', 0)"""
+        )
+        db.execute("INSERT INTO delivery_trip_orders (trip_id, order_id) VALUES (1, 101), (1, 102)")
+        db.commit()
+
+        summary = repo.get_shift_summary(1)
+        assert summary.pending_delivery == 200.0, (
+            f"Expected pending_delivery=200.0 (excluding paid 150 EGP), got {summary.pending_delivery}"
+        )
+        assert summary.cash_sales == 150.0
+
     def test_paid_takeaway_order_not_in_pending_kitchen(self):
         """Paid orders still in preparation are NOT unpaid receivables."""
         from broast_pos.data.repositories.financial_repository import (

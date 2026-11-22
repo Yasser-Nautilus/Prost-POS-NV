@@ -226,6 +226,8 @@ class FinancialRepository(BaseRepository[Shift]):
         B-01 fix: Only count CASH delivery orders on unsettled trips.
         ONLINE orders are pre-paid (is_paid=1 at creation); they were
         never in the cash drawer and must NOT be deducted here.
+        H04 fix: Only count unpaid orders (is_paid = 0). Paid orders are
+        already accounted for in cash_sales and must NOT be counted as pending.
         """
         row = self._db.fetch_one(
             """SELECT COALESCE(SUM(o.total), 0) AS pending
@@ -234,7 +236,8 @@ class FinancialRepository(BaseRepository[Shift]):
                JOIN delivery_trips dt ON dt.id = dto.trip_id
                WHERE o.shift_id = ? AND dt.is_settled = 0
                  AND o.status NOT IN ('cancelled')
-                 AND o.payment_method = 'cash'""",
+                 AND o.payment_method = 'cash'
+                 AND o.is_paid = 0""",
             (shift_id,),
         )
         return row["pending"] if row else 0.0
