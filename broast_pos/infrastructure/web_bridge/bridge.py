@@ -109,6 +109,24 @@ class POSBridge(QObject):
                 auth_service=self._auth,
             )
 
+    def _session_still_valid(self) -> bool:
+        """H20: ask the auth service whether this session's PIN is unchanged.
+
+        A bridge built without an auth service (partial test doubles) has no
+        way to check and keeps its previous behaviour.
+        """
+        auth = getattr(self, "_auth", None)
+        return True if auth is None else bool(auth.validate_session())
+
+    def _clear_session(self) -> None:
+        """Drop the logged-in user and every per-user controller."""
+        self._current_user = None
+        self._order_ctrl = None
+        self._delivery_ctrl = None
+        self._financial_ctrl = None
+        self._reports_ctrl = None
+        self._session_ctrl = None
+
     def _on_order_changed_cb(self):
         order = self._order_ctrl._current_order if self._order_ctrl else None
         self.orderChanged.emit(json.dumps(self._order_to_dict(order) if order else None))
@@ -223,9 +241,34 @@ class POSBridge(QObject):
             payload = json.loads(payload_json) if payload_json else {}
             logger.info("Bridge received action: %s", action)
 
+            # H20: revalidate authority from current DB state on every call —
+            # a deactivation/demotion/PIN change must take effect immediately,
+            # not only after the next full login. Clears the cached session
+            # if the user was deactivated since login.
+            if self._current_user is not None:
+                self._current_user = self._auth.refresh_current_user()
+
             # ── Auth guard: reject unauthenticated calls ───────────────────────
             if action not in _PUBLIC_ACTIONS and not self._current_user:
                 return json.dumps({"success": False, "error": "غير مصرح — يجب تسجيل الدخول أولاً"})
+
+            # ── H20: reject sessions whose PIN changed (or user was deactivated) ──
+            # Runs on every protected call, plus get_current_user so the UI's
+            # checkAuth sees "logged out" instead of a stale user.
+            if (
+                self._current_user
+                and action != "logout"          # logging out is always allowed
+                and (action not in _PUBLIC_ACTIONS or action == "get_current_user")
+                and not self._session_still_valid()
+            ):
+                self._clear_session()
+                if action == "get_current_user":
+                    return json.dumps({"success": True, "data": None})
+                return json.dumps({
+                    "success": False,
+                    "code": "session_expired",
+                    "error": "انتهت الجلسة — تم تغيير رمز PIN، يجب تسجيل الدخول من جديد",
+                })
 
             # ── Auth ──────────────────────────────────────────────────────────
             if action == "login":
@@ -239,11 +282,7 @@ class POSBridge(QObject):
 
             elif action == "logout":
                 self._auth.logout()
-                self._current_user = None
-                self._order_ctrl = None
-                self._delivery_ctrl = None
-                self._financial_ctrl = None
-                self._reports_ctrl = None
+                self._clear_session()
                 return json.dumps({"success": True})
 
             elif action == "get_current_user":

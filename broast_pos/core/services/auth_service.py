@@ -97,6 +97,8 @@ class AuthService:
     def __init__(self, user_repo: UserRepository | None = None) -> None:
         self._users = user_repo or UserRepository()
         self._current_user: User | None = None
+        # H20: PIN fingerprint the active session logged in with
+        self._session_credential: tuple[str, str | None] | None = None
         # B-08: in-memory throttle store — {identifier: (failure_count, first_failure_ts)}
         # H18: identifier is a stable, non-guess-derived label — str(user_id)
         # for login(), a fixed per-surface label for the pin-only paths
@@ -140,7 +142,7 @@ class AuthService:
 
         self._reset_throttle(key)
         self._upgrade_if_legacy(user, pin)
-        self._current_user = user
+        self._start_session(user)
         return user
 
     def login_by_pin(self, pin: str) -> User:
@@ -165,12 +167,51 @@ class AuthService:
 
         self._reset_throttle(key)
         self._upgrade_if_legacy(user, pin)
-        self._current_user = user
+        self._start_session(user)
         return user
 
     def logout(self) -> None:
         """Clear the active session — return to login screen."""
         self._current_user = None
+        self._session_credential = None
+
+    # H20: a session is only valid while the user's PIN is unchanged -----
+
+    @staticmethod
+    def _credential_fingerprint(user: User) -> tuple[str, str | None]:
+        """Identity of a user's current PIN (hash + salt).
+
+        Every PIN change writes a fresh salt and hash, so the pair differs
+        after any change — even if the new PIN equals the old one.
+        """
+        return (user.pin_hash or "", user.pin_salt)
+
+    def _start_session(self, user: User) -> None:
+        """Make *user* the active session and remember the PIN it started with."""
+        self._current_user = user
+        self._session_credential = self._credential_fingerprint(user)
+
+    def validate_session(self) -> bool:
+        """Check the active session against the database.
+
+        Returns False — and ends the session — when the user was deactivated
+        or deleted, or when their PIN was changed after this session logged in
+        (for example by another admin on another station). Call this before
+        serving any protected request.
+        """
+        user = self._current_user
+        if user is None:
+            return False
+        stored = self._users.get_by_id(user.id) if user.id is not None else None
+        if (
+            stored is None
+            or not stored.is_active
+            or self._credential_fingerprint(stored) != self._session_credential
+        ):
+            logger.info("Session of user id=%s ended: PIN changed or user inactive", user.id)
+            self.logout()
+            return False
+        return True
 
     def get_current_user(self) -> User | None:
         """Return the currently logged-in user, or None."""
@@ -179,6 +220,24 @@ class AuthService:
     def is_logged_in(self) -> bool:
         """Check if there is an active session."""
         return self._current_user is not None
+
+    def refresh_current_user(self) -> User | None:
+        """Re-fetch the logged-in user's live state (H20).
+
+        Permission checks must never rely on a cached role/active flag —
+        a deactivation, demotion, or PIN change must take effect on the
+        very next request, not only the next full login. Call this before
+        any privileged action. Clears the session if the user no longer
+        exists or was deactivated since login.
+        """
+        if self._current_user is None:
+            return None
+        fresh = self._users.get_by_id(self._current_user.id)
+        if fresh is None or not fresh.is_active:
+            self._current_user = None
+            return None
+        self._current_user = fresh
+        return fresh
 
     # ------------------------------------------------------------------
     # Manager override (PIN verification)
@@ -338,6 +397,29 @@ class AuthService:
         if user is None:
             raise ValueError("المستخدم غير موجود")
 
+        # H20: self/last-admin protection, backend-enforced (the frontend
+        # guard alone does not stop a direct bridge call).
+        is_self = self._current_user is not None and self._current_user.id == user_id
+        demoting_from_admin = (
+            role is not None and role != UserRole.ADMIN and user.role == UserRole.ADMIN
+        )
+        deactivating = is_active is False and user.is_active
+
+        if is_self and deactivating:
+            raise ValueError("لا يمكنك إلغاء تفعيل حسابك الخاص")
+        if is_self and demoting_from_admin:
+            raise ValueError("لا يمكنك تخفيض صلاحياتك الخاصة")
+
+        if user.role == UserRole.ADMIN and (deactivating or demoting_from_admin):
+            other_active_admins = [
+                u for u in self._users.get_all_active()
+                if u.role == UserRole.ADMIN and u.id != user_id
+            ]
+            if not other_active_admins:
+                raise ValueError(
+                    "لا يمكن إلغاء تفعيل أو تخفيض آخر مدير نظام نشط"
+                )
+
         if username is not None:
             username = username.strip()
             if not username:
@@ -377,7 +459,19 @@ class AuthService:
         if is_active is not None:
             user.is_active = is_active
 
-        return self._users.save(user)
+        saved = self._users.save(user)
+
+        # H20: if the caller just changed their OWN account, refresh the
+        # cached session immediately — the next privileged check must see
+        # the new role/active status right away, not after another login.
+        if is_self:
+            self._current_user = saved if saved.is_active else None
+            # H20: an own PIN change re-fingerprints this session; every
+            # other session of this user is rejected by validate_session().
+            if pin is not None and self._current_user is not None:
+                self._start_session(saved)
+
+        return saved
 
     # ------------------------------------------------------------------
     # PIN hashing
