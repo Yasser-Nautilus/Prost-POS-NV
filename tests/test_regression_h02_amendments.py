@@ -258,7 +258,7 @@ class TestSaveAmendmentResultShape:
         # No edits — save without changes
         result = ctrl.save_amendment()
         assert len(result) == 3, f"Expected 3 values, got {len(result)}: {result}"
-        ok, msg, _ = result
+        ok, _msg, _ = result
         assert ok is True
 
     def test_successful_save_returns_three_values(self):
@@ -270,8 +270,8 @@ class TestSaveAmendmentResultShape:
         ctrl.add_item(product_id=2, product_name="مشروب", unit_price=20.0, quantity=1)
         result = ctrl.save_amendment()
         assert len(result) == 3, f"Expected 3 values, got {len(result)}: {result}"
-        ok, msg, _ = result
-        assert ok is True, f"Expected success, got: {msg}"
+        ok, _msg, _ = result
+        assert ok is True, f"Expected success, got: {_msg}"
 
     def test_no_order_branch_returns_three_values(self):
         """save_amendment with no current order must return a 3-tuple."""
@@ -355,3 +355,222 @@ class TestNoteOnlyAmendment:
         assert ctrl_ids == db_ids, (
             f"Controller state must match DB after save. ctrl={ctrl_ids} db={db_ids}"
         )
+
+
+# ===========================================================================
+# Bridge-level regression tests — full end-to-end amendment via POSBridge
+# ===========================================================================
+
+def _make_bridge_h02(db: DatabaseConnection):
+    import hashlib
+    import json
+    from unittest.mock import MagicMock
+
+    from broast_pos.core.services.auth_service import AuthService
+    from broast_pos.core.services.financial_service import FinancialService
+    from broast_pos.core.services.order_service import OrderService
+    from broast_pos.data.repositories.financial_repository import FinancialRepository
+    from broast_pos.data.repositories.order_repository import OrderRepository
+    from broast_pos.data.repositories.user_repository import UserRepository
+    from broast_pos.infrastructure.web_bridge.bridge import POSBridge
+
+    # Ensure user 1 is an active admin with PIN '1234'
+    pin_hash = hashlib.sha256(b"1234").hexdigest()
+    db.execute("UPDATE users SET pin_hash=?, role='admin' WHERE id=1", (pin_hash,))
+    db.commit()
+
+    user_repo = UserRepository(db=db)
+    auth_svc = AuthService(user_repo=user_repo)
+    fin_svc = FinancialService(financial_repo=FinancialRepository(db=db), auth_service=auth_svc)
+    order_svc = OrderService(order_repo=OrderRepository(db=db), financial_service=fin_svc, auth_service=auth_svc)
+
+    mock_print = MagicMock()
+    mock_print.on_order_created.return_value = True
+    mock_print.on_order_amended.return_value = True
+
+    bridge = POSBridge(
+        auth_service=auth_svc,
+        product_service=MagicMock(),
+        customer_service=MagicMock(),
+        delivery_service=MagicMock(),
+        financial_service=fin_svc,
+        order_service=order_svc,
+        report_service=MagicMock(),
+        printer_manager=MagicMock(),
+        print_triggers=mock_print,
+    )
+    # Login admin (PIN 1234)
+    login_resp = json.loads(bridge.dispatch("login", json.dumps({"pin": "1234"})))
+    assert login_resp["success"], f"Admin login failed: {login_resp}"
+    return bridge
+
+
+class TestH02BridgeAmendment:
+    """End-to-end amendment testing through the real POSBridge.dispatch."""
+
+    def _setup_two_line_order(self, bridge):
+        import json
+
+        # Create takeaway order
+        resp = json.loads(bridge.dispatch("new_order", json.dumps({"order_type": "takeaway"})))
+        assert resp["success"]
+
+        # Line 1: product 1, qty 3, note "بدون بصل"
+        resp = json.loads(bridge.dispatch("add_item", json.dumps({
+            "product_id": 1, "product_name": "وجبة", "unit_price": 70.0,
+            "quantity": 3, "notes": "بدون بصل",
+        })))
+        assert resp["success"]
+
+        # Line 2: product 1, qty 1, note "حار جدا" (same product, different note)
+        resp = json.loads(bridge.dispatch("add_item", json.dumps({
+            "product_id": 1, "product_name": "وجبة", "unit_price": 70.0,
+            "quantity": 1, "notes": "حار جدا",
+        })))
+        assert resp["success"]
+
+        # Confirm order to save in DB
+        resp = json.loads(bridge.dispatch("confirm_order", json.dumps({})))
+        assert resp["success"], f"confirm_order failed: {resp}"
+        order_id = resp["data"]["order_id"]
+        assert order_id is not None
+        return order_id
+
+    def test_bridge_amend_same_product_two_note_lines_3_to_2(self):
+        """
+        Bearbeiten über Bridge: 3 → 2 ändert nur die richtige Zeile.
+        Notizen und IDs bleiben erhalten, auch nach DB-Reload.
+        """
+        import json
+
+        from broast_pos.data.repositories.order_repository import OrderRepository
+
+        db = _fresh_db()
+        bridge = _make_bridge_h02(db)
+        order_id = self._setup_two_line_order(bridge)
+
+        # Inspect initial DB state
+        initial_order = OrderRepository(db).get_by_id(order_id)
+        assert len(initial_order.items) == 2
+        line_a = initial_order.items[0]
+        line_b = initial_order.items[1]
+        assert line_a.quantity == 3 and line_a.notes == "بدون بصل"
+        assert line_b.quantity == 1 and line_b.notes == "حار جدا"
+        id_a, id_b = line_a.id, line_b.id
+        assert id_a is not None and id_b is not None
+
+        # Load order over bridge
+        load_resp = json.loads(bridge.dispatch("load_order", json.dumps({"order_id": order_id})))
+        assert load_resp["success"]
+
+        # Change quantity of line 0 from 3 to 2 (delta = -1)
+        qty_resp = json.loads(bridge.dispatch("change_item_quantity", json.dumps({
+            "index": 0, "delta": -1,
+        })))
+        assert qty_resp["success"]
+
+        # Save amendment (requires manager PIN since qty decreased)
+        save_resp = json.loads(bridge.dispatch("save_amendment", json.dumps({
+            "manager_pin": "1234",
+        })))
+        assert save_resp["success"], f"save_amendment failed: {save_resp}"
+
+        # DB reload: load order again over bridge
+        reloaded_resp = json.loads(bridge.dispatch("load_order", json.dumps({"order_id": order_id})))
+        assert reloaded_resp["success"]
+        items = reloaded_resp["data"]["items"]
+
+        # Verify: still 2 items
+        assert len(items) == 2, f"Expected 2 items, got {len(items)}"
+
+        # Line A: quantity changed 3 → 2, note preserved
+        item_a = next(i for i in items if i["notes"] == "بدون بصل")
+        assert item_a["quantity"] == 2
+        assert item_a["id"] == id_a
+
+        # Line B: quantity and note completely unchanged
+        item_b = next(i for i in items if i["notes"] == "حار جدا")
+        assert item_b["quantity"] == 1
+        assert item_b["id"] == id_b
+
+        # Verify DB directly as well
+        db_order = OrderRepository(db).get_by_id(order_id)
+        assert db_order.total == 210.0  # (2 * 70) + (1 * 70)
+        assert len(db_order.items) == 2
+
+    def test_bridge_note_only_amendment(self):
+        """
+        Notiz-only Änderung über die Bridge bleibt nach DB-Reload erhalten.
+        """
+        import json
+
+        from broast_pos.data.repositories.order_repository import OrderRepository
+
+        db = _fresh_db()
+        bridge = _make_bridge_h02(db)
+        order_id = self._setup_two_line_order(bridge)
+
+        # Load order over bridge
+        json.loads(bridge.dispatch("load_order", json.dumps({"order_id": order_id})))
+
+        # Update note of line 1 (index 1) to "اكسترا صوص"
+        note_resp = json.loads(bridge.dispatch("set_item_note", json.dumps({
+            "index": 1, "note": "اكسترا صوص",
+        })))
+        assert note_resp["success"]
+
+        # Save amendment
+        save_resp = json.loads(bridge.dispatch("save_amendment", json.dumps({
+            "manager_pin": "1234",
+        })))
+        assert save_resp["success"], f"save_amendment failed: {save_resp}"
+
+        # Reload over bridge
+        reloaded_resp = json.loads(bridge.dispatch("load_order", json.dumps({"order_id": order_id})))
+        assert reloaded_resp["success"]
+        items = reloaded_resp["data"]["items"]
+
+        # Line 0 still has "بدون بصل" with qty 3
+        item_0 = next(i for i in items if i["notes"] == "بدون بصل")
+        assert item_0["quantity"] == 3
+
+        # Line 1 has new note "اكسترا صوص" with qty 1
+        item_1 = next(i for i in items if i["notes"] == "اكسترا صوص")
+        assert item_1["quantity"] == 1
+
+        # Direct DB check
+        db_order = OrderRepository(db).get_by_id(order_id)
+        assert db_order.total == 280.0
+
+    def test_bridge_no_op_amendment(self):
+        """
+        No-op save_amendment über die Bridge liefert success und ändert nichts.
+        """
+        import json
+
+        from broast_pos.data.repositories.order_repository import OrderRepository
+
+        db = _fresh_db()
+        bridge = _make_bridge_h02(db)
+        order_id = self._setup_two_line_order(bridge)
+
+        # Load order over bridge
+        json.loads(bridge.dispatch("load_order", json.dumps({"order_id": order_id})))
+
+        # Save amendment without any changes
+        save_resp = json.loads(bridge.dispatch("save_amendment", json.dumps({})))
+        assert save_resp["success"] is True
+        assert "لا توجد تغييرات" in save_resp["message"]
+
+        # Reload over bridge
+        reloaded_resp = json.loads(bridge.dispatch("load_order", json.dumps({"order_id": order_id})))
+        assert reloaded_resp["success"]
+        items = reloaded_resp["data"]["items"]
+        assert len(items) == 2
+        assert items[0]["quantity"] == 3
+        assert items[1]["quantity"] == 1
+
+        # Direct DB check
+        db_order = OrderRepository(db).get_by_id(order_id)
+        assert db_order.total == 280.0
+

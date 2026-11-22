@@ -366,6 +366,7 @@ class OrderService:
                     if new_qty > 0:
                         # Partial reduction — keep the line with the lower qty.
                         new_items.append(OrderItem(
+                            id=item.id,
                             product_id=item.product_id,
                             product_name=item.product_name,
                             unit_price=item.unit_price,
