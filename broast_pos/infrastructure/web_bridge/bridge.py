@@ -221,6 +221,13 @@ class POSBridge(QObject):
             payload = json.loads(payload_json) if payload_json else {}
             logger.info("Bridge received action: %s", action)
 
+            # H20: revalidate authority from current DB state on every call —
+            # a deactivation/demotion/PIN change must take effect immediately,
+            # not only after the next full login. Clears the cached session
+            # if the user was deactivated since login.
+            if self._current_user is not None:
+                self._current_user = self._auth.refresh_current_user()
+
             # ── Auth guard: reject unauthenticated calls ───────────────────────
             if action not in _PUBLIC_ACTIONS and not self._current_user:
                 return json.dumps({"success": False, "error": "غير مصرح — يجب تسجيل الدخول أولاً"})

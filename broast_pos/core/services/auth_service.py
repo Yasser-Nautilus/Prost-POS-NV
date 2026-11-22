@@ -177,6 +177,24 @@ class AuthService:
         """Check if there is an active session."""
         return self._current_user is not None
 
+    def refresh_current_user(self) -> User | None:
+        """Re-fetch the logged-in user's live state (H20).
+
+        Permission checks must never rely on a cached role/active flag —
+        a deactivation, demotion, or PIN change must take effect on the
+        very next request, not only the next full login. Call this before
+        any privileged action. Clears the session if the user no longer
+        exists or was deactivated since login.
+        """
+        if self._current_user is None:
+            return None
+        fresh = self._users.get_by_id(self._current_user.id)
+        if fresh is None or not fresh.is_active:
+            self._current_user = None
+            return None
+        self._current_user = fresh
+        return fresh
+
     # ------------------------------------------------------------------
     # Manager override (PIN verification)
     # ------------------------------------------------------------------
@@ -334,6 +352,29 @@ class AuthService:
         if user is None:
             raise ValueError("المستخدم غير موجود")
 
+        # H20: self/last-admin protection, backend-enforced (the frontend
+        # guard alone does not stop a direct bridge call).
+        is_self = self._current_user is not None and self._current_user.id == user_id
+        demoting_from_admin = (
+            role is not None and role != UserRole.ADMIN and user.role == UserRole.ADMIN
+        )
+        deactivating = is_active is False and user.is_active
+
+        if is_self and deactivating:
+            raise ValueError("لا يمكنك إلغاء تفعيل حسابك الخاص")
+        if is_self and demoting_from_admin:
+            raise ValueError("لا يمكنك تخفيض صلاحياتك الخاصة")
+
+        if user.role == UserRole.ADMIN and (deactivating or demoting_from_admin):
+            other_active_admins = [
+                u for u in self._users.get_all_active()
+                if u.role == UserRole.ADMIN and u.id != user_id
+            ]
+            if not other_active_admins:
+                raise ValueError(
+                    "لا يمكن إلغاء تفعيل أو تخفيض آخر مدير نظام نشط"
+                )
+
         if username is not None:
             username = username.strip()
             if not username:
@@ -373,7 +414,15 @@ class AuthService:
         if is_active is not None:
             user.is_active = is_active
 
-        return self._users.save(user)
+        saved = self._users.save(user)
+
+        # H20: if the caller just changed their OWN account, refresh the
+        # cached session immediately — the next privileged check must see
+        # the new role/active status right away, not after another login.
+        if is_self:
+            self._current_user = saved if saved.is_active else None
+
+        return saved
 
     # ------------------------------------------------------------------
     # PIN hashing
