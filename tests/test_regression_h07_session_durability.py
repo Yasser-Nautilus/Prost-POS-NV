@@ -111,7 +111,6 @@ class TestH07SessionDurability:
         _seed(db)
 
         svc = _make_svc(db)
-        original_append = svc._ledger.append
 
         def _fail_append(entry):
             raise RuntimeError("injected ledger failure")
@@ -143,8 +142,6 @@ class TestH07SessionDurability:
             day_id=1, user_id=1, station=Station.ALL,
             opening_float_pt=10_000, actor_id=1,
         )
-
-        original_close = svc._sessions.close_session
 
         def _fail_close(**kwargs):
             raise RuntimeError("injected close failure")
