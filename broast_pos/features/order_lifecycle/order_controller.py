@@ -638,7 +638,7 @@ class OrderController:
             self._notify_order_changed()
 
             # B-03: audit every money-touching operation, even before first save
-            self._order_svc._audit_svc.log(
+            self._order_svc.audit_svc.log(
                 event_type=AuditEventType.DISCOUNT_APPLIED,
                 user_id=manager.id,
                 user_name=manager.display_name or manager.username or "",
