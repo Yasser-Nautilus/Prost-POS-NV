@@ -4,9 +4,9 @@ Financial models — Shift, ShiftTransfer, CashTransaction, ShiftSummary.
 Shift is the primary accounting period. All orders and expenses belong to a shift.
 ShiftSummary is computed (not stored) — it aggregates live data for display.
 
-Expected cash formula (corrected in batch 1.2 — FIN-001):
-    expected_cash = cash_sales − total_expenses − all_pending
-    (pending = money not yet physically in the drawer)
+Expected cash formula (H04 corrected):
+    expected_cash = cash_sales − total_expenses
+    Pending amounts are unpaid receivables shown separately — not deducted.
 
     total_sales is kept separately as a “total revenue” figure for
     reporting; it must NOT be used for drawer reconciliation because it
@@ -121,14 +121,13 @@ class ShiftSummary:
     def expected_cash(self) -> float:
         """Cash that should be in the drawer right now.
 
-        Formula (B-01 corrected):
+        Formula (H04 corrected):
             cash_sales (is_paid=1, CASH only)
           − total_expenses
-          − pending_delivery (CASH unsettled trips only — ONLINE excluded)
-          − pending_dinein   (unpaid cash dine-in)
-          − pending_kitchen  (new/preparing/ready cash orders)
+
+        Pending amounts (pending_delivery, pending_dinein, pending_kitchen) are
+        UNPAID RECEIVABLES — they were never in the drawer to begin with
+        (all have is_paid=0 / is_settled=0).  Deducting them from cash_sales
+        understates the drawer balance.  Show them separately via total_pending.
         """
-        return round(
-            self.cash_sales - self.total_expenses - self.total_pending,
-            2,
-        )
+        return round(self.cash_sales - self.total_expenses, 2)
