@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import hashlib
 import logging
-import os
 import secrets
 import time
 from enum import Enum
@@ -35,17 +34,24 @@ _LOCKOUT_SECONDS: int = 30  # lockout window
 # Secret pepper mixed into every salted PIN hash. Kept OUT of the database so a
 # stolen DB file alone cannot brute-force short PINs via rainbow tables.
 # Override in production via the BROAST_PIN_PEPPER environment variable.
-_DEFAULT_PEPPER = "broast-pos-default-pepper-change-me"
-_PIN_PEPPER: str = os.environ.get("BROAST_PIN_PEPPER", _DEFAULT_PEPPER)
+_DEFAULT_PEPPER = config.DEV_FALLBACK_PEPPER
+_PIN_PEPPER: str = config.get_pin_pepper()
 
-# Checkup-Fix: der Default-Pepper darf niemals in Produktion aktiv sein.
-# In "prod" ohne gesetztes BROAST_PIN_PEPPER wird hart abgebrochen statt still
-# mit einem öffentlich bekannten Pepper weiterzulaufen.
-if _PIN_PEPPER == _DEFAULT_PEPPER and config.ENVIRONMENT == "prod":
-    raise RuntimeError(
-        "BROAST_PIN_PEPPER must be set in production (APP_ENV=prod). "
-        "Refusing to run with the public default pepper."
-    )
+
+def _get_pepper() -> str:
+    """Return the active pepper string.
+
+    If _PIN_PEPPER was monkeypatched to a custom test value, honor it.
+    Otherwise, retrieve the current configured pepper dynamically from config.
+    """
+    global _PIN_PEPPER
+    if _PIN_PEPPER != _DEFAULT_PEPPER and _PIN_PEPPER is not None:
+        return _PIN_PEPPER
+    return config.get_pin_pepper()
+
+
+# Hard-fail on import if production is configured with missing or placeholder secrets
+config.validate_production_secrets()
 
 # Checkup-Fix: PBKDF2 statt Single-Round-SHA-256 — macht das Durchprobieren
 # aller 10k vierstelligen PINs teuer. Versioniertes Format erlaubt es, alte
@@ -95,6 +101,8 @@ class AuthService:
     """Login, session management, permission checks, and manager override."""
 
     def __init__(self, user_repo: UserRepository | None = None) -> None:
+        if config.is_production():
+            config.validate_production_secrets()
         self._users = user_repo or UserRepository()
         self._current_user: User | None = None
         # B-08: in-memory throttle store — {identifier: (failure_count, first_failure_ts)}
@@ -403,7 +411,7 @@ class AuthService:
         """
         dk = hashlib.pbkdf2_hmac(
             _PBKDF2_ALGO,
-            (_PIN_PEPPER + raw_pin).encode("utf-8"),
+            (_get_pepper() + raw_pin).encode("utf-8"),
             salt.encode("utf-8"),
             _PBKDF2_ITERATIONS,
         )
@@ -412,7 +420,7 @@ class AuthService:
     @staticmethod
     def _hash_legacy_salted(raw_pin: str, salt: str) -> str:
         """Pre-checkup salted SHA-256 hash — kept only to verify old v6 hashes."""
-        return hashlib.sha256((_PIN_PEPPER + salt + raw_pin).encode("utf-8")).hexdigest()
+        return hashlib.sha256((_get_pepper() + salt + raw_pin).encode("utf-8")).hexdigest()
 
     def _verify_pin(self, user: User, raw_pin: str) -> bool:
         """Return True if *raw_pin* matches *user*'s stored hash (any scheme)."""
@@ -427,7 +435,7 @@ class AuthService:
                     return False
                 dk = hashlib.pbkdf2_hmac(
                     _PBKDF2_ALGO,
-                    (_PIN_PEPPER + raw_pin).encode("utf-8"),
+                    (_get_pepper() + raw_pin).encode("utf-8"),
                     user.pin_salt.encode("utf-8"),
                     iterations,
                 )

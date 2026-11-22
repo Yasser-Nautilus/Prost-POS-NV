@@ -19,6 +19,7 @@ import sys
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QApplication
 
+from broast_pos.config import config
 from broast_pos.config.config import LOGS_PATH, get_app_name
 from broast_pos.core.services.audit_service import AuditService
 from broast_pos.core.services.auth_service import AuthService
@@ -33,7 +34,7 @@ from broast_pos.core.services.product_service import ProductService
 from broast_pos.core.services.report_service import ReportService
 from broast_pos.data.database.connection import DatabaseConnection
 from broast_pos.data.database.migrations import initialise_database
-from broast_pos.data.database.seed import seed_database
+from broast_pos.data.database.seed import seed_database, validate_no_default_admin
 from broast_pos.data.repositories.audit_repository import AuditRepository
 from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
 from broast_pos.data.repositories.cashier_session_repository import (
@@ -101,12 +102,22 @@ def main() -> int:
     logger.info("Starting %s …", get_app_name())
 
     # ------------------------------------------------------------------
+    # 0. Configuration & Security Pre-flight
+    # ------------------------------------------------------------------
+    try:
+        config.validate_production_secrets()
+    except Exception as exc:
+        logger.critical("Security configuration check failed: %s", exc)
+        return 1
+
+    # ------------------------------------------------------------------
     # 1. Database
     # ------------------------------------------------------------------
     try:
         db = DatabaseConnection.get_instance()
         initialise_database(db)
         seed_database(db)
+        validate_no_default_admin(db)
         logger.info("Database ready (WAL mode)")
     except Exception as exc:
         logger.critical("Database init failed: %s", exc)
