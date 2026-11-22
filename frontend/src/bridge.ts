@@ -339,6 +339,9 @@ class POSBridgeClient {
       case "get_current_user":
         return this.mockState.currentUser;
 
+      case "get_config":
+        return { restaurant_name_ar: "بروستش", restaurant_name_en: "Prostsh" } as any;
+
       case "get_all_users":
         return this.mockState.users.filter((u: any) => u.is_active).map(({ pin: _pin, ...u }: any) => u) as any;
 
