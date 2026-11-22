@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Calendar, Plus, Power, Loader2, Printer, CheckCircle2, ArrowLeftRight, ArrowRight } from "lucide-react";
+import { X, Calendar, Plus, Power, Loader2, Printer, CheckCircle2, Circle, ArrowLeftRight, ArrowRight } from "lucide-react";
 import { bridge } from "../bridge";
 import { PinDialog } from "./PinDialog";
 
@@ -376,16 +376,38 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                               <ArrowLeftRight size={16} />
                               نقل وردية
                             </button>
-                            {/* Only manager/admin can close shift */}
-                            <button
-                              onClick={handleCloseShiftClick}
-                              disabled={loading || !summaryPrinted}
-                              title={!summaryPrinted ? "يجب طباعة الملخص أولاً" : ""}
-                              className="py-3 px-5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl flex items-center gap-1.5 active:translate-y-0.5 btn-hover-active disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {loading ? <Loader2 size={18} className="animate-spin" /> : <Power size={18} />}
-                              إغلاق الوردية
-                            </button>
+
+                            {/* Close prerequisites checklist */}
+                            {(() => {
+                              const hasNoOpenOrders =
+                                ((summary?.pending_dinein || 0) + (summary?.pending_kitchen || 0)) === 0;
+                              const canClose = summaryPrinted && hasNoOpenOrders;
+                              return (
+                                <>
+                                  <div className="w-full bg-brand-card/30 border border-brand-border/40 rounded-xl p-3 space-y-2 text-xs" dir="rtl">
+                                    <span className="text-gray-400 font-semibold block">متطلبات الإغلاق:</span>
+                                    <div className={`flex items-center gap-2 ${summaryPrinted ? "text-brand-teal" : "text-gray-500"}`}>
+                                      {summaryPrinted ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+                                      <span>طباعة ملخص الوردية</span>
+                                    </div>
+                                    <div className={`flex items-center gap-2 ${hasNoOpenOrders ? "text-brand-teal" : "text-yellow-500"}`}>
+                                      {hasNoOpenOrders ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+                                      <span>تسوية جميع الطلبات المفتوحة</span>
+                                    </div>
+                                  </div>
+                                  {/* Only manager/admin can close shift */}
+                                  <button
+                                    onClick={handleCloseShiftClick}
+                                    disabled={loading || !canClose}
+                                    title={!canClose ? "يجب استيفاء جميع متطلبات الإغلاق" : ""}
+                                    className="py-3 px-5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl flex items-center gap-1.5 active:translate-y-0.5 btn-hover-active disabled:opacity-50 disabled:cursor-not-allowed"
+                                  >
+                                    {loading ? <Loader2 size={18} className="animate-spin" /> : <Power size={18} />}
+                                    إغلاق الوردية
+                                  </button>
+                                </>
+                              );
+                            })()}
                           </div>
                         </div>
                       ) : (
