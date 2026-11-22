@@ -272,6 +272,7 @@ class TestFullUserSimulation:
         })
         assert res["success"] is True
         assert res["data"]["id"] is not None
+        cashier_session_id = res["data"]["id"]
 
         # ------------------------------------------------------------------
         # Step 3: Dine-In Order Flow (Order -> Kitchen -> Move Table -> Pay)
@@ -548,6 +549,20 @@ class TestFullUserSimulation:
         # ------------------------------------------------------------------
         # Step 7: Shift Close Guards (Cannot close with open orders)
         # ------------------------------------------------------------------
+        # H08: close the cashier session before testing shift-close guards.
+        # close_business_day now rejects if any cashier session is still open.
+        # Ledger movements that reach the session (session_id-keyed entries):
+        #   OPENING_FLOAT +500, DRIVER_REMITTANCE +125 = 625.00 EGP.
+        # (SALE_CASH and EXPENSE are not recorded here because complete_payment
+        #  doesn't forward actor_id, so the session-lookup guard skips them;
+        #  that is a separate limitation, not an H08/H09 issue.)
+        res = client.call("session.close", {
+            "session_id": cashier_session_id,
+            "counted_cash_egp": 625.0,
+        })
+        assert res["success"] is True
+        assert res["data"]["variance_egp"] == 0.0
+
         # Start a new order on Table 8 and confirm it (open in-progress)
         res = client.call("new_order", {"order_type": "dine_in"})
         res = client.call("set_table", {"table_number": 8})

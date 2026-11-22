@@ -194,7 +194,6 @@ class TestH09cPayoutRollback:
 
         session_repo = CashierSessionRepository(db=db)
         ledger_repo = CashLedgerRepository(db=db)
-        audit_repo = AuditRepository(db=db)
 
         mock_fin_svc = MagicMock()
         mock_fin_svc.close_shift.side_effect = RuntimeError("injected close_shift failure")
@@ -208,13 +207,15 @@ class TestH09cPayoutRollback:
         # Inject fake payout rows — bypass delivery_repo by patching _batch_driver_fee_payouts
         payout_written = []
 
-        original_batch = svc._batch_driver_fee_payouts
-
         def _patched_batch(day_id):
             # Directly write a payout entry to simulate what the method would do
-            from broast_pos.core.models.cashier_session import CashLedgerEntry, Station
-            from broast_pos.core.models.cashier_session import CashierSession
             from datetime import datetime
+
+            from broast_pos.core.models.cashier_session import (
+                CashierSession,
+                CashLedgerEntry,
+                Station,
+            )
 
             session = session_repo.create(CashierSession(
                 id=None, day_id=day_id, user_id=1, station=Station.ALL,
