@@ -467,9 +467,12 @@ CREATE TRIGGER IF NOT EXISTS cash_ledger_no_delete
 BEFORE DELETE ON cash_ledger
 BEGIN SELECT RAISE(ABORT, 'cash_ledger is append-only'); END;
 
--- Idempotency: one SALE_CASH per order, one DRIVER_REMITTANCE per trip
+-- Idempotency: one SALE_CASH per order, one DRIVER_REMITTANCE / DRIVER_FEE_PAYOUT per trip
 CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_sale
     ON cash_ledger(order_id) WHERE entry_type = 'SALE_CASH';
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_remit
     ON cash_ledger(trip_id) WHERE entry_type = 'DRIVER_REMITTANCE';
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_driver_payout
+    ON cash_ledger(trip_id) WHERE entry_type = 'DRIVER_FEE_PAYOUT';

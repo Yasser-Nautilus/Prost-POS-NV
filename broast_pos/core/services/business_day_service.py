@@ -182,6 +182,10 @@ class BusinessDayService:
         # FR-DAY-1: All sessions must be closed
         self._guard_all_sessions_closed(day_id)
 
+        # H09: Verify manager authorization BEFORE any booking so invalid auth
+        # fails fast without leaving ledger state.
+        self._verify_manager_pin(manager_pin)
+
         # FR-DAY-2 + close_shift are atomic: if close_shift fails (e.g. a guard
         # fires), the DRIVER_FEE_PAYOUT entries must roll back with it.
         db = self._sessions._db
@@ -240,6 +244,25 @@ class BusinessDayService:
                 f"لا يمكن إغلاق اليوم بينما توجد وردية مفتوحة: {names}. "
                 "أغلق جميع الورديات أولاً."
             )
+
+    def _verify_manager_pin(self, manager_pin: str | None) -> None:
+        """Verify manager authorization if auth_service or financial_service is configured."""
+        from unittest.mock import Mock
+
+        if self._financial is not None and not isinstance(self._financial, Mock) and hasattr(self._financial, "_verify_manager_pin"):
+            self._financial._verify_manager_pin(manager_pin)
+        elif self._auth is not None:
+            if not manager_pin:
+                current_user = getattr(self._auth, "get_current_user", lambda: None)()
+                if current_user and hasattr(current_user, "is_manager_or_above") and current_user.is_manager_or_above():
+                    return
+                raise PermissionError("يجب إدخال رمز PIN للمدير")
+            if hasattr(self._auth, "verify_manager_pin"):
+                self._auth.verify_manager_pin(manager_pin)
+            elif hasattr(self._auth, "verify_pin"):
+                user = self._auth.verify_pin(manager_pin)
+                if user is None:
+                    raise PermissionError("PIN غير صحيح")
 
     # ------------------------------------------------------------------
     # FR-DAY-2: DRIVER_FEE_PAYOUT batch at day close

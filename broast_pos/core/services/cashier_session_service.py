@@ -83,6 +83,13 @@ class CashierSessionService:
         if opening_float_pt < 0:
             raise ValueError("مبلغ الفتح لا يمكن أن يكون سالباً")
 
+        # Guard (H08/H09): reject opening session on a closed business day
+        shift_row = self._sessions._db.fetch_one(
+            "SELECT is_active FROM shifts WHERE id = ?", (day_id,)
+        )
+        if shift_row and not shift_row["is_active"]:
+            raise ValueError("لا يمكن فتح وردية في يوم عمل مغلق")
+
         # FR-SES-2: station conflict check
         self._check_station_conflict(day_id, station)
 

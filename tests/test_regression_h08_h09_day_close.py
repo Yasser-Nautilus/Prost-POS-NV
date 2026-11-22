@@ -65,6 +65,18 @@ def _fresh_db() -> DatabaseConnection:
         "business_date, summary_printed_at) VALUES "
         "(1, 1, datetime('now'), 1, 1, date('now','localtime'), datetime('now'))"
     )
+    # Seed a category and product for order tests (FK: order_items.product_id → products.id)
+    db.execute("INSERT INTO categories (id, name, sort_order, is_active) VALUES (1, 'وجبات', 0, 1)")
+    db.execute(
+        "INSERT INTO products (id, name, price, category_id, is_active) "
+        "VALUES (1, 'الوجبة', 100.0, 1, 1)"
+    )
+    # Seed delivery trips referenced by payout tests (FK: cash_ledger.trip_id → delivery_trips.id)
+    db.execute(
+        "INSERT INTO delivery_trips (id, driver_id, driver_name, is_settled, total_delivery_fees) "
+        "VALUES (10, 2, 'سائق', 1, 35.0), (42, 2, 'سائق', 1, 25.0), "
+        "(77, 2, 'سائق', 1, 30.0), (99, 2, 'سائق', 1, 50.0)"
+    )
     db.commit()
     return db
 
@@ -91,6 +103,7 @@ def _make_bridge(db, current_user):
         financial_repo=financial_repo,
         audit_repo=audit_repo,
         auth_service=mock_auth,
+        cashier_session_repo=session_repo,
     )
     session_svc = CashierSessionService(
         session_repo=session_repo, ledger_repo=ledger_repo
@@ -145,6 +158,89 @@ class TestH08CloseShiftRouting:
         # No sessions open → close should succeed
         resp = json.loads(bridge.dispatch("close_shift", json.dumps({"manager_pin": "1234"})))
         assert resp["success"] is True, f"close_shift with no open sessions must succeed: {resp}"
+
+    def test_legacy_close_shift_without_session_ctrl_rejects_open_sessions(self):
+        """H08: Even when session_ctrl is None (legacy fallback in bridge or direct
+        FinancialService.close_shift call), open cashier sessions must block shift close.
+        """
+        db = _fresh_db()
+        mgr = _manager()
+        bridge = _make_bridge(db, mgr)
+
+        # Open a session in the DB
+        session_repo = CashierSessionRepository(db=db)
+        ledger_repo = CashLedgerRepository(db=db)
+        svc = CashierSessionService(session_repo=session_repo, ledger_repo=ledger_repo)
+        svc.open_session(day_id=1, user_id=2, station=Station.ALL, opening_float_pt=0, actor_id=1)
+
+        # Force legacy fallback by clearing _session_ctrl
+        bridge._session_ctrl = None
+
+        resp = json.loads(bridge.dispatch("close_shift", json.dumps({"manager_pin": "1234"})))
+        assert resp["success"] is False, "Legacy close_shift must reject when cashier session is open"
+        assert "وردية" in resp.get("error", "")
+
+    def test_payment_on_closed_day_rejected(self):
+        """H08: Completing/paying an order on a closed shift must be rejected."""
+        from broast_pos.core.models.order import (
+            Order,
+            OrderItem,
+            OrderStatus,
+            OrderType,
+            PaymentMethod,
+        )
+        from broast_pos.core.services.order_service import OrderService
+        from broast_pos.data.repositories.order_repository import OrderRepository
+
+        db = _fresh_db()
+        order_repo = OrderRepository(db=db)
+        fin_repo = FinancialRepository(db=db)
+        fin_svc = FinancialService(financial_repo=fin_repo)
+        order_svc = OrderService(order_repo=order_repo, financial_service=fin_svc)
+
+        # Create an order on shift 1
+        order = Order(
+            id=None,
+            invoice_no=1,
+            shift_id=1,
+            order_type=OrderType.TAKEAWAY,
+            status=OrderStatus.NEW,
+            items=[OrderItem(product_id=1, product_name="الوجبة", unit_price=100.0, quantity=1)],
+            subtotal=100.0,
+            total=100.0,
+            created_by_id=1,
+            created_by_name="كاشير",
+            cashier_slot=1,
+        )
+        saved = order_repo.save(order)
+
+        # Close shift 1
+        db.execute("UPDATE shifts SET is_active = 0, closed_at = datetime('now') WHERE id = 1")
+        db.commit()
+
+        # Attempt to complete payment on the closed shift's order
+        with pytest.raises(ValueError, match="مغلقة"):
+            order_svc.complete_order(
+                order_id=saved.id,
+                payment_method=PaymentMethod.CASH,
+                amount_received=100.0,
+            )
+
+    def test_session_open_below_bridge_on_closed_day_rejected(self):
+        """H08: CashierSessionService.open_session directly rejects opening on closed day."""
+        db = _fresh_db()
+        # Close shift 1
+        db.execute("UPDATE shifts SET is_active = 0, closed_at = datetime('now') WHERE id = 1")
+        db.commit()
+
+        session_repo = CashierSessionRepository(db=db)
+        ledger_repo = CashLedgerRepository(db=db)
+        svc = CashierSessionService(session_repo=session_repo, ledger_repo=ledger_repo)
+
+        with pytest.raises(ValueError, match="مغلق"):
+            svc.open_session(
+                day_id=1, user_id=2, station=Station.ALL, opening_float_pt=0, actor_id=1
+            )
 
 
 class TestH09ClosedDayGuards:
@@ -229,9 +325,11 @@ class TestH09cPayoutRollback:
             ledger_repo.append(entry)
             payout_written.append(True)
 
-        with patch.object(svc, "_batch_driver_fee_payouts", side_effect=_patched_batch):
-            with pytest.raises(RuntimeError, match="injected"):
-                svc.close_business_day(day_id=1, manager_pin="1234")
+        with (
+            patch.object(svc, "_batch_driver_fee_payouts", side_effect=_patched_batch),
+            pytest.raises(RuntimeError, match="injected"),
+        ):
+            svc.close_business_day(day_id=1, manager_pin="1234")
 
         # Payout entry must have been attempted
         assert payout_written, "Payout write was never attempted"
@@ -244,3 +342,172 @@ class TestH09cPayoutRollback:
         assert len(rows) == 0, (
             f"Payout entries must be rolled back when close_shift fails, found {len(rows)}"
         )
+
+
+class TestH09DriverPayoutSafeguards:
+    """Verifies H09 requirements:
+    1. Berechtigung und Voraussetzungen vor Buchungen prüfen (Fehler lässt Ledger/Kasse unverändert).
+    2. Auszahlung der richtigen Kasse zuordnen.
+    3. Doppelte Auszahlung zuverlässig verhindern (Wiederholung zahlt nicht zweimal aus).
+    4. DB partial unique index blocks duplicate payout at SQL level.
+    """
+
+    def test_payout_not_booked_if_manager_pin_invalid(self):
+        """Invalid manager PIN rejects BEFORE any payout booking — ledger stays empty."""
+        db = _fresh_db()
+        session_repo = CashierSessionRepository(db=db)
+        ledger_repo = CashLedgerRepository(db=db)
+
+        mock_auth = MagicMock()
+        mock_auth.verify_manager_pin.side_effect = PermissionError("PIN غير صحيح")
+
+        mock_deliv = MagicMock()
+        mock_deliv.get_settled_trip_fees_for_shift.return_value = [
+            {"trip_id": 10, "total_delivery_fees": 35.0}
+        ]
+
+        svc = BusinessDayService(
+            financial_service=MagicMock(),
+            session_repo=session_repo,
+            ledger_repo=ledger_repo,
+            auth_service=mock_auth,
+            delivery_repo=mock_deliv,
+        )
+
+        with pytest.raises(PermissionError, match="PIN"):
+            svc.close_business_day(day_id=1, manager_pin="wrong_pin")
+
+        # Ledger must remain completely empty (no payouts booked)
+        rows = db.fetch_all("SELECT * FROM cash_ledger WHERE entry_type = 'DRIVER_FEE_PAYOUT'")
+        assert len(rows) == 0, "No payout should be booked when authorization fails"
+
+    def test_payout_not_booked_if_prerequisites_fail(self):
+        """If shift prerequisites (e.g. summary not printed) fail, no payout is booked."""
+        db = _fresh_db()
+        # Reset summary_printed_at to NULL so prerequisite fails
+        db.execute("UPDATE shifts SET summary_printed_at = NULL WHERE id = 1")
+        db.commit()
+
+        session_repo = CashierSessionRepository(db=db)
+        ledger_repo = CashLedgerRepository(db=db)
+        fin_repo = FinancialRepository(db=db)
+        mock_auth = MagicMock()
+        mock_auth.verify_manager_pin.return_value = _manager()
+        fin_svc = FinancialService(financial_repo=fin_repo, auth_service=mock_auth)
+
+        mock_deliv = MagicMock()
+        mock_deliv.get_settled_trip_fees_for_shift.return_value = [
+            {"trip_id": 10, "total_delivery_fees": 35.0}
+        ]
+
+        svc = BusinessDayService(
+            financial_service=fin_svc,
+            session_repo=session_repo,
+            ledger_repo=ledger_repo,
+            delivery_repo=mock_deliv,
+            auth_service=mock_auth,
+        )
+
+        with pytest.raises(ValueError, match="تقرير"):
+            svc.close_business_day(day_id=1, manager_pin="1234")
+
+        # Ledger must be untouched
+        rows = db.fetch_all("SELECT * FROM cash_ledger WHERE entry_type = 'DRIVER_FEE_PAYOUT'")
+        assert len(rows) == 0, "No payout should be booked when shift prerequisites fail"
+
+    def test_payout_assigned_to_open_delivery_session(self):
+        """Payout must be assigned to the open delivery session if one is active."""
+        from broast_pos.core.models.cashier_session import CashierSession
+        db = _fresh_db()
+        session_repo = CashierSessionRepository(db=db)
+        ledger_repo = CashLedgerRepository(db=db)
+
+        # Create an open DELIVERY session
+        open_session = session_repo.create(CashierSession(
+            id=None, day_id=1, user_id=2, station=Station.DELIVERY,
+            is_open=True, opened_at="2026-11-22T20:00:00",
+        ))
+
+        mock_deliv = MagicMock()
+        mock_deliv.get_settled_trip_fees_for_shift.return_value = [
+            {"trip_id": 42, "total_delivery_fees": 25.0}
+        ]
+
+        svc = BusinessDayService(
+            financial_service=None,
+            session_repo=session_repo,
+            ledger_repo=ledger_repo,
+            delivery_repo=mock_deliv,
+        )
+
+        count = svc._batch_driver_fee_payouts(day_id=1)
+        assert count == 1
+
+        entries = db.fetch_all("SELECT * FROM cash_ledger WHERE entry_type = 'DRIVER_FEE_PAYOUT'")
+        assert len(entries) == 1
+        assert entries[0]["session_id"] == open_session.id
+        assert entries[0]["amount_pt"] == -2500
+
+    def test_payout_repetition_does_not_pay_twice(self):
+        """Repeating the batch payout for the same day/trips does NOT create duplicates."""
+        from broast_pos.core.models.cashier_session import CashierSession
+        db = _fresh_db()
+        session_repo = CashierSessionRepository(db=db)
+        ledger_repo = CashLedgerRepository(db=db)
+
+        # Create session
+        session_repo.create(CashierSession(
+            id=None, day_id=1, user_id=1, station=Station.ALL,
+            is_open=True, opened_at="2026-11-22T20:00:00",
+        ))
+
+        mock_deliv = MagicMock()
+        mock_deliv.get_settled_trip_fees_for_shift.return_value = [
+            {"trip_id": 99, "total_delivery_fees": 50.0}
+        ]
+
+        svc = BusinessDayService(
+            financial_service=None,
+            session_repo=session_repo,
+            ledger_repo=ledger_repo,
+            delivery_repo=mock_deliv,
+        )
+
+        first_count = svc._batch_driver_fee_payouts(day_id=1)
+        assert first_count == 1
+
+        # Second run (repetition)
+        second_count = svc._batch_driver_fee_payouts(day_id=1)
+        assert second_count == 0, "Repeated payout batch must not pay again"
+
+        entries = db.fetch_all("SELECT * FROM cash_ledger WHERE entry_type = 'DRIVER_FEE_PAYOUT'")
+        assert len(entries) == 1, "Exactly one payout entry must exist"
+
+    def test_db_unique_index_prevents_duplicate_driver_payout(self):
+        """Database constraint uq_ledger_driver_payout blocks duplicate entry for same trip_id."""
+        import sqlite3
+
+        from broast_pos.core.models.cashier_session import CashierSession
+        db = _fresh_db()
+        session_repo = CashierSessionRepository(db=db)
+        session = session_repo.create(CashierSession(
+            id=None, day_id=1, user_id=1, station=Station.ALL,
+            is_open=True, opened_at="2026-11-22T20:00:00",
+        ))
+
+        # First insert
+        db.execute(
+            """INSERT INTO cash_ledger (day_id, session_id, entry_type, amount_pt, trip_id, actor_id, reason, created_at)
+               VALUES (1, ?, 'DRIVER_FEE_PAYOUT', -3000, 77, 1, 'payout 1', datetime('now', 'localtime'))""",
+            (session.id,),
+        )
+        db.commit()
+
+        # Second insert for identical trip_id must fail at DB constraint level
+        with pytest.raises(sqlite3.IntegrityError):
+            db.execute(
+                """INSERT INTO cash_ledger (day_id, session_id, entry_type, amount_pt, trip_id, actor_id, reason, created_at)
+                   VALUES (1, ?, 'DRIVER_FEE_PAYOUT', -3000, 77, 1, 'payout 2', datetime('now', 'localtime'))""",
+                (session.id,),
+            )
+            db.commit()

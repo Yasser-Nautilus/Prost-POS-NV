@@ -402,6 +402,18 @@ class OrderService:
         if order.status == OrderStatus.CANCELLED:
             raise ValueError("لا يمكن دفع طلب ملغي")
 
+        # Guard (H08): reject payment on a closed shift/day
+        if self._financial is not None and order.shift_id:
+            shift = None
+            if hasattr(self._financial, "get_shift_by_id"):
+                shift = self._financial.get_shift_by_id(order.shift_id)
+            else:
+                fin_repo = getattr(self._financial, "_financial", self._financial)
+                if hasattr(fin_repo, "get_by_id"):
+                    shift = fin_repo.get_by_id(order.shift_id)
+            if shift is not None and not shift.is_active:
+                raise ValueError("لا يمكن الدفع على وردية مغلقة")
+
         payment = self._payments.calculate(
             total=order.total,
             method=payment_method,
