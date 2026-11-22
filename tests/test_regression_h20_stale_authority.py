@@ -56,7 +56,9 @@ def _fresh_db() -> DatabaseConnection:
 def _make_bridge(db: DatabaseConnection, current_user_id: int) -> POSBridge:
     user_repo = UserRepository(db)
     auth = AuthService(user_repo=user_repo)
-    auth._current_user = user_repo.get_by_id(current_user_id)
+    # H20: sessions are fingerprinted at login since the PIN-change fix;
+    # start the harness session through the same path a real login takes.
+    auth._start_session(user_repo.get_by_id(current_user_id))
 
     bridge = POSBridge.__new__(POSBridge)
     bridge._auth = auth
