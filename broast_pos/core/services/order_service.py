@@ -838,7 +838,14 @@ class OrderService:
     def _create_cancel_reversal_entry(
         self, order: Order, actor_id: int, reason: str
     ) -> None:
-        """C6: Create a REVERSAL entry when a paid cash order is cancelled."""
+        """C6/H10: Create a REVERSAL entry when a paid cash order is cancelled.
+
+        Routes the outflow to the currently authorized (open) till, not the
+        original sale's session blindly — that session may have closed and
+        been counted since the sale, and a sealed historical count must
+        never be rewritten. The entry still links back to the original sale
+        via reverses_entry_id for the audit trail.
+        """
         import datetime as _dt
 
         from broast_pos.core.models.cashier_session import (
@@ -850,11 +857,19 @@ class OrderService:
         if sale_entry is None:
             return
 
+        target_session_id = self._resolve_refund_session_id(sale_entry)
+        if target_session_id is None:
+            logger.warning(
+                "No open cashier session available to route cancel-refund "
+                "for order %s — reversal not posted", order.id,
+            )
+            return
+
         reversal_amount_pt = -abs(sale_entry.amount_pt)
         self._ledger.append(CashLedgerEntry(
             id=None,
             day_id=sale_entry.day_id,
-            session_id=sale_entry.session_id,
+            session_id=target_session_id,
             entry_type=LedgerEntryType.REVERSAL,
             amount_pt=reversal_amount_pt,
             order_id=order.id,
@@ -864,6 +879,35 @@ class OrderService:
             reason=f"الغاء طلب #{order.invoice_no}: {reason}",
             created_at=_dt.datetime.now().isoformat(),
         ))
+
+    def _resolve_refund_session_id(self, sale_entry) -> int | None:
+        """Pick the till that must absorb a cancellation refund outflow.
+
+        Prefers the still-open session the original sale was recorded
+        against. If that session has since closed, falls back to any
+        currently open session on the same business day — same station
+        first — so the sealed historical count is never touched.
+        """
+        if self._cashier_sessions is None:
+            # Legacy mode (no session repo wired) — keep prior behaviour.
+            return sale_entry.session_id
+
+        original = self._cashier_sessions.get_by_id(sale_entry.session_id)
+        if original is not None and original.is_open:
+            return original.id
+
+        open_sessions = self._cashier_sessions.get_open_sessions_for_day(sale_entry.day_id)
+        if not open_sessions:
+            return None
+
+        if original is not None:
+            same_station = next(
+                (s for s in open_sessions if s.station == original.station), None
+            )
+            if same_station is not None:
+                return same_station.id
+
+        return open_sessions[0].id
 
     def _create_sale_cash_entry(
         self,
