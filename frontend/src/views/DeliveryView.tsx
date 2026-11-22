@@ -54,7 +54,7 @@ const LiveTimer: React.FC<{ since: string | null; urgentSecs?: number }> = ({
     return () => clearInterval(id);
   }, [since, urgentSecs]);
   return (
-    <span className={`font-mono font-bold tabular-nums text-xs ${urgent ? "text-red-400 animate-pulse" : "text-brand-gold"}`}>
+    <span className={`font-mono font-bold tabular-nums text-xs ${urgent ? "text-red-400 animate-pulse" : "text-brand-red"}`}>
       {display}
     </span>
   );
@@ -83,7 +83,7 @@ const TripSettlementDialog: React.FC<{
         {/* Header */}
         <div className="p-5 border-b border-brand-border/40 flex items-center justify-between bg-brand-card/60">
           <div>
-            <h3 className="font-bold text-xl text-brand-gold">تسوية رحلة دليفري</h3>
+            <h3 className="font-bold text-xl text-brand-red">تسوية رحلة دليفري</h3>
             {details && (
               <p className="text-xs text-gray-400 mt-0.5">الطيار: {details.driver_name} — رحلة #{details.trip_id}</p>
             )}
@@ -125,7 +125,7 @@ const TripSettlementDialog: React.FC<{
                         {o.customer_phone && <span className="text-gray-500 font-mono text-[10px]">{o.customer_phone}</span>}
                       </td>
                       <td className="py-2.5 px-3 text-gray-400 text-xs">
-                        {o.customer_zone && <div className="text-brand-gold text-[10px] font-bold">{o.customer_zone}</div>}
+                        {o.customer_zone && <div className="text-brand-red text-[10px] font-bold">{o.customer_zone}</div>}
                         <div className="truncate max-w-[120px]">{o.customer_address}</div>
                       </td>
                       <td className="py-2.5 px-3 text-center text-gray-300 text-xs">{o.payment_method || "cash"}</td>
@@ -135,7 +135,7 @@ const TripSettlementDialog: React.FC<{
                       <td className="py-2.5 px-3 text-center text-green-300 font-bold font-mono">
                         {(o.collected || 0).toFixed(2)} ج.م
                       </td>
-                      <td className="py-2.5 px-3 text-center text-brand-gold font-bold font-mono">
+                      <td className="py-2.5 px-3 text-center text-brand-red font-bold font-mono">
                         {(o.delivery_fee || 0).toFixed(2)} ج.م
                       </td>
                     </tr>
@@ -152,11 +152,11 @@ const TripSettlementDialog: React.FC<{
                     <span className="text-sm font-normal text-gray-400 ml-1">ج.م</span>
                   </div>
                 </div>
-                <div className="bg-brand-gold/10 rounded-2xl p-4 text-center border border-brand-gold/30">
-                  <div className="text-xs text-brand-gold/70 mb-1">إجمالي خدمة التوصيل</div>
-                  <div className="text-2xl font-black text-brand-gold font-mono">
+                <div className="bg-brand-red/10 rounded-2xl p-4 text-center border border-brand-red/30">
+                  <div className="text-xs text-brand-red/70 mb-1">إجمالي خدمة التوصيل</div>
+                  <div className="text-2xl font-black text-brand-red font-mono">
                     {(details.total_delivery_fees || 0).toFixed(2)}
-                    <span className="text-sm font-normal text-brand-gold/60 ml-1">ج.م</span>
+                    <span className="text-sm font-normal text-brand-red/60 ml-1">ج.م</span>
                   </div>
                 </div>
               </div>
@@ -285,7 +285,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
   if (loading && drivers.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-white space-y-2 h-[calc(100vh-64px)] bg-brand-dark">
-        <Loader2 className="animate-spin text-brand-gold" size={32} />
+        <Loader2 className="animate-spin text-brand-red" size={32} />
         <p className="text-gray-400 text-xs">جاري تحميل بيانات الدليفري...</p>
       </div>
     );
@@ -298,9 +298,9 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
       <div className="p-4 border-b border-brand-border/40">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <Truck size={17} className="text-brand-gold" />
-            <h3 className="font-bold text-brand-gold text-sm">الرحلات النشطة في الطريق</h3>
-            <span className="bg-brand-gold/20 text-brand-gold text-[10px] font-bold px-2 py-0.5 rounded-full">{trips.length}</span>
+            <Truck size={17} className="text-brand-red" />
+            <h3 className="font-bold text-brand-red text-sm">الرحلات النشطة في الطريق</h3>
+            <span className="bg-brand-red/20 text-brand-red text-[10px] font-bold px-2 py-0.5 rounded-full">{trips.length}</span>
           </div>
           <button onClick={fetchAll} className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-brand-border/30 transition-all">
             <RefreshCw size={13} />
@@ -328,7 +328,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
                       <td className="py-2 px-3 text-gray-500 font-mono text-xs">#{t.id}</td>
                       <td className="py-2 px-3 text-white font-bold">{t.driver_name || "—"}</td>
                       <td className="py-2 px-3 text-center">
-                        <span className="bg-brand-gold/10 text-brand-gold text-xs font-bold px-2 py-0.5 rounded-full">
+                        <span className="bg-brand-red/10 text-brand-red text-xs font-bold px-2 py-0.5 rounded-full">
                           {t.order_count || t.order_ids?.length || 0}
                         </span>
                       </td>
@@ -343,7 +343,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
                       <td className="py-2 px-3 text-center">
                         {!isReturned ? (
                           <button onClick={() => handleReturnTrip(t.id)}
-                            className="py-1 px-3 bg-brand-gold/10 text-brand-gold border border-brand-gold/30 hover:bg-brand-gold/20 font-bold rounded-lg text-xs flex items-center gap-1 mx-auto transition-all">
+                            className="py-1 px-3 bg-brand-red/10 text-brand-red border border-brand-red/30 hover:bg-brand-red/20 font-bold rounded-lg text-xs flex items-center gap-1 mx-auto transition-all">
                             <RotateCcw size={11} /> رجوع
                           </button>
                         ) : (
@@ -378,7 +378,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
             onClick={() => setActiveTab(id)}
             className={`flex-1 py-2.5 text-xs font-bold flex items-center justify-center gap-1.5 border-b-2 transition-all ${
               activeTab === id
-                ? "border-brand-gold text-brand-gold"
+                ? "border-brand-red text-brand-red"
                 : "border-transparent text-gray-500 hover:text-gray-300"
             }`}
           >
@@ -394,8 +394,8 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
         {activeTab === "dispatch" && (
           <div className="p-4 max-w-lg mx-auto">
             <div className="flex items-center gap-1.5 mb-3">
-              <Truck size={14} className="text-brand-gold" />
-              <h4 className="text-xs font-bold text-brand-gold">إرسال رحلة جديدة</h4>
+              <Truck size={14} className="text-brand-red" />
+              <h4 className="text-xs font-bold text-brand-red">إرسال رحلة جديدة</h4>
             </div>
             <form onSubmit={handleCreateTrip} className="space-y-3">
               <div>
@@ -403,7 +403,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
                 <select
                   value={selectedDriverId}
                   onChange={(e) => setSelectedDriverId(e.target.value)}
-                  className="w-full bg-brand-dark border border-brand-border/50 rounded-xl p-2.5 text-white text-sm focus:outline-none focus:border-brand-gold"
+                  className="w-full bg-brand-dark border border-brand-border/50 rounded-xl p-2.5 text-white text-sm focus:outline-none focus:border-brand-red"
                 >
                   <option value="">-- اختر طياراً --</option>
                   {availableForDispatch.map((drv) => (
@@ -415,7 +415,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
               <div>
                 <label className="text-gray-400 text-xs block mb-1 flex justify-between">
                   <span>طلبات تنتظر إرسال</span>
-                  <span className="text-brand-gold">{selectedOrders.length} محددة</span>
+                  <span className="text-brand-red">{selectedOrders.length} محددة</span>
                 </label>
                 {unassignedOrders.length > 0 ? (
                   <div className="rounded-xl border border-brand-border/40 overflow-hidden max-h-48 overflow-y-auto">
@@ -441,10 +441,10 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
                               onClick={() => setSelectedOrders((prev) =>
                                 prev.includes(o.id) ? prev.filter((x) => x !== o.id) : [...prev, o.id]
                               )}
-                              className={`cursor-pointer border-t border-brand-border/20 transition-colors ${isSel ? "bg-brand-gold/10" : i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}
+                              className={`cursor-pointer border-t border-brand-border/20 transition-colors ${isSel ? "bg-brand-red/10" : i % 2 === 0 ? "bg-brand-dark" : "bg-brand-card/20"}`}
                             >
                               <td className="py-2 px-2">
-                                <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${isSel ? "bg-brand-gold border-brand-gold" : "border-brand-border/50"}`}>
+                                <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${isSel ? "bg-brand-red border-brand-red" : "border-brand-border/50"}`}>
                                   {isSel && <span className="text-[8px] text-brand-dark font-black">✓</span>}
                                 </div>
                               </td>
@@ -455,7 +455,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
                                 <MapPin size={9} />{o.customer_zone || "—"}
                               </td>
                               {/* CHANGED: base amount (total minus delivery fee) + delivery fee separately */}
-                              <td className="py-2 px-2 text-brand-gold font-bold font-mono">{((o.total || 0) - (o.delivery_fee || 0)).toFixed(0)} ج.م</td>
+                              <td className="py-2 px-2 text-brand-red font-bold font-mono">{((o.total || 0) - (o.delivery_fee || 0)).toFixed(0)} ج.م</td>
                               <td className="py-2 px-2 text-amber-400 font-bold font-mono">{(o.delivery_fee || 0).toFixed(0)} ج.م</td>
                             </tr>
                           );
@@ -471,7 +471,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
               <button
                 type="submit"
                 disabled={!selectedDriverId || selectedOrders.length === 0}
-                className="w-full py-3 bg-brand-gold text-brand-dark disabled:opacity-40 hover:bg-opacity-90 font-black rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95"
+                className="w-full py-3 bg-brand-red text-brand-dark disabled:opacity-40 hover:bg-opacity-90 font-black rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95"
               >
                 <Plus size={15} />
                 إرسال الطيار ({selectedOrders.length} طلب)
@@ -487,8 +487,8 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
             {/* ── Driver Check-in / Check-out Cards ── */}
             <div>
               <div className="flex items-center gap-1.5 mb-3">
-                <Users size={14} className="text-brand-gold" />
-                <h4 className="text-xs font-bold text-brand-gold">حضور وانصراف الطيارين</h4>
+                <Users size={14} className="text-brand-red" />
+                <h4 className="text-xs font-bold text-brand-red">حضور وانصراف الطيارين</h4>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
                 {drivers.map((drv) => {
@@ -522,8 +522,8 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
             {/* ── Attendance Records ── */}
             <div>
               <div className="flex items-center gap-1.5 mb-3">
-                <Clock size={14} className="text-brand-gold" />
-                <h4 className="text-xs font-bold text-brand-gold">سجل حضور اليوم</h4>
+                <Clock size={14} className="text-brand-red" />
+                <h4 className="text-xs font-bold text-brand-red">سجل حضور اليوم</h4>
               </div>
               <div className="relative mb-2">
                 <Search size={14} className="absolute right-3 top-2.5 text-gray-500" />
@@ -532,7 +532,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
                   value={attendanceSearch}
                   onChange={(e) => setAttendanceSearch(e.target.value)}
                   placeholder="ابحث عن طيار..."
-                  className="w-full bg-brand-card border border-brand-border/50 rounded-xl py-2 pr-8 pl-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-gold text-right"
+                  className="w-full bg-brand-card border border-brand-border/50 rounded-xl py-2 pr-8 pl-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-red text-right"
                 />
               </div>
 
@@ -567,7 +567,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
                             <td className="py-2.5 px-3 text-center text-red-400 text-xs">
                               {isCheckedOut ? formatTime(rec.check_out_at) : "—"}
                             </td>
-                            <td className="py-2.5 px-3 text-center text-brand-gold font-mono text-xs font-bold">
+                            <td className="py-2.5 px-3 text-center text-brand-red font-mono text-xs font-bold">
                               {formatDuration(rec.check_in_at, rec.check_out_at)}
                             </td>
                             <td className="py-2.5 px-3 text-center">
@@ -585,7 +585,7 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
 
               {/* Which driver arrived first */}
               {filteredAttendance.length > 0 && (
-                <div className="mt-2 bg-brand-gold/5 border border-brand-gold/20 rounded-xl p-3 text-xs text-center text-brand-gold">
+                <div className="mt-2 bg-brand-red/5 border border-brand-red/20 rounded-xl p-3 text-xs text-center text-brand-red">
                   🏆 أول من حضر اليوم: <span className="font-black">{filteredAttendance[0]?.display_name}</span>
                   {" "}في {formatTime(filteredAttendance[0]?.check_in_at)}
                 </div>
