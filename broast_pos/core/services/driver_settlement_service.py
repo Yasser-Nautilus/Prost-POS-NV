@@ -59,6 +59,9 @@ class DriverSettlementService:
         # Phase 3: cash ledger wiring (optional)
         self._ledger = ledger_repo
         self._cashier_sessions = cashier_session_repo
+        # Optional FinancialService, injected by main.py: books the driver's
+        # delivery fees as an expense when the end-of-day settlement is made.
+        self._expense_recorder = None
 
     # ------------------------------------------------------------------
     # Preview — read-only calculation, no DB writes
@@ -301,6 +304,17 @@ class DriverSettlementService:
                                         oid, exc,
                                     )
 
+                # 7b. Day settlement: the driver's total delivery fees become an
+                #     expense in his name (category "رسوم توصيل") and a drawer
+                #     payout. Per-trip settlements do not book the fee.
+                if trip_id is None:
+                    self._record_delivery_fee_expense(
+                        driver_name=driver_name,
+                        day_trips=day_trips,
+                        total_fees=summary["total_delivery_fees"],
+                        actor_id=settled_by_id,
+                    )
+
                 # 8. Audit event (inside transaction — all-or-nothing)
                 db.execute(
                     """INSERT INTO audit_log
@@ -376,6 +390,7 @@ class DriverSettlementService:
         order_count = 0
 
         per_trip_details = []
+        fee_counts: dict[float, int] = {}
 
         for trip in eligible_trips:
             trip_orders = []
@@ -396,6 +411,7 @@ class DriverSettlementService:
                 total_order_value += order_total
                 total_delivery_fees += delivery_fee
                 order_count += 1
+                fee_counts[round(delivery_fee, 2)] = fee_counts.get(round(delivery_fee, 2), 0) + 1
 
                 if is_cash:
                     trip_cash += order.cash_due_on_delivery
@@ -445,6 +461,12 @@ class DriverSettlementService:
             "cash_collected": round(cash_collected, 2),
             "online_paid": round(online_paid, 2),
             "total_delivery_fees": round(total_delivery_fees, 2),
+            # End-of-day sheet: how many orders at each delivery fee
+            # (e.g. 12 orders x 20, 5 x 10, 4 x 15), highest fee first.
+            "fee_breakdown": [
+                {"fee": fee, "order_count": n, "subtotal": round(fee * n, 2)}
+                for fee, n in sorted(fee_counts.items(), reverse=True)
+            ],
             "trips": per_trip_details,
         }
 
@@ -477,6 +499,83 @@ class DriverSettlementService:
             trip_cash=trip_cash,
             actor_id=actor_id,
         )
+
+    # ------------------------------------------------------------------
+    # Delivery fee expense (booked on the end-of-day driver settlement)
+    # ------------------------------------------------------------------
+
+    def _record_delivery_fee_expense(
+        self,
+        driver_name: str,
+        day_trips,
+        total_fees: float,
+        actor_id: int,
+    ) -> None:
+        """Record the driver's delivery-fee total as an expense in his name.
+
+        - Expense row (category delivery_fees, description = driver name):
+          shows in the shift expenses list and the shift summary.
+        - DRIVER_FEE_PAYOUT ledger entry per trip (cash leaves the drawer).
+          The business-day-close batch skips trips already paid out here, so
+          the fee is never deducted twice.
+        """
+        if self._expense_recorder is None or total_fees <= 0:
+            return
+        shift = self._expense_recorder.get_active_shift()
+        if shift is None:
+            logger.warning("No active shift — delivery fee expense for %s not booked", driver_name)
+            return
+        self._expense_recorder.add_expense(
+            shift_id=shift.id,
+            amount=round(total_fees, 2),
+            description=driver_name,
+            category="delivery_fees",
+            user_id=actor_id,
+            record_ledger=False,
+        )
+        for trip in day_trips:
+            fee = 0.0
+            for oid in trip.order_ids:
+                order = self._orders.get_by_id(oid)
+                if order and order.status != OrderStatus.CANCELLED:
+                    fee += order.delivery_fee or 0.0
+            self._create_driver_fee_payout_entry(trip.id, shift.id, fee, actor_id)
+
+    def _create_driver_fee_payout_entry(
+        self, trip_id: int, day_id: int, fee: float, actor_id: int,
+    ) -> None:
+        """Append a DRIVER_FEE_PAYOUT (negative) entry for one trip, once."""
+        from broast_pos.core.models.cashier_session import (
+            CashLedgerEntry,
+            LedgerEntryType,
+            Station,
+        )
+
+        if self._ledger is None or self._cashier_sessions is None or fee <= 0:
+            return
+        if self._ledger.get_entry_by_trip(trip_id, LedgerEntryType.DRIVER_FEE_PAYOUT):
+            return
+        open_sessions = self._cashier_sessions.get_open_sessions_for_day(day_id)
+        session = (
+            next((s for s in open_sessions if s.station == Station.DELIVERY), None)
+            or next((s for s in open_sessions if s.station == Station.ALL), None)
+            or (open_sessions[0] if open_sessions else None)
+        )
+        if session is None:
+            logger.warning("No open session for day %d — fee payout for trip %d left to day close", day_id, trip_id)
+            return
+        import datetime as _dt
+        self._ledger.append(CashLedgerEntry(
+            id=None,
+            day_id=day_id,
+            session_id=session.id,
+            entry_type=LedgerEntryType.DRIVER_FEE_PAYOUT,
+            amount_pt=-round(fee * 100),
+            trip_id=trip_id,
+            actor_id=actor_id,
+            reason="رسوم توصيل السائق عند التسوية",
+            created_at=_dt.datetime.now().isoformat(),
+        ))
 
     # ------------------------------------------------------------------
     # Phase 3: Ledger helper

@@ -11,6 +11,7 @@ every transition is recorded in order_status_history.
 
 from __future__ import annotations
 
+from broast_pos.core.clock import restaurant_today
 import logging
 from datetime import date, datetime
 
@@ -113,6 +114,14 @@ class DeliveryService:
                 "لا يمكن تسجيل خروج السائق — يوجد رحلات غير محسوبة"
             )
         self._delivery.check_out_driver(driver_id)
+
+    def check_out_all_drivers(self) -> int:
+        """Automatic check-out of every driver at day close.
+
+        Close-day guards already guarantee no driver is in transit and no
+        returned trip is unsettled, so nobody is left mid-trip.
+        """
+        return self._delivery.check_out_all_drivers()
 
     def get_active_drivers(self) -> list[User]:
         """Return only checked-in (available) drivers for the dispatch list."""
@@ -600,7 +609,7 @@ class DeliveryService:
     def get_driver_attendance_today(self) -> list[dict]:
         """All attendance records for today — for the attendance panel."""
         try:
-            records = self._delivery.get_attendance_for_date(date.today().isoformat())
+            records = self._delivery.get_attendance_for_date(restaurant_today().isoformat())
         except Exception:
             records = []
         result = []
