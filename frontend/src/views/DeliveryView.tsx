@@ -22,17 +22,19 @@ function formatElapsed(dateStr: string | null): string {
 
 function formatTime(dateStr: string | null): string {
   if (!dateStr) return "—";
-  const d = new Date(dateStr);
+  // Stored as "YYYY-MM-DD HH:MM:SS" restaurant wall-clock time.
+  const d = new Date(dateStr.replace(" ", "T"));
   return d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
 }
 
 function formatDuration(checkIn: string | null, checkOut: string | null): string {
   if (!checkIn) return "—";
-  const end = checkOut ? new Date(checkOut).getTime() : Date.now();
-  const secs = Math.max(0, Math.floor((end - new Date(checkIn).getTime()) / 1000));
+  const end = checkOut ? new Date(checkOut.replace(" ", "T")).getTime() : Date.now();
+  const secs = Math.max(0, Math.floor((end - new Date(checkIn.replace(" ", "T")).getTime()) / 1000));
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
-  return `${h}س ${m}د`;
+  // No check-out yet: the duration is "so far", counted up to now.
+  return checkOut ? `${h}س ${m}د` : `${h}س ${m}د (مستمر)`;
 }
 
 /** Live elapsed timer cell */
@@ -392,13 +394,14 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
 
         {/* ── DISPATCH TAB ─────────────────────────────────────────── */}
         {activeTab === "dispatch" && (
-          <div className="p-4 max-w-lg mx-auto">
+          <div className="p-4 w-full">
             <div className="flex items-center gap-1.5 mb-3">
               <Truck size={14} className="text-brand-red" />
               <h4 className="text-xs font-bold text-brand-red">إرسال رحلة جديدة</h4>
             </div>
-            <form onSubmit={handleCreateTrip} className="space-y-3">
-              <div>
+            {/* Two columns on wide screens: driver + send button | orders waiting */}
+            <form onSubmit={handleCreateTrip} className="grid grid-cols-1 lg:grid-cols-[minmax(280px,1fr)_minmax(0,2fr)] gap-5 items-start">
+              <div className="space-y-3 lg:sticky lg:top-0">
                 <label className="text-gray-400 text-xs block mb-1">الطيار المتاح</label>
                 <select
                   value={selectedDriverId}
@@ -410,15 +413,23 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
                     <option key={drv.id} value={drv.id}>{drv.display_name} (متاح)</option>
                   ))}
                 </select>
+              <button
+                type="submit"
+                disabled={!selectedDriverId || selectedOrders.length === 0}
+                className="w-full py-3 bg-brand-red text-brand-dark disabled:opacity-40 hover:bg-opacity-90 font-black rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95"
+              >
+                <Plus size={15} />
+                إرسال الطيار ({selectedOrders.length} طلب)
+              </button>
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <label className="text-gray-400 text-xs block mb-1 flex justify-between">
                   <span>طلبات تنتظر إرسال</span>
                   <span className="text-brand-red">{selectedOrders.length} محددة</span>
                 </label>
                 {unassignedOrders.length > 0 ? (
-                  <div className="rounded-xl border border-brand-border/40 overflow-hidden max-h-48 overflow-y-auto">
+                  <div className="rounded-xl border border-brand-border/40 overflow-hidden max-h-[60vh] overflow-y-auto">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="bg-brand-card/60 text-gray-500">
@@ -467,15 +478,6 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
                   <div className="py-5 text-center text-gray-500 text-xs rounded-xl border border-brand-border/20">لا توجد طلبات تنتظر إرسال</div>
                 )}
               </div>
-
-              <button
-                type="submit"
-                disabled={!selectedDriverId || selectedOrders.length === 0}
-                className="w-full py-3 bg-brand-red text-brand-dark disabled:opacity-40 hover:bg-opacity-90 font-black rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95"
-              >
-                <Plus size={15} />
-                إرسال الطيار ({selectedOrders.length} طلب)
-              </button>
             </form>
           </div>
         )}

@@ -1,3 +1,4 @@
+import { ManagerApprovalDialog } from "../components/ManagerApprovalDialog";
 import React, { useState, useEffect, useCallback } from "react";
 import {
   Eye, RefreshCw, Loader2, X,
@@ -391,7 +392,7 @@ const HistoryTable: React.FC<{ orders: any[] }> = ({ orders }) => (
 
 // ─── Main View ────────────────────────────────────────────────────────────────
 
-export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResumeOrder, onHandoverOrder }) => {
+export const TrackingView: React.FC<TrackingViewProps> = ({ onResumeOrder, onHandoverOrder }) => {
   const [orders, setOrders] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -401,14 +402,11 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
   // Cancel dialog state
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [pendingCancelOrderId, setPendingCancelOrderId] = useState<number | null>(null);
-  const [cancelReason, setCancelReason] = useState("");
-  const [cancelPin, setCancelPin] = useState("");
 
   // Customer history modal
   const [historyCustomerId, setHistoryCustomerId] = useState<number | null>(null);
   const [historyCustomerName, setHistoryCustomerName] = useState<string | undefined>();
 
-  const isManagerOrAbove = currentUser?.role === "manager" || currentUser?.role === "admin";
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -458,28 +456,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
 
   const handleCancelClick = (orderId: number) => {
     setPendingCancelOrderId(orderId);
-    setCancelReason("");
-    setCancelPin("");
     setShowCancelDialog(true);
-  };
-
-  const performCancel = async () => {
-    if (!pendingCancelOrderId) return;
-    if (!cancelReason.trim()) { alert("يجب إدخال سبب الإلغاء"); return; }
-    if (!cancelPin.trim()) { alert("يجب إدخال رمز PIN المدير"); return; }
-    try {
-      const ok = await bridge.call("cancel_order", {
-        order_id: pendingCancelOrderId,
-        manager_pin: cancelPin,
-        reason: cancelReason,
-      });
-      if (ok) {
-        setShowCancelDialog(false);
-        fetchOrders();
-      }
-    } catch (e: any) {
-      alert("فشل الإلغاء: " + e.message);
-    }
   };
 
   const handleResume = async (order: any) => {
@@ -600,7 +577,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
                   orders={typeOrders}
                   onResume={handleResume}
                   onCancel={handleCancelClick}
-                  canCancel={isManagerOrAbove}
+                  canCancel
                 />
               )}
               {(type === "delivery" || type === "pickup") && (
@@ -608,7 +585,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
                   orders={typeOrders}
                   onCancel={handleCancelClick}
                   onResume={handleResume}
-                  canCancel={isManagerOrAbove}
+                  canCancel
                   onHandover={onHandoverOrder}
                   onViewCustomer={(order: any) => {
                     setHistoryCustomerId(order.customer_id || null);
@@ -621,7 +598,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
                   orders={typeOrders}
                   onCancel={handleCancelClick}
                   onResume={handleResume}
-                  canCancel={isManagerOrAbove}
+                  canCancel
                 />
               )}
             </div>
@@ -629,49 +606,30 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ currentUser, onResum
         })
       )}
 
-      {/* Cancel Dialog */}
-      {showCancelDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md">
-          <div className="w-full max-w-sm mx-4 bg-brand-surface border border-brand-border rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200 p-6 space-y-4">
-            <h3 className="font-bold text-xl text-red-400">إلغاء الطلب</h3>
-            <div>
-              <label className="text-gray-400 text-xs block mb-1.5">سبب الإلغاء (مطلوب)</label>
-              <textarea
-                value={cancelReason}
-                onChange={(e) => setCancelReason(e.target.value)}
-                rows={2}
-                className="w-full bg-brand-dark border border-brand-border/50 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-red-500 resize-none"
-                placeholder="اكتب سبب الإلغاء..."
-              />
-            </div>
-            <div>
-              <label className="text-gray-400 text-xs block mb-1.5">PIN المدير</label>
-              <input
-                type="password"
-                value={cancelPin}
-                onChange={(e) => setCancelPin(e.target.value)}
-                className="w-full bg-brand-dark border border-brand-border/50 rounded-xl p-3 text-white font-mono text-center text-lg tracking-widest focus:outline-none focus:border-red-500"
-                placeholder="••••"
-                maxLength={6}
-              />
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowCancelDialog(false)}
-                className="flex-1 py-3 bg-brand-card border border-brand-border/40 text-gray-300 font-bold rounded-xl hover:bg-brand-border/20 transition-all"
-              >
-                تراجع
-              </button>
-              <button
-                onClick={performCancel}
-                className="flex-1 py-3 bg-red-900/40 text-red-300 border border-red-900/50 font-bold rounded-xl hover:bg-red-900/60 transition-all"
-              >
-                تأكيد الإلغاء
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Cancel Dialog — cashier stays logged in; a manager types their PIN
+          and the reason. The PIN identifies which manager approved. */}
+      <ManagerApprovalDialog
+        isOpen={showCancelDialog}
+        title="إلغاء الطلب"
+        subtitle={pendingCancelOrderId ? `الطلب رقم ${pendingCancelOrderId}` : undefined}
+        reasonLabel="سبب الإلغاء (مطلوب)"
+        confirmLabel="تأكيد الإلغاء"
+        onClose={() => setShowCancelDialog(false)}
+        onConfirm={async (pin, reason) => {
+          if (!pendingCancelOrderId) return;
+          try {
+            await bridge.call("cancel_order", {
+              order_id: pendingCancelOrderId,
+              manager_pin: pin,
+              reason,
+            });
+          } catch (e: any) {
+            return "فشل الإلغاء: " + e.message;
+          }
+          setShowCancelDialog(false);
+          fetchOrders();
+        }}
+      />
 
       {/* Customer History Modal */}
       {historyCustomerId !== null && (
