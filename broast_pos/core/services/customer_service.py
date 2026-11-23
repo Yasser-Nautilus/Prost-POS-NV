@@ -210,6 +210,13 @@ class CustomerService:
         """All active zones for dropdown selection."""
         return self._customers.get_all_active_zones()
 
+    def _ensure_zone_name_free(self, name: str, exclude_id: int | None = None) -> None:
+        """Reject a zone name already used by another zone (case/space-insensitive)."""
+        wanted = " ".join(name.split()).casefold()
+        for z in self._customers.get_zones():
+            if z.id != exclude_id and " ".join(z.name.split()).casefold() == wanted:
+                raise ValueError("اسم المنطقة مستخدم بالفعل")
+
     def create_zone(self, name: str, delivery_fee: float) -> Zone:
         """Create a new delivery zone.
 
@@ -222,6 +229,7 @@ class CustomerService:
         if delivery_fee < 0:
             raise ValueError("رسوم التوصيل يجب أن تكون أكبر من أو تساوي صفر")
 
+        self._ensure_zone_name_free(name)
         zone = Zone(name=name, delivery_fee=delivery_fee, is_active=True)
         return self._customers.save_zone(zone)
 
@@ -248,6 +256,7 @@ class CustomerService:
             name = name.strip()
             if not name:
                 raise ValueError("اسم المنطقة مطلوب")
+            self._ensure_zone_name_free(name, exclude_id=zone_id)
             zone.name = name
 
         if delivery_fee is not None:

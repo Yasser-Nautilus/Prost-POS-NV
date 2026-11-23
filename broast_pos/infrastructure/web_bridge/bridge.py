@@ -345,6 +345,9 @@ class POSBridge(QObject):
                 return json.dumps({"success": False, "error": "ليست لديك صلاحيات مدير"})
 
             elif action == "get_users_management":
+                # Admin only: the list exposes every user incl. driver phones.
+                if not self._current_user or self._current_user.role.value != "admin":
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير النظام"})
                 users = self._auth.get_users_for_management()
                 return json.dumps({"success": True, "data": [self._user_to_dict(u) for u in users]})
 
