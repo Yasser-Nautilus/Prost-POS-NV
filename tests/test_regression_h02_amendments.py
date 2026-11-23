@@ -356,7 +356,7 @@ class TestNoteOnlyAmendment:
         # Change note, same product and qty — requires manager_pin because
         # the diff sees old-note line as removed and new-note line as added.
         ctrl._current_order.items[0].notes = "مع صوص"
-        ok, _msg, _print_ok = ctrl.save_amendment(manager_pin="1234")
+        ok, _msg, _print_ok = ctrl.save_amendment(manager_pin="1234", reason="تعديل العميل")
         assert ok is True, f"Note-only save must succeed: {_msg}"
 
         reloaded = OrderRepository(db).get_by_id(order.id)
@@ -499,7 +499,7 @@ class TestH02BridgeAmendment:
 
         # Save amendment (requires manager PIN since qty decreased)
         save_resp = json.loads(bridge.dispatch("save_amendment", json.dumps({
-            "manager_pin": "1234",
+            "manager_pin": "1234", "reason": "تعديل العميل",
         })))
         assert save_resp["success"], f"save_amendment failed: {save_resp}"
 
@@ -549,7 +549,7 @@ class TestH02BridgeAmendment:
 
         # Save amendment
         save_resp = json.loads(bridge.dispatch("save_amendment", json.dumps({
-            "manager_pin": "1234",
+            "manager_pin": "1234", "reason": "تعديل العميل",
         })))
         assert save_resp["success"], f"save_amendment failed: {save_resp}"
 
