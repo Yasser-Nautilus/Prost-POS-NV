@@ -556,7 +556,7 @@ class POSBridge(QObject):
                     amount=payload.get("amount"),
                     description=payload.get("description", ""),
                     category=payload.get("category", "other"),
-                    user_id=payload.get("user_id") or self._current_user.id
+                    user_id=self._current_user.id
                 )
                 return json.dumps({"success": True, "data": exp})
 

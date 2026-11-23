@@ -258,8 +258,8 @@ class TestExpenseLedgerIntegration:
         assert entry.actor_id == 100
         assert "مصروف" in entry.reason
 
-    def test_expense_no_session_no_ledger_entry(self, db, auth):
-        """If no open session, expense is saved but no ledger entry created."""
+    def test_expense_no_session_is_rejected(self, db, auth):
+        """Missing drawer must reject the entire expense, not silently skip cash."""
         fin_repo = FinancialRepository(db)
         session_repo = CashierSessionRepository(db)
         ledger_repo = CashLedgerRepository(db)
@@ -277,17 +277,12 @@ class TestExpenseLedgerIntegration:
         shift = fin_svc.open_shift(user_id=100)
         db.commit()
 
-        # Add expense — should still work (expense saved, no ledger entry)
-        expense = fin_svc.add_expense(
-            shift_id=shift.id,
-            amount=10.00,
-            description="delivery_fees",
-            category="delivery_fees",
-            user_id=100,
-        )
-        db.commit()
-
-        assert expense.id is not None
+        with pytest.raises(ValueError, match="درج"):
+            fin_svc.add_expense(
+                shift_id=shift.id, amount=10.00, description="delivery_fees",
+                category="delivery_fees", user_id=100,
+            )
+        assert db.fetch_one("SELECT count(*) n FROM cash_transactions")["n"] == 0
         # No ledger entries for the day (no session exists)
         entries = ledger_repo.get_entries_for_day(shift.id)
         expense_entries = [e for e in entries if e.entry_type == LedgerEntryType.EXPENSE]

@@ -108,6 +108,8 @@ def _build_test_bridge(qapp):
         audit_repo=audit_repo,
         auth_service=auth_service,
         delivery_service=delivery_service,
+        cash_ledger_repo=cash_ledger_repo,
+        cashier_session_repo=cashier_session_repo,
     )
     cashier_session_service = CashierSessionService(
         session_repo=cashier_session_repo,
@@ -558,12 +560,12 @@ class TestFullUserSimulation:
         #   OPENING_FLOAT +500.00 (opening float)
         #   SALE_CASH     +235.00 (dine-in order, paid cash)
         #   DRIVER_REMITTANCE +125.00 (delivery order, cash collected by driver)
-        #   = 860.00 EGP.
-        # (The takeaway order was paid by card, so it posts no cash entry;
-        # EXPENSE is booked at the business-day level, not this session.)
+        #   EXPENSE       -50.00
+        #   = 810.00 EGP.
+        # The takeaway order was paid by card, so it posts no cash entry.
         res = client.call("session.close", {
             "session_id": cashier_session_id,
-            "counted_cash_egp": 860.0,
+            "counted_cash_egp": 810.0,
         })
         assert res["success"] is True
         assert res["data"]["variance_egp"] == 0.0
@@ -633,14 +635,14 @@ class TestFullUserSimulation:
         #   Takeaway order = 75.00
         # Total sales = 435.00
         # Expenses: 50.00
-        # Expected cash in drawer = cash_sales (360.00) - expenses (50.00) = 310.00
+        # Expected drawer includes opening float: 500 + 360 - 50 = 810.00
         res = client.call("get_shift_summary")
         assert res["success"] is True
         summary = res["data"]
         assert summary["cash_sales"] == 360.0
         assert summary["total_sales"] == 435.0
         assert summary["total_expenses"] == 50.0
-        assert summary["expected_cash"] == 310.0
+        assert summary["expected_cash"] == 810.0
 
         # Manager closes shift
         res = client.call("close_shift")

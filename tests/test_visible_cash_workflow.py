@@ -138,6 +138,16 @@ def test_visible_open_shift_to_cash_payment(qapp, monkeypatch, existing_day, con
         assert session["station"] == "COUNTER"
         assert session["opening_float_pt"] == 12550
         browser.screenshot("02-open.png")
+        # Exercise visible expense form through the same production channel.
+        browser.js("""(()=>{for(const [selector,value] of [["input[type=number]","10.25"],
+          ["form input[type=text]","UI expense"]]){const e=document.querySelector(selector);
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,value);
+          e.dispatchEvent(new Event('input',{bubbles:true}));}})()""")
+        browser.click("تسجيل وحفظ المصروف")
+        browser.wait("document.body.innerText.includes('UI expense')")
+        outflow = db.fetch_one("SELECT * FROM cash_ledger WHERE entry_type='EXPENSE'")
+        assert outflow["amount_pt"] == -1025 and outflow["session_id"] == session["id"]
+        assert outflow["actor_id"] == session["user_id"]
         assert not browser.js("!!document.querySelector('[aria-label=\"محطة الدرج\"]')")
         assert db.fetch_one("SELECT count(*) c FROM shifts")["c"] == 1
         # Close the shift dialog through its header control, then use normal POS.
