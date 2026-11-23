@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Users, Plus, Edit3, UserX, RefreshCw, Loader2, X, Check, Shield } from "lucide-react";
 import { bridge } from "../bridge";
 import { useConfirm } from "../components/ConfirmDialog";
+import { INVALID_PHONE_MSG, normalizeEgyptianMobile } from "../phone";
 
 interface UsersViewProps {
   currentUser: any;
@@ -53,6 +54,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
   const [formPin, setFormPin] = useState("");
   const [formSlot, setFormSlot] = useState<string>("");
   const [formPhone, setFormPhone] = useState("");
+  const [phoneError, setPhoneError] = useState("");
 
   const isAdmin = currentUser?.role === "admin";
 
@@ -80,6 +82,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
     setFormPin("");
     setFormSlot("");
     setFormPhone("");
+    setPhoneError("");
     setShowForm(true);
   };
 
@@ -93,6 +96,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
     setFormPin(""); // don't pre-fill PIN
     setFormSlot(user.cashier_slot != null ? user.cashier_slot.toString() : "");
     setFormPhone(user.phone || "");
+    setPhoneError("");
     setShowForm(true);
   };
 
@@ -105,8 +109,17 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
 
       // Drivers are not login users, but they must have a phone number.
       if (isDriver && !formPhone.trim()) {
-        alert("رقم التليفون مطلوب للطيار");
+        setPhoneError("رقم التليفون مطلوب للطيار");
         return;
+      }
+      let phoneToSave: string | undefined = undefined;
+      if (formPhone.trim()) {
+        const norm = normalizeEgyptianMobile(formPhone);
+        if (!norm) {
+          setPhoneError(INVALID_PHONE_MSG);
+          return;
+        }
+        phoneToSave = norm;
       }
 
       if (editingUser) {
@@ -117,7 +130,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
           role: backendRole,
           pin: formPin || undefined,
           cashier_slot: isDriver ? null : (formSlot !== "" ? parseInt(formSlot) : -1),
-          phone: formPhone.trim() || undefined,
+          phone: phoneToSave,
         });
       } else {
         if (!formPin) {
@@ -130,7 +143,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
           role: backendRole,
           pin: formPin,
           cashier_slot: isDriver ? null : (formSlot !== "" ? parseInt(formSlot) : null),
-          phone: formPhone.trim() || undefined,
+          phone: phoneToSave,
         });
       }
       setShowForm(false);
@@ -372,11 +385,12 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
                     required
                     inputMode="tel"
                     value={formPhone}
-                    onChange={(e) => setFormPhone(e.target.value)}
+                    onChange={(e) => { setFormPhone(e.target.value.replace(/[^0-9+\s\-]/g, "")); setPhoneError(""); }}
                     placeholder="01xxxxxxxxx"
                     aria-label="رقم تليفون الطيار"
                     className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-brand-red text-center font-mono"
                   />
+                  {phoneError && <p className="text-red-400 text-xs mt-1" role="alert">{phoneError}</p>}
                 </div>
               )}
               {formRole === "driver" && (

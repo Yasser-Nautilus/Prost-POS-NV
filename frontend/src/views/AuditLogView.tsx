@@ -39,6 +39,9 @@ const EVENT_TYPE_CONFIG: Record<string, { label: string; color: string; icon: an
   shift_closed:                 { label: "إغلاق وردية",      color: "text-gray-400 bg-gray-900/20 border-gray-700/30",   icon: Clock },
   shift_transferred:            { label: "نقل وردية",        color: "text-indigo-400 bg-indigo-900/20 border-indigo-700/30", icon: Clock },
   user_created:                 { label: "مستخدم جديد",      color: "text-purple-400 bg-purple-900/20 border-purple-700/30", icon: User },
+  zone_created:                 { label: "منطقة توصيل جديدة", color: "text-teal-400 bg-teal-900/20 border-teal-700/30",   icon: Truck },
+  zone_updated:                 { label: "تعديل منطقة توصيل", color: "text-teal-300 bg-teal-900/10 border-teal-700/20",   icon: Truck },
+  category_deleted:             { label: "حذف فئة",           color: "text-red-400 bg-red-900/20 border-red-700/30",       icon: XCircle },
   user_updated:                 { label: "تعديل مستخدم",     color: "text-purple-300 bg-purple-900/10 border-purple-700/20", icon: User },
 };
 

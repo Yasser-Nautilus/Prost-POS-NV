@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { Package, Plus, Edit3, EyeOff, RefreshCw, Loader2, AlertCircle, X, Check, GripVertical } from "lucide-react";
+import { Package, Plus, Edit3, EyeOff, RefreshCw, Loader2, AlertCircle, X, Check, GripVertical, Trash2 } from "lucide-react";
 import { bridge } from "../bridge";
+import { ZonesPanel } from "../components/ZonesPanel";
 import { useConfirm } from "../components/ConfirmDialog";
 
 interface ProductsViewProps {
@@ -10,6 +11,7 @@ interface ProductsViewProps {
 export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
   const { confirm: showConfirm, ConfirmUI } = useConfirm();
 
+  const [section, setSection] = useState<"menu" | "zones">("menu");
   const [categories, setCategories] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
@@ -120,6 +122,17 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
       if (selectedCatId !== null) fetchProducts(selectedCatId);
     } catch (err: any) {
       alert("فشل حفظ المنتج: " + err.message);
+    }
+  };
+
+  const handleDeleteCategory = async (cat: any) => {
+    if (!(await showConfirm(`هل تريد حذف الفئة "${cat.name}"؟`))) return;
+    try {
+      await bridge.call("delete_category", { category_id: cat.id });
+      if (selectedCatId === cat.id) setSelectedCatId(null);
+      await fetchAll();
+    } catch (err: any) {
+      alert("فشل حذف الفئة: " + err.message);
     }
   };
 
@@ -239,6 +252,12 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {isManagerOrAbove && (
+            <div className="flex rounded-xl overflow-hidden border border-brand-border/40">
+              <button onClick={() => setSection("menu")} className={`px-3 py-2 text-xs font-bold ${section === "menu" ? "bg-brand-red text-brand-dark" : "bg-brand-card text-gray-300"}`}>المنتجات</button>
+              <button onClick={() => setSection("zones")} className={`px-3 py-2 text-xs font-bold ${section === "zones" ? "bg-brand-red text-brand-dark" : "bg-brand-card text-gray-300"}`}>المناطق</button>
+            </div>
+          )}
           <button
             onClick={openNewCategory}
             className="py-2 px-3 bg-brand-card border border-brand-border/40 hover:border-brand-red text-gray-300 hover:text-brand-red rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all"
@@ -264,6 +283,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
         </div>
       </div>
 
+      {section === "zones" && isManagerOrAbove ? <ZonesPanel /> : (
       <div className="flex flex-1 overflow-hidden p-6 gap-6">
         {/* Category sidebar */}
         <div className="w-48 flex-shrink-0 space-y-2 overflow-y-auto">
@@ -311,6 +331,37 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
               >
                 <Edit3 size={12} />
               </button>
+              {isManagerOrAbove && !cat.is_active && (
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      await bridge.call("update_category", { category_id: cat.id, is_active: true });
+                      await fetchAll();
+                    } catch (err: any) {
+                      alert("فشل التفعيل: " + err.message);
+                    }
+                  }}
+                  aria-label="إعادة تفعيل الفئة"
+                  title="إعادة تفعيل الفئة"
+                  className="text-xs text-brand-teal hover:underline"
+                >
+                  تفعيل
+                </button>
+              )}
+              {isManagerOrAbove && cat.is_active && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteCategory(cat);
+                  }}
+                  aria-label="حذف الفئة"
+                  title="حذف الفئة"
+                  className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all"
+                >
+                  <Trash2 size={12} />
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -375,6 +426,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
           )}
         </div>
       </div>
+      )}
 
       {/* Product Form Modal */}
       {showProductForm && (
