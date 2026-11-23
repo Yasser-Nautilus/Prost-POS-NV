@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Lock, Users, ShieldAlert, Loader2 } from "lucide-react";
+import { Users, ShieldAlert, Loader2 } from "lucide-react";
 import { Numpad } from "../components/Numpad";
 import { bridge } from "../bridge";
 import loginBackground from "../assets/prostsh-brand.webp";
@@ -63,7 +63,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         className="w-full min-w-0 flex-1 text-right space-y-6 flex flex-col justify-center"
       >
         <div className="space-y-2">
-          <img src={prostshP} alt="شعار بروستش" className="h-20 w-auto mb-2 drop-shadow-lg" />
           <div className="inline-block py-1.5 px-4 bg-brand-red/10 border border-brand-red/30 rounded-full text-brand-red text-sm font-bold">
             نظام إدارة المبيعات الذكي v1.0
           </div>
@@ -125,14 +124,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         aria-label="لوحة PIN — أدخل رمز الدخول"
         className="w-full max-w-sm shrink-0 p-6 bg-brand-card/90 backdrop-blur-xl border border-brand-red/25 rounded-3xl shadow-2xl shadow-black/50 flex flex-col items-center"
       >
-        <div className="h-16 w-16 rounded-full bg-brand-red/10 text-brand-red flex items-center justify-center mb-4">
+        <div className="h-20 w-20 rounded-full bg-brand-red/10 text-brand-red flex items-center justify-center mb-4">
           {loading ? (
-            <Loader2 size={28} className="animate-spin" />
+            <Loader2 size={32} className="animate-spin" />
           ) : (
-            <Lock size={28} className="animate-pulse" />
+            <img src={prostshP} alt="شعار بروستش" className="h-12 w-auto drop-shadow-lg" />
           )}
         </div>
-        
+
         <h3 className="text-xl font-bold text-white mb-1">تسجيل الدخول للنظام</h3>
         <p className="text-gray-400 text-sm mb-6 text-center">أدخل رمز الـ PIN الخاص بك</p>
 
