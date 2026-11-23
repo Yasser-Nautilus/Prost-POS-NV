@@ -121,6 +121,15 @@ class OrderService:
         """Public accessor for the audit service (used by controllers)."""
         return self._audit_svc
 
+    def can_transition(self, order: Order, new_status: OrderStatus) -> bool:
+        """Read-only check: would new_status be a legal transition for order?
+
+        Lets a caller validate a whole batch of orders before writing
+        anything (H13), without going through change_order_status's
+        side effects.
+        """
+        return new_status in _allowed_targets(order)
+
     # ------------------------------------------------------------------
     # Create order
     # ------------------------------------------------------------------
@@ -329,13 +338,11 @@ class OrderService:
         if order.status in (OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED):
             raise ValueError("لا يمكن تعديل طلب في هذه الحالة (مكتمل، ملغي، أو خارج للتوصيل)")
 
-        # H03: reject item changes on a paid active order — the amount already
-        # posted to the ledger would no longer match the new total and there is
-        # no reconciliation workflow available.
-        if order.is_paid and (added_items or removed_items):
-            raise ValueError(
-                "لا يمكن تعديل عناصر طلب مدفوع — لا توجد عملية تسوية"
-            )
+        # H03: a paid order must never change total after payment — a
+        # takeaway order stays ACTIVE (not COMPLETED) while already paid,
+        # so the status check above does not catch this on its own.
+        if order.is_paid:
+            raise ValueError("لا يمكن تعديل طلب مدفوع بالفعل")
 
         # Removing items requires manager override
         if removed_items:
@@ -359,10 +366,32 @@ class OrderService:
                     },
                 )
 
-        # Apply changes
-        # Remove items from order
-        remove_ids = {i.product_id for i in removed_items}
-        order.items = [i for i in order.items if i.product_id not in remove_ids]
+        # Apply removals as quantity deltas, keyed on (product_id, notes) so that
+        # lines with the same product but different notes are addressed independently.
+        if removed_items:
+            remove_deltas: dict[tuple[int, str], int] = {
+                (i.product_id, i.notes or ""): i.quantity for i in removed_items
+            }
+            new_items: list[OrderItem] = []
+            for item in order.items:
+                key = (item.product_id, item.notes or "")
+                delta = remove_deltas.get(key, 0)
+                if delta:
+                    new_qty = item.quantity - delta
+                    if new_qty > 0:
+                        # Partial reduction — keep the line with the lower qty.
+                        new_items.append(OrderItem(
+                            id=item.id,
+                            product_id=item.product_id,
+                            product_name=item.product_name,
+                            unit_price=item.unit_price,
+                            quantity=new_qty,
+                            notes=item.notes,
+                        ))
+                    # else: fully removed — do not add to new_items
+                else:
+                    new_items.append(item)
+            order.items = new_items
 
         # Add new items (prices locked at this moment) — check availability first
         self._check_items_available(added_items)
@@ -410,9 +439,23 @@ class OrderService:
         if order.status == OrderStatus.CANCELLED:
             raise ValueError("لا يمكن دفع طلب ملغي")
 
-        # H03: guard against unsupported re-payment on a paid active order.
-        # Only an exact retry (same method + same amount) is idempotent.
-        # Any method change is rejected — no reconciliation workflow exists.
+        # Guard (H08): reject payment on a closed shift/day
+        if self._financial is not None and order.shift_id:
+            shift = None
+            if hasattr(self._financial, "get_shift_by_id"):
+                shift = self._financial.get_shift_by_id(order.shift_id)
+            else:
+                fin_repo = getattr(self._financial, "_financial", self._financial)
+                if hasattr(fin_repo, "get_by_id"):
+                    shift = fin_repo.get_by_id(order.shift_id)
+            if shift is not None and not shift.is_active:
+                raise ValueError("لا يمكن الدفع على وردية مغلقة")
+
+        # H03: guard against unsupported re-payment on a paid active order
+        # (e.g. a takeaway paid with finalize=False). Only an exact retry
+        # (same method + same amount) is idempotent — a network retry or
+        # double-click should not error the cashier. Any other re-payment
+        # attempt is rejected; no reconciliation workflow exists yet.
         if order.is_paid:
             same_method = (order.payment_method == payment_method)
             same_amount = (abs((order.amount_paid or 0) - amount_received) < 0.001)
@@ -862,7 +905,14 @@ class OrderService:
     def _create_cancel_reversal_entry(
         self, order: Order, actor_id: int, reason: str
     ) -> None:
-        """C6: Create a REVERSAL entry when a paid cash order is cancelled."""
+        """C6/H10: Create a REVERSAL entry when a paid cash order is cancelled.
+
+        Routes the outflow to the currently authorized (open) till, not the
+        original sale's session blindly — that session may have closed and
+        been counted since the sale, and a sealed historical count must
+        never be rewritten. The entry still links back to the original sale
+        via reverses_entry_id for the audit trail.
+        """
         import datetime as _dt
 
         from broast_pos.core.models.cashier_session import (
@@ -874,11 +924,21 @@ class OrderService:
         if sale_entry is None:
             return
 
+        target_session_id = self._resolve_refund_session_id(sale_entry)
+        if target_session_id is None:
+            # H10: no open till to absorb the outflow — the cancellation
+            # must fail outright (the caller wraps this in a transaction),
+            # not silently cancel the order without ever posting a refund.
+            raise ValueError(
+                f"لا يمكن إلغاء الطلب #{order.invoice_no} — لا توجد وردية "
+                "صندوق مفتوحة لتسجيل المبلغ المرتجع"
+            )
+
         reversal_amount_pt = -abs(sale_entry.amount_pt)
         self._ledger.append(CashLedgerEntry(
             id=None,
             day_id=sale_entry.day_id,
-            session_id=sale_entry.session_id,
+            session_id=target_session_id,
             entry_type=LedgerEntryType.REVERSAL,
             amount_pt=reversal_amount_pt,
             order_id=order.id,
@@ -888,6 +948,35 @@ class OrderService:
             reason=f"الغاء طلب #{order.invoice_no}: {reason}",
             created_at=_dt.datetime.now().isoformat(),
         ))
+
+    def _resolve_refund_session_id(self, sale_entry) -> int | None:
+        """Pick the till that must absorb a cancellation refund outflow.
+
+        Prefers the still-open session the original sale was recorded
+        against. If that session has since closed, falls back to any
+        currently open session on the same business day — same station
+        first — so the sealed historical count is never touched.
+        """
+        if self._cashier_sessions is None:
+            # Legacy mode (no session repo wired) — keep prior behaviour.
+            return sale_entry.session_id
+
+        original = self._cashier_sessions.get_by_id(sale_entry.session_id)
+        if original is not None and original.is_open:
+            return original.id
+
+        open_sessions = self._cashier_sessions.get_open_sessions_for_day(sale_entry.day_id)
+        if not open_sessions:
+            return None
+
+        if original is not None:
+            same_station = next(
+                (s for s in open_sessions if s.station == original.station), None
+            )
+            if same_station is not None:
+                return same_station.id
+
+        return open_sessions[0].id
 
     def _create_sale_cash_entry(
         self,
@@ -899,12 +988,12 @@ class OrderService:
         """
         Append a SALE_CASH entry to the active cashier session's ledger.
 
-        Strategy:
-          1. If CashierSessionRepository is wired in, look up the open session
-             for this cashier on this shift (day_id = shift_id).
-          2. If no session found (legacy mode), skip silently.
-          3. Amount is in PIASTERS = round(total * 100).
+        When CashierSessionRepository is wired (session mode), both a valid
+        actor_id and an open session for that cashier are required — missing
+        either raises ValueError and the caller's transaction rolls back.
+        When the repo is not wired (legacy mode), the entry is skipped.
 
+        Amount is in PIASTERS = round(total * 100).
         Called only for CASH payments from complete_order().
         """
         import datetime as _dt
@@ -916,18 +1005,26 @@ class OrderService:
 
         # Resolve session_id
         session_id: int | None = None
-        if self._cashier_sessions is not None and cashier_id is not None:
+        if self._cashier_sessions is not None:
+            # Session mode is active — actor_id is required.
+            if cashier_id is None:
+                raise ValueError(
+                    "actor_id مطلوب لتسجيل دفع النقد في وضع الجلسة"
+                )
             open_sessions = self._cashier_sessions.get_open_sessions_for_day(
                 day_id=shift_id
             )
             cashier_session = next(
                 (s for s in open_sessions if s.user_id == cashier_id), None
             )
-            if cashier_session:
-                session_id = cashier_session.id
+            if cashier_session is None:
+                raise ValueError(
+                    f"لا توجد جلسة مفتوحة للكاشير #{cashier_id} — لا يمكن تسجيل الدفع"
+                )
+            session_id = cashier_session.id
 
         if session_id is None:
-            # No active session → skip (graceful legacy fallback)
+            # Legacy mode (no session repo wired) — skip ledger entry.
             return
 
         amount_pt = round(order.total * 100)

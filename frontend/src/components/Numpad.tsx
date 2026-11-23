@@ -15,7 +15,7 @@ export const Numpad: React.FC<NumpadProps> = ({
   onChange,
   onConfirm,
   confirmLabel = "موافق",
-  confirmColor = "bg-brand-gold text-brand-dark hover:bg-opacity-90",
+  confirmColor = "bg-brand-red text-brand-dark hover:bg-opacity-90",
   maxLength = 12,
 }) => {
   // ── Physical keyboard support ────────────────────────────────────────
@@ -90,7 +90,7 @@ export const Numpad: React.FC<NumpadProps> = ({
               key={idx}
               type="button"
               onClick={() => handlePress(btn)}
-              className="h-16 text-2xl font-bold rounded-xl bg-brand-card text-white border border-brand-border/30 hover:border-brand-gold/40 active:translate-y-0.5 btn-hover-active"
+              className="h-16 text-2xl font-bold rounded-xl bg-brand-card text-white border border-brand-border/30 hover:border-brand-red/40 active:translate-y-0.5 btn-hover-active"
             >
               {btn}
             </button>

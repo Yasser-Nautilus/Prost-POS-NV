@@ -83,6 +83,13 @@ class CashierSessionService:
         if opening_float_pt < 0:
             raise ValueError("مبلغ الفتح لا يمكن أن يكون سالباً")
 
+        # Guard (H08/H09): reject opening session on a closed business day
+        shift_row = self._sessions._db.fetch_one(
+            "SELECT is_active FROM shifts WHERE id = ?", (day_id,)
+        )
+        if shift_row and not shift_row["is_active"]:
+            raise ValueError("لا يمكن فتح وردية في يوم عمل مغلق")
+
         # FR-SES-2: station conflict check
         self._check_station_conflict(day_id, station)
 
@@ -97,19 +104,21 @@ class CashierSessionService:
             opening_float_pt=opening_float_pt,
         )
 
-        created = self._sessions.create(session)
+        db = self._sessions._db
+        with db.transaction():
+            created = self._sessions.create(session)
 
-        # OPENING_FLOAT ledger entry — cash enters the drawer
-        if opening_float_pt > 0:
-            self._ledger.append(CashLedgerEntry(
-                id=None,
-                day_id=day_id,
-                session_id=created.id,
-                entry_type=LedgerEntryType.OPENING_FLOAT,
-                amount_pt=opening_float_pt,
-                actor_id=actor_id or user_id,
-                reason="فتح الوردية",
-            ))
+            # OPENING_FLOAT ledger entry — cash enters the drawer
+            if opening_float_pt > 0:
+                self._ledger.append(CashLedgerEntry(
+                    id=None,
+                    day_id=day_id,
+                    session_id=created.id,
+                    entry_type=LedgerEntryType.OPENING_FLOAT,
+                    amount_pt=opening_float_pt,
+                    actor_id=actor_id or user_id,
+                    reason="فتح الوردية",
+                ))
 
         logger.info(
             "Session %d opened — day=%d user=%d station=%s float=%.2f EGP",
@@ -150,6 +159,12 @@ class CashierSessionService:
         if not session.is_open:
             raise ValueError("الوردية مغلقة بالفعل")
 
+        # H05: Only session owner or manager/admin can close a session
+        if self._auth is not None and actor_id is not None:
+            actor = self._auth.get_user_by_id(actor_id)
+            if actor is not None and not actor.is_manager_or_above() and session.user_id != actor_id:
+                raise ValueError("لا يمكن إغلاق درج كاشير آخر")
+
         expected_pt = self._ledger.get_session_balance_pt(session_id)
         variance_pt = counted_cash_pt - expected_pt
 
@@ -163,7 +178,7 @@ class CashierSessionService:
             if self._auth is not None:
                 self._auth.verify_manager_pin(manager_pin)
 
-        # ADJUSTMENT entry if there is a variance
+        # ADJUSTMENT entry and session close are atomic — roll back both on failure
         manager_id: int | None = None
         if variance_pt != 0:
             if self._auth is not None and manager_pin:
@@ -174,25 +189,28 @@ class CashierSessionService:
                     # Checkup-Fix: manager lookup is optional here, but log failures.
                     logger.debug("Manager-by-PIN lookup failed (variance entry)", exc_info=True)
 
-            self._ledger.append(CashLedgerEntry(
-                id=None,
-                day_id=session.day_id,
-                session_id=session_id,
-                entry_type=LedgerEntryType.ADJUSTMENT,
-                amount_pt=variance_pt,          # signed: + shortage counted more, − counted less
-                actor_id=actor_id,
-                approved_by=manager_id,
-                reason=variance_reason or ("عجز" if variance_pt < 0 else "زيادة"),
-            ))
+        db = self._sessions._db
+        with db.transaction():
+            if variance_pt != 0:
+                self._ledger.append(CashLedgerEntry(
+                    id=None,
+                    day_id=session.day_id,
+                    session_id=session_id,
+                    entry_type=LedgerEntryType.ADJUSTMENT,
+                    amount_pt=variance_pt,          # signed: + shortage counted more, − counted less
+                    actor_id=actor_id,
+                    approved_by=manager_id,
+                    reason=variance_reason or ("عجز" if variance_pt < 0 else "زيادة"),
+                ))
 
-        self._sessions.close_session(
-            session_id=session_id,
-            counted_cash_pt=counted_cash_pt,
-            expected_cash_pt=expected_pt,
-            variance_pt=variance_pt,
-            variance_approved_by=manager_id,
-            variance_reason=variance_reason,
-        )
+            self._sessions.close_session(
+                session_id=session_id,
+                counted_cash_pt=counted_cash_pt,
+                expected_cash_pt=expected_pt,
+                variance_pt=variance_pt,
+                variance_approved_by=manager_id,
+                variance_reason=variance_reason,
+            )
 
         closed = self._sessions.get_by_id(session_id)
         logger.info(
@@ -239,6 +257,15 @@ class CashierSessionService:
         if not outgoing.is_open:
             raise ValueError("وردية التسليم مغلقة بالفعل")
 
+        # H05: Only session owner or manager/admin can handover a session
+        if self._auth is not None and actor_id is not None:
+            actor = self._auth.get_user_by_id(actor_id)
+            if actor is not None and not actor.is_manager_or_above() and outgoing.user_id != actor_id:
+                raise ValueError("لا يمكن تسليم درج كاشير آخر")
+            to_user = self._auth.get_user_by_id(to_user_id)
+            if to_user is not None and to_user.cashier_slot is None:
+                raise ValueError("المستخدم المستلم ليس كاشيراً مسجلاً — لا يمكن نقل الوردية لسائق توصيل")
+
         if cash_drop_pt < 0:
             raise ValueError("مبلغ التحويل للخزينة لا يمكن أن يكون سالباً")
 
@@ -246,6 +273,12 @@ class CashierSessionService:
         # Outgoing cashier counts the drawer (blind)
         # If not provided explicitly, default to the expected (no variance)
         counted_pt = to_user_counted_pt if to_user_counted_pt is not None else expected_pt
+        if counted_pt < 0:
+            raise ValueError("المبلغ المعدود لا يمكن أن يكون سالباً")
+
+        if cash_drop_pt > counted_pt:
+            raise ValueError("مبلغ التحويل للخزينة لا يمكن أن يتجاوز المبلغ المعدود")
+
         variance_pt = counted_pt - expected_pt
 
         if abs(variance_pt) > variance_threshold_pt:
@@ -267,7 +300,7 @@ class CashierSessionService:
 
         now = datetime.now().isoformat()
         actor = actor_id or to_user_id
-        incoming_float_pt = max(0, counted_pt - cash_drop_pt)
+        incoming_float_pt = counted_pt - cash_drop_pt
 
         # All writes are atomic: if create() or set_handover_link() fail after
         # close_session(), the outgoing session would be permanently closed with
@@ -287,13 +320,26 @@ class CashierSessionService:
                     reason=variance_reason or ("عجز في التسليم" if variance_pt < 0 else "زيادة في التسليم"),
                 ))
 
-            # HANDOVER_OUT: counted cash leaves the outgoing drawer
+            # CASH_DROP: cash transferred to safe if cash_drop_pt > 0
+            if cash_drop_pt > 0:
+                self._ledger.append(CashLedgerEntry(
+                    id=None,
+                    day_id=outgoing.day_id,
+                    session_id=from_session_id,
+                    entry_type=LedgerEntryType.CASH_DROP,
+                    amount_pt=-cash_drop_pt,              # negative: cash leaves drawer to safe
+                    actor_id=actor,
+                    approved_by=manager_id,
+                    reason=f"تحويل للخزينة عند التسليم لـ user_id={to_user_id}",
+                ))
+
+            # HANDOVER_OUT: remaining counted cash leaves outgoing drawer for next session
             self._ledger.append(CashLedgerEntry(
                 id=None,
                 day_id=outgoing.day_id,
                 session_id=from_session_id,
                 entry_type=LedgerEntryType.HANDOVER_OUT,
-                amount_pt=-counted_pt,              # negative: cash leaves drawer
+                amount_pt=-incoming_float_pt,         # negative: cash transferred to new session
                 actor_id=actor,
                 reason=f"تسليم الوردية لـ user_id={to_user_id}",
             ))

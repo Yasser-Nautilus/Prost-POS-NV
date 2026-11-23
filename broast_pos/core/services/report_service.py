@@ -10,6 +10,12 @@ B-10 business-date pattern:
   methods which filter by shift_id (correct for midnight-spanning shifts).
   Calendar-date methods (generate_daily_sales etc.) remain for historical
   reporting where a shift_id is not available.
+
+H16 — a report shows EITHER a shift OR a calendar day, never a mix:
+  * shift report  → everything filtered by shift_id; its date is the shift's
+    business date (the day it was opened).
+  * day report    → everything filtered by DATE(created_at); no shift totals.
+  ReportsController enforces this; asking for both at once is an error.
 """
 
 from __future__ import annotations
@@ -286,6 +292,14 @@ class ReportService:
             "count": len(items),
             "orders": items,
         }
+
+    def generate_driver_summary_for_shift(self, shift_id: int) -> list[dict]:
+        """Per-driver trip/order/fee totals for one shift (H16).
+
+        Same structure as generate_driver_summary(), limited to trips that
+        carry orders of this shift.
+        """
+        return self._delivery.get_all_drivers_shift_summary(shift_id)
 
     def generate_product_sales_for_shift(self, shift_id: int) -> list[dict]:
         """Qty sold per product for a shift, sorted by popularity (B-10).

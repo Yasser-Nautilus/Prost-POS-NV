@@ -80,7 +80,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
         <div className="flex-1 p-6 flex flex-col justify-between border-l border-brand-border/60">
           <div>
             <div className="flex justify-between items-center mb-6">
-              <h3 className="font-bold text-xl text-brand-gold">تسوية وإغلاق الفاتورة</h3>
+              <h3 className="font-bold text-xl text-brand-red">تسوية وإغلاق الفاتورة</h3>
               <button
                 onClick={onClose}
                 className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-brand-border/30 md:hidden"
@@ -99,7 +99,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                 }}
                 className={`py-4 rounded-2xl border font-bold flex flex-col items-center justify-center gap-2 transition-all ${
                   method === "cash"
-                    ? "bg-brand-gold/10 border-brand-gold text-brand-gold"
+                    ? "bg-brand-red/10 border-brand-red text-brand-red"
                     : "bg-brand-card border-brand-border/50 text-gray-400 hover:text-white"
                 }`}
               >
@@ -117,7 +117,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                   orderType === "delivery"
                     ? "opacity-40 cursor-not-allowed bg-brand-card border-brand-border/50 text-gray-500"
                     : method === "visa"
-                      ? "bg-brand-gold/10 border-brand-gold text-brand-gold"
+                      ? "bg-brand-red/10 border-brand-red text-brand-red"
                       : "bg-brand-card border-brand-border/50 text-gray-400 hover:text-white"
                 }`}
               >
@@ -132,7 +132,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                 }}
                 className={`py-4 rounded-2xl border font-bold flex flex-col items-center justify-center gap-2 transition-all ${
                   method === "online"
-                    ? "bg-brand-gold/10 border-brand-gold text-brand-gold"
+                    ? "bg-brand-red/10 border-brand-red text-brand-red"
                     : "bg-brand-card border-brand-border/50 text-gray-400 hover:text-white"
                 }`}
               >
@@ -155,7 +155,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
                           key={amt}
                           type="button"
                           onClick={() => handleQuickCash(roundedAmt)}
-                          className="flex-1 py-2 px-1 text-sm font-semibold rounded-lg bg-brand-card border border-brand-border/40 hover:border-brand-gold text-white btn-hover-active"
+                          className="flex-1 py-2 px-1 text-sm font-semibold rounded-lg bg-brand-card border border-brand-border/40 hover:border-brand-red text-white btn-hover-active"
                         >
                           {roundedAmt} ج.م
                         </button>
@@ -203,7 +203,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
               <>
                 <div className="flex justify-between items-center text-gray-400">
                   <span>المبلغ المدفوع:</span>
-                  <span className="text-2xl font-black text-brand-gold">
+                  <span className="text-2xl font-black text-brand-red">
                     {(parseFloat(cashReceived) || 0).toFixed(2)} ج.م
                   </span>
                 </div>
@@ -228,7 +228,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             />
           ) : (
             <div className="flex-1 flex flex-col justify-center items-center text-center p-8 border-2 border-dashed border-brand-border/50 rounded-2xl">
-              <CreditCard size={48} className="text-brand-gold mb-3 animate-pulse" />
+              <CreditCard size={48} className="text-brand-red mb-3 animate-pulse" />
               <p className="text-gray-300 font-medium">سيتم تحصيل كامل المبلغ</p>
               <p className="text-3xl font-black text-white mt-2">{total.toFixed(2)} ج.م</p>
             </div>

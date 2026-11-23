@@ -45,7 +45,7 @@ export const PinDialog: React.FC<PinDialogProps> = ({
         
         {/* Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-brand-border/60 bg-brand-card">
-          <div className="flex items-center gap-2 text-brand-gold">
+          <div className="flex items-center gap-2 text-brand-red">
             <Lock size={18} />
             <h3 className="font-bold text-lg">{title}</h3>
           </div>
@@ -64,8 +64,8 @@ export const PinDialog: React.FC<PinDialogProps> = ({
               {[0, 1, 2, 3].map((idx) => (
                 <div
                   key={idx}
-                  className={`w-4 h-4 rounded-full border border-brand-gold/60 transition-colors ${
-                    pin.length > idx ? "bg-brand-gold" : "bg-transparent"
+                  className={`w-4 h-4 rounded-full border border-brand-red/60 transition-colors ${
+                    pin.length > idx ? "bg-brand-red" : "bg-transparent"
                   }`}
                 />
               ))}
@@ -93,7 +93,7 @@ export const PinDialog: React.FC<PinDialogProps> = ({
             }}
             onConfirm={handleSubmit}
             confirmLabel={loading ? "جاري التحقق..." : "تأكيد الرمز"}
-            confirmColor="bg-brand-gold text-brand-dark hover:bg-opacity-90 font-bold"
+            confirmColor="bg-brand-red text-brand-dark hover:bg-opacity-90 font-bold"
           />
         </div>
       </div>

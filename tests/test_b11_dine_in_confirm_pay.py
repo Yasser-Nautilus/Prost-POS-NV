@@ -78,6 +78,9 @@ def _ctrl_stub(current_order, order_svc=None):
     ctrl._notify_table_changed = MagicMock()
     ctrl._recalc_totals = MagicMock()
     ctrl._order_to_dict = MagicMock(return_value={})
+    auth_svc = MagicMock()
+    auth_svc.get_current_user.return_value = None
+    ctrl._auth_svc = auth_svc
     return ctrl
 
 

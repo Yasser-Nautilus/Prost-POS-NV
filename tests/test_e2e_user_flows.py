@@ -272,6 +272,7 @@ class TestFullUserSimulation:
         })
         assert res["success"] is True
         assert res["data"]["id"] is not None
+        cashier_session_id = res["data"]["id"]
 
         # ------------------------------------------------------------------
         # Step 3: Dine-In Order Flow (Order -> Kitchen -> Move Table -> Pay)
@@ -449,6 +450,7 @@ class TestFullUserSimulation:
             "zone_id": zone_entag["id"],
         })
         assert res["success"] is True
+        address_id = res["data"]["id"]
 
         # Create delivery order
         res = client.call("new_order", {"order_type": "delivery"})
@@ -459,8 +461,7 @@ class TestFullUserSimulation:
             "name": "محمود إبراهيم",
             "phone": "01099887766",
             "address": "عمارة 15 الدور الثالث",
-            "zone": zone_entag["name"],
-            "delivery_fee": zone_entag["delivery_fee"],  # 15.00
+            "address_id": address_id,  # H19: backend resolves zone/fee from this
             "payment_method": "cash",
         })
         assert res["success"] is True
@@ -548,6 +549,25 @@ class TestFullUserSimulation:
         # ------------------------------------------------------------------
         # Step 7: Shift Close Guards (Cannot close with open orders)
         # ------------------------------------------------------------------
+        # H08: close the cashier session before testing shift-close guards.
+        # close_business_day now rejects if any cashier session is still open.
+        # Ledger movements that reach the session (session_id-keyed entries),
+        # now that H01 forwards the authenticated actor through to cash
+        # posting (the dine-in cash sale is properly attributed instead of
+        # being skipped by the session-lookup guard):
+        #   OPENING_FLOAT +500.00 (opening float)
+        #   SALE_CASH     +235.00 (dine-in order, paid cash)
+        #   DRIVER_REMITTANCE +125.00 (delivery order, cash collected by driver)
+        #   = 860.00 EGP.
+        # (The takeaway order was paid by card, so it posts no cash entry;
+        # EXPENSE is booked at the business-day level, not this session.)
+        res = client.call("session.close", {
+            "session_id": cashier_session_id,
+            "counted_cash_egp": 860.0,
+        })
+        assert res["success"] is True
+        assert res["data"]["variance_egp"] == 0.0
+
         # Start a new order on Table 8 and confirm it (open in-progress)
         res = client.call("new_order", {"order_type": "dine_in"})
         res = client.call("set_table", {"table_number": 8})
@@ -565,8 +585,14 @@ class TestFullUserSimulation:
         assert res["success"] is False
         assert "طباعة التقرير اليومي" in res["error"]
 
-        # Print shift summary
+        # Print shift summary — manager/admin only (H06): the frontend never
+        # shows this button to a cashier, so the manager steps in to print it.
+        client.call("logout")
+        client.call("login", {"pin": "1234"})
         res = client.call("print_shift_summary")
+        assert res["success"] is True
+        client.call("logout")
+        res = client.call("login", {"pin": "2222"})
         assert res["success"] is True
 
         # Now attempt to close shift while an order is open -> MUST FAIL (Guard 4: open orders)
@@ -592,10 +618,6 @@ class TestFullUserSimulation:
         assert "expected_cash" not in cashier_summary
         assert "total_sales" not in cashier_summary
         assert cashier_summary["total_expenses"] == 50.0
-
-        # Print shift summary (simulating cashier pressing Print Daily Summary)
-        res = client.call("print_shift_summary")
-        assert res["success"] is True
 
         # Log out cashier, log in manager/admin to view full figures
         client.call("logout")

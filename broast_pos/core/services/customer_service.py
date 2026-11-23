@@ -103,6 +103,10 @@ class CustomerService:
         """All saved addresses for a customer."""
         return self._customers.get_addresses(customer_id)
 
+    def get_address(self, address_id: int) -> CustomerAddress | None:
+        """A single saved address by id — authoritative zone/fee source."""
+        return self._customers.get_address_by_id(address_id)
+
     def delete_address(self, address_id: int) -> None:
         """Soft-delete an address.
 

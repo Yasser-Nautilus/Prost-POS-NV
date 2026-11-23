@@ -515,14 +515,27 @@ class OrderRepository(BaseRepository[Order]):
     def _save_items(self, order_id: int, items: list[OrderItem]) -> None:
         """Insert all items for an order."""
         for item in items:
-            self._db.execute(
-                """INSERT INTO order_items
-                       (order_id, product_id, product_name, quantity,
-                        unit_price, total_price, notes)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    order_id, item.product_id, item.product_name,
-                    item.quantity, item.unit_price, item.total_price,
-                    item.notes or None,
-                ),
-            )
+            if item.id is not None:
+                self._db.execute(
+                    """INSERT INTO order_items
+                           (id, order_id, product_id, product_name, quantity,
+                            unit_price, total_price, notes)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        item.id, order_id, item.product_id, item.product_name,
+                        item.quantity, item.unit_price, item.total_price,
+                        item.notes or None,
+                    ),
+                )
+            else:
+                self._db.execute(
+                    """INSERT INTO order_items
+                           (order_id, product_id, product_name, quantity,
+                            unit_price, total_price, notes)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        order_id, item.product_id, item.product_name,
+                        item.quantity, item.unit_price, item.total_price,
+                        item.notes or None,
+                    ),
+                )

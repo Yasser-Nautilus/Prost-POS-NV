@@ -495,6 +495,7 @@ class DriverSettlementService:
           - Idempotency guaranteed by DB's uq_ledger_remit unique index on trip_id.
         """
         import datetime as _dt
+        import sqlite3
 
         from broast_pos.core.models.cashier_session import (
             CashLedgerEntry,
@@ -538,6 +539,26 @@ class DriverSettlementService:
                 actor_id=actor_id,
                 created_at=_dt.datetime.now().isoformat(),
             ))
-        except Exception as exc:
-            # uq_ledger_remit: already recorded (idempotency). Log and continue.
-            logger.warning("DRIVER_REMITTANCE for trip %d already exists: %s", trip_id, exc)
+        except sqlite3.IntegrityError as exc:
+            # H12: only uq_ledger_remit (duplicate trip_id) is a safe idempotent
+            # retry — and only once the existing row is confirmed to match the
+            # intended entry. Any other integrity error, or a mismatching
+            # existing row, is a real problem and must not be swallowed.
+            existing = self._ledger.get_entry_by_trip(trip_id, LedgerEntryType.DRIVER_REMITTANCE)
+            if existing is None:
+                raise
+            if (
+                existing.amount_pt != amount_pt
+                or existing.day_id != day_id
+                or existing.session_id != session.id
+            ):
+                raise ValueError(
+                    f"DRIVER_REMITTANCE conflict for trip {trip_id}: existing entry "
+                    f"(amount={existing.amount_pt}, day={existing.day_id}, "
+                    f"session={existing.session_id}) does not match the intended "
+                    f"entry (amount={amount_pt}, day={day_id}, session={session.id})"
+                ) from exc
+            logger.info(
+                "DRIVER_REMITTANCE for trip %d already recorded identically — "
+                "treating as idempotent retry", trip_id,
+            )

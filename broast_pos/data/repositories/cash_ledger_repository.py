@@ -182,6 +182,24 @@ class CashLedgerRepository:
         )
         return int(row["total"]) if row else 0
 
+    def get_cash_drop_total_pt(self, session_id: int) -> int:
+        """Sum of all CASH_DROP entries (absolute value) for a session."""
+        row = self._db.fetch_one(
+            """SELECT COALESCE(SUM(ABS(amount_pt)), 0) AS total FROM cash_ledger
+               WHERE session_id = ? AND entry_type = 'CASH_DROP'""",
+            (session_id,),
+        )
+        return int(row["total"]) if row else 0
+
+    def get_day_cash_drop_total_pt(self, day_id: int) -> int:
+        """Sum of all CASH_DROP entries (absolute value) for a business day."""
+        row = self._db.fetch_one(
+            """SELECT COALESCE(SUM(ABS(amount_pt)), 0) AS total FROM cash_ledger
+               WHERE day_id = ? AND entry_type = 'CASH_DROP'""",
+            (day_id,),
+        )
+        return int(row["total"]) if row else 0
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
