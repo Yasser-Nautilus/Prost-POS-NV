@@ -581,6 +581,43 @@ class OrderController:
         logger.info("Payment completed for order #%s", completed.invoice_no)
         return True, "تم الدفع بنجاح", receipt_ok
 
+    def complete_payment_split(
+        self,
+        order_id: int,
+        parts: list[dict],
+        cash_received: float | None = None,
+        finalize: bool = True,
+    ) -> tuple[bool, str, bool]:
+        """Pay one order with several methods and print the receipt."""
+        try:
+            auth_svc = getattr(self, "_auth_svc", None)
+            actor = auth_svc.get_current_user() if auth_svc else None
+            actor_id = actor.id if actor else None
+            actor_name = (actor.display_name or actor.username or "نظام") if actor else "نظام"
+            completed = self._order_svc.complete_order_split(
+                order_id, parts, cash_received,
+                actor_id=actor_id, actor_name=actor_name, finalize=finalize,
+            )
+        except Exception as exc:
+            return False, f"فشل في الدفع: {exc}", True
+
+        labels = {"cash": "Cash", "visa": "Visa", "online": "Online"}
+        order_dict = self._order_to_dict(completed)
+        order_dict["payment_method"] = " + ".join(
+            f"{labels.get(p['method'], p['method'])} {p['amount']:.2f}"
+            for p in self._order_svc.get_payment_parts(order_id))
+        order_dict["amount_paid"] = completed.amount_paid
+        order_dict["change_given"] = completed.change_given
+        receipt_ok = bool(self._print.on_order_completed(order_dict, self._cashier_slot))
+
+        if completed.order_type == OrderType.DINE_IN and completed.table_no:
+            self._occupied_tables.pop(completed.table_no, None)
+            self._notify_table_changed()
+        if finalize and self._current_order and self._current_order.id == order_id:
+            self._current_order = None
+            self._notify_order_changed()
+        return True, "تم الدفع بنجاح", receipt_ok
+
     # ------------------------------------------------------------------
     # 5. Edit Saved Order (Amendment)
     # ------------------------------------------------------------------
