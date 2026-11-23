@@ -1,8 +1,14 @@
+# ruff: noqa: F811
 """Regression tests for the QA findings: users-list guard, duplicate zone names,
 same-user shift transfer, expense cap."""
 from __future__ import annotations
 
-from test_e2e_user_flows import _build_test_bridge, POSUserClient, qapp, reset_db_singleton  # noqa: F401
+from test_e2e_user_flows import (  # noqa: F401
+    POSUserClient,
+    _build_test_bridge,
+    qapp,
+    reset_db_singleton,
+)
 
 
 def _setup(qapp):
