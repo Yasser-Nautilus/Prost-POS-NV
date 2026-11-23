@@ -62,3 +62,32 @@ def compute_discount(subtotal: float, value: float, kind: str) -> float:
         amount = val
 
     return float(amount.quantize(Decimal("0.01"), ROUND_HALF_UP))
+
+
+def rescale_discount(
+    discount_amount: float,
+    kind: str | None,
+    old_subtotal: float,
+    new_subtotal: float,
+) -> float:
+    """Keep an existing discount valid after the order subtotal changed.
+
+    Removing items must never leave a discount larger than the new subtotal
+    (that made the order total negative).
+
+    * ``percent`` discounts keep their original percentage of the subtotal.
+    * ``flat`` (and unknown) discounts keep their amount, capped at the new
+      subtotal.
+    * An empty order has no discount.
+    """
+    disc = Decimal(str(discount_amount or 0))
+    new_sub = Decimal(str(new_subtotal or 0))
+    if disc <= 0 or new_sub <= 0:
+        return 0.0
+    if kind == "percent":
+        old_sub = Decimal(str(old_subtotal or 0))
+        if old_sub > 0:
+            amount = new_sub * disc / old_sub
+            amount = min(amount, new_sub)
+            return float(amount.quantize(Decimal("0.01"), ROUND_HALF_UP))
+    return float(min(disc, new_sub).quantize(Decimal("0.01"), ROUND_HALF_UP))
