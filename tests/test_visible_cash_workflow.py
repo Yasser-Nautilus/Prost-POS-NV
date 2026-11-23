@@ -155,6 +155,23 @@ def test_visible_open_shift_to_cash_payment(qapp, monkeypatch, existing_day, con
         browser.click("تيك أواي")
         browser.wait("[...document.querySelectorAll('h4')].some(b=>b.textContent==='تشيكن فرايز حار')")
         browser.js("[...document.querySelectorAll('h4')].find(b=>b.textContent==='تشيكن فرايز حار').parentElement.click()")
+        # Park via the visible button, log out, log in, then restore via the modal.
+        browser.click("تعليق")
+        browser.wait("document.body.innerText.includes('استرجاع طلب معلّق (1)')")
+        assert db.fetch_one("SELECT count(*) n FROM parked_order_drafts")["n"] == 1
+        assert db.fetch_one("SELECT count(*) n FROM orders")["n"] == 0
+        browser.js("document.querySelector('[title=\"تسجيل الخروج\"]').click()")
+        browser.click("تأكيد")
+        browser.wait("document.body.innerText.includes('تأكيد PIN')")
+        for digit in ("5678" if cashier else "1234"):
+            browser.click(digit)
+        browser.click("تأكيد PIN")
+        browser.click("استرجاع طلب معلّق (1)")
+        browser.wait("document.body.innerText.includes('1 عناصر')")
+        browser.screenshot("06-recovered-parking.png")
+        browser.js("[...document.querySelectorAll('button')].find(b=>b.textContent.includes('1 عناصر')).click()")
+        browser.wait("document.body.innerText.includes('تأكيد ودفع الفاتورة')")
+        assert db.fetch_one("SELECT count(*) n FROM orders")["n"] == 0
         browser.click("تأكيد ودفع الفاتورة")
         browser.wait("document.body.innerText.includes('تأكيد الدفع')")
         # Explicit cash amount, no reliance on the unrelated empty/zero fallback.

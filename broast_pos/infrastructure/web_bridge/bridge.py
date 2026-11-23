@@ -8,6 +8,7 @@ from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 from broast_pos.core.models.customer import Customer, Zone
 from broast_pos.core.models.order import Order
 from broast_pos.core.models.user import User, UserRole
+from broast_pos.data.repositories.parked_draft_repository import ParkedDraftRepository
 from broast_pos.features.delivery_system.delivery_controller import DeliveryController
 from broast_pos.features.financial.financial_controller import FinancialController
 from broast_pos.features.financial.session_controller import SessionController
@@ -80,6 +81,8 @@ class POSBridge(QObject):
             cashier_slot=user.cashier_slot or 1,
             product_service=self._product,
             customer_service=self._customer,
+            draft_repository=ParkedDraftRepository(self._order_svc._db),
+            draft_user_id=user.id,
         )
         self._order_ctrl.on_order_changed(self._on_order_changed_cb)
         self._order_ctrl.on_parked_changed(self._on_parked_changed_cb)

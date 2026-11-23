@@ -476,3 +476,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_remit
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_driver_payout
     ON cash_ledger(trip_id) WHERE entry_type = 'DRIVER_FEE_PAYOUT';
+
+-- Private cashier drafts, separate from confirmed orders and accounting.
+CREATE TABLE IF NOT EXISTS parked_order_drafts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    payload TEXT NOT NULL,
+    baseline TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_parked_draft_user ON parked_order_drafts(user_id,id);
