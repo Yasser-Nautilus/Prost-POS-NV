@@ -482,6 +482,30 @@ class DeliveryController:
         except Exception as exc:
             return False, str(exc)
 
+    def print_driver_day_sheet(
+        self,
+        driver_id: int,
+        settlement_date: str | None = None,
+    ) -> tuple[bool, Any]:
+        """Print the end-of-day settlement sheet (order count per delivery fee).
+
+        Works before or after the settlement is confirmed: it reads the same
+        server-side calculation, never client-supplied numbers.
+        """
+        if self._settlement_svc is None:
+            return False, "خدمة التسوية غير مهيأة"
+        try:
+            sheet = dict(self._settlement_svc.get_driver_settlement_preview(
+                driver_id=driver_id, settlement_date=settlement_date,
+            ))
+            driver = self._delivery_svc._users.get_by_id(driver_id)
+            sheet["driver_phone"] = getattr(driver, "phone", None) or ""
+            sheet.pop("trips", None)
+        except Exception as exc:
+            return False, str(exc)
+        printed = bool(self._print.on_driver_day_sheet(sheet, self._cashier_slot))
+        return True, {"printed": printed, "sheet": sheet}
+
     def get_driver_settlements(
         self,
         driver_id: int | None = None,
