@@ -517,6 +517,12 @@ class DeliveryController:
         try:
             if driver_id is not None:
                 settlements = self._settlement_svc.get_settlements_for_driver(driver_id)
+                if date_str:
+                    # Driver and date together: that driver's settlements on that day
+                    settlements = [
+                        s for s in settlements
+                        if str(s.settlement_date or "")[:10] == date_str[:10]
+                    ]
             elif date_str:
                 settlements = self._settlement_svc.get_settlements_for_date(date_str)
             else:

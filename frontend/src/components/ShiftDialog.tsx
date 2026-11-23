@@ -38,6 +38,19 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
   // Cashier counts and closes their own drawer (blind count)
   const [showCloseDrawer, setShowCloseDrawer] = useState(false);
 
+  // Escape closes the dialog, unless a nested dialog is open (it handles its own).
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (showPinGate || showCloseDrawer) return;
+      onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpen, onClose, showPinGate, showCloseDrawer]);
+
+
   // Shift transfer (نقل وردية) — manager hands the shift to another cashier
   const [showTransferPin, setShowTransferPin] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);

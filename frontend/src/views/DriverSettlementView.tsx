@@ -11,6 +11,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { SettlementHistory } from "../components/SettlementHistory";
 import {
   Wallet, ChevronRight, CheckCircle, AlertCircle, Clock,
   Package, RefreshCcw, Loader2, User,
@@ -724,6 +725,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
             </div>
           </>
         )}
+        <SettlementHistory drivers={drivers} />
       </div>
     </div>
   );

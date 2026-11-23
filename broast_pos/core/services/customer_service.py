@@ -8,13 +8,12 @@ and is stored on the address for historical consistency.
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
+from broast_pos.core.phone import INVALID_PHONE_MSG, normalize_egyptian_mobile
 from broast_pos.core.models.customer import Customer, CustomerAddress, Zone
 from broast_pos.data.repositories.customer_repository import CustomerRepository
 
-_PHONE_PATTERN = re.compile(r"^01\d{9}$")
 
 
 class CustomerService:
@@ -31,8 +30,7 @@ class CustomerService:
 
     def find_by_phone(self, phone: str) -> Customer | None:
         """Exact 11-digit phone match → customer with all addresses, or None."""
-        phone = phone.strip()
-        self._validate_phone(phone)
+        phone = self._validate_phone(phone)
         return self._customers.find_by_phone(phone)
 
     # ------------------------------------------------------------------
@@ -49,8 +47,7 @@ class CustomerService:
         if not name:
             raise ValueError("اسم العميل مطلوب")
 
-        phone = phone.strip()
-        self._validate_phone(phone)
+        phone = self._validate_phone(phone)
 
         # Check for duplicates
         existing = self._customers.find_by_phone(phone)
@@ -63,6 +60,42 @@ class CustomerService:
     # ------------------------------------------------------------------
     # Address management
     # ------------------------------------------------------------------
+
+    def search_customers(self, query: str, limit: int = 20) -> list[Customer]:
+        """Find customers by part of the name or phone. Empty query returns none."""
+        query = (query or "").strip()
+        if len(query) < 2:
+            return []
+        digits = normalize_egyptian_mobile(query)
+        if digits is not None:
+            query = digits
+        return self._customers.search_customers(query, limit)
+
+    def update_customer(
+        self, customer_id: int, name: str | None = None, phone: str | None = None
+    ) -> Customer:
+        """Edit a customer's name and/or phone.
+
+        Raises:
+            ValueError: customer not found, empty name, invalid phone, or the
+                phone already belongs to another customer.
+        """
+        customer = self._customers.get_by_id_simple(customer_id)
+        if customer is None:
+            raise ValueError("العميل غير موجود")
+        if name is not None:
+            name = name.strip()
+            if not name:
+                raise ValueError("اسم العميل مطلوب")
+            customer.name = name
+        if phone is not None:
+            normalized = self._validate_phone(phone)
+            other = self._customers.find_by_phone(normalized)
+            if other is not None and other.id != customer.id:
+                raise ValueError("رقم الهاتف مسجل بالفعل")
+            customer.phone = normalized
+        self._customers.save_customer(customer)
+        return self._customers.find_by_phone(customer.phone) or customer
 
     def add_address(
         self,
@@ -245,11 +278,16 @@ class CustomerService:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _validate_phone(phone: str) -> None:
-        """Enforce 11-digit phone starting with '01'.
+    def _validate_phone(phone: str) -> str:
+        """Normalise and validate an Egyptian mobile number.
+
+        Accepts pasted WhatsApp formats (+20, spaces, dashes) and returns the
+        01XXXXXXXXX form with English digits.
 
         Raises:
-            ValueError: if format is invalid.
+            ValueError: if the number is not a valid Egyptian mobile.
         """
-        if not _PHONE_PATTERN.match(phone):
-            raise ValueError("رقم الهاتف يجب أن يكون 11 رقم ويبدأ بـ 01")
+        normalized = normalize_egyptian_mobile(phone)
+        if normalized is None:
+            raise ValueError(INVALID_PHONE_MSG)
+        return normalized

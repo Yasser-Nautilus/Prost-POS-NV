@@ -22,6 +22,7 @@ import time
 from enum import Enum
 
 from broast_pos.config import config
+from broast_pos.core.phone import INVALID_PHONE_MSG, normalize_egyptian_mobile
 from broast_pos.core.models.audit import AuditEventType
 from broast_pos.core.models.user import User, UserRole
 from broast_pos.data.repositories.user_repository import UserRepository
@@ -652,16 +653,16 @@ class AuthService:
 
     @staticmethod
     def _normalise_phone(phone: str | None) -> str | None:
-        """Strip spaces/dashes; require 10-15 digits (optional leading +)."""
-        if phone is None:
+        """Normalise a user/driver phone to 01XXXXXXXXX (English digits).
+
+        Accepts pasted formats (+20, spaces, dashes). Empty means no phone.
+        """
+        if phone is None or not str(phone).strip():
             return None
-        cleaned = "".join(ch for ch in phone.strip() if ch not in " -()")
-        if not cleaned:
-            return None
-        digits = cleaned[1:] if cleaned.startswith("+") else cleaned
-        if not digits.isdigit() or not 10 <= len(digits) <= 15:
-            raise ValueError("رقم التليفون غير صحيح")
-        return cleaned
+        normalized = normalize_egyptian_mobile(phone)
+        if normalized is None:
+            raise ValueError(INVALID_PHONE_MSG)
+        return normalized
 
     def _pin_in_use(self, raw_pin: str, exclude_user_id: int | None = None) -> bool:
         """True if *raw_pin* already authenticates some other active user."""

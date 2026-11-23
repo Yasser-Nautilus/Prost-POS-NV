@@ -274,7 +274,23 @@ class SessionController:
     # Serializers
     # ------------------------------------------------------------------
 
+    def _live_expected_pt(self, s: CashierSession) -> int | None:
+        """Expected drawer cash for a session.
+
+        The stored expected_cash_pt is only written when the session closes, so an
+        open session must read the live ledger balance. Otherwise the UI falls back
+        to the opening float and shows a wrong expected amount and variance.
+        """
+        if s.expected_cash_pt is not None or not s.is_open or s.id is None:
+            return s.expected_cash_pt
+        try:
+            value = self._svc.get_session_expected_cash_pt(s.id)
+        except Exception:
+            return s.expected_cash_pt
+        return value if isinstance(value, int) else s.expected_cash_pt
+
     def _session_to_dict(self, s: CashierSession) -> dict[str, Any]:
+        expected_pt = self._live_expected_pt(s)
         return {
             "id": s.id,
             "day_id": s.day_id,
@@ -289,9 +305,9 @@ class SessionController:
             "counted_cash_egp": (
                 round(s.counted_cash_pt / 100, 2) if s.counted_cash_pt is not None else None
             ),
-            "expected_cash_pt": s.expected_cash_pt,
+            "expected_cash_pt": expected_pt,
             "expected_cash_egp": (
-                round(s.expected_cash_pt / 100, 2) if s.expected_cash_pt is not None else None
+                round(expected_pt / 100, 2) if expected_pt is not None else None
             ),
             "variance_pt": s.variance_pt,
             "variance_egp": (

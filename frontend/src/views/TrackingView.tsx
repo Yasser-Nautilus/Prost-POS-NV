@@ -170,7 +170,7 @@ const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => v
         <tr className="bg-brand-card/80 text-gray-400 text-xs">
           <th className="py-2.5 px-3 text-right">#فاتورة</th>
           <th className="py-2.5 px-3 text-right">العميل</th>
-          <th className="py-2.5 px-3 text-right">المنطقة/العنوان</th>
+          <th className="py-2.5 px-3 text-right w-[40%]">المنطقة/العنوان</th>
           <th className="py-2.5 px-3 text-center">الحالة</th>
           <th className="py-2.5 px-3 text-center">المنقضي</th>
           <th className="py-2.5 px-3 text-center font-mono">الإجمالي</th>
@@ -227,7 +227,7 @@ const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => v
                 ) : (
                   <>
                     {order.customer_zone && <div className="text-brand-red">{order.customer_zone}</div>}
-                    {order.customer_address && <div className="truncate max-w-[120px]">{order.customer_address}</div>}
+                    {order.customer_address && <div className="whitespace-normal break-words leading-snug">{order.customer_address}</div>}
                   </>
                 )}
               </td>
