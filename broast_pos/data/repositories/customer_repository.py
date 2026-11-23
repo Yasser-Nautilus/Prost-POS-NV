@@ -54,6 +54,19 @@ class CustomerRepository(BaseRepository[Customer]):
         customer.addresses = self.get_addresses(customer.id)
         return customer
 
+    def search_customers(self, query: str, limit: int = 20) -> list[Customer]:
+        """Customers whose name or phone contains *query* (no addresses)."""
+        like = f"%{query}%"
+        rows = self._db.fetch_all(
+            "SELECT * FROM customers WHERE name LIKE ? OR phone LIKE ? ORDER BY name LIMIT ?",
+            (like, like, limit),
+        )
+        return [self._row_to_customer(r) for r in rows]
+
+    def get_by_id_simple(self, customer_id: int) -> Customer | None:
+        row = self._db.fetch_one("SELECT * FROM customers WHERE id = ?", (customer_id,))
+        return self._row_to_customer(row) if row else None
+
     def save_customer(self, customer: Customer) -> Customer:
         """Insert or update a customer."""
         if customer.id is None:
