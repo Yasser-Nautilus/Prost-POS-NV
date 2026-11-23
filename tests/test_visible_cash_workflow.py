@@ -354,3 +354,43 @@ def test_visible_long_and_legacy_text_pin_login_and_override(qapp, monkeypatch, 
     finally:
         shell.close()
         DatabaseConnection.reset()
+
+
+def test_visible_tracking_customer_history_uses_live_native_bridge(qapp, monkeypatch):
+    monkeypatch.setenv("POS_DEV_MODE", "0")
+    DatabaseConnection.reset()
+    bridge, db = _build_test_bridge(qapp)
+    def call(action, payload=None):
+        result = json.loads(bridge.dispatch(action, json.dumps(payload or {})))
+        assert result["success"], result
+        return result.get("data")
+    call("login", {"pin": "1234"})
+    call("open_shift")
+    customer = call("create_customer", {"name": "عميل المتابعة", "phone": "01012345678"})
+    call("new_order", {"order_type": "pickup"})
+    call("add_item", {"product_id": 1})
+    call("set_customer_info", {"customer_id": customer["id"], "phone": customer["phone"], "name": customer["name"]})
+    call("confirm_order")
+    call("logout")
+    shell = WebShell(bridge)
+    shell.setWindowState(Qt.WindowState.WindowNoState)
+    shell.resize(1440, 1000)
+    shell.show()
+    browser = Browser(shell)
+    try:
+        for digit in "1234":
+            browser.click(digit)
+        browser.click("تأكيد PIN")
+        browser.click("متابعة الطلبات")
+        browser.wait("!!document.querySelector('[title=\"عرض تاريخ العميل\"]')")
+        browser.js("document.querySelector('[title=\"عرض تاريخ العميل\"]').click()")
+        browser.wait("document.body.innerText.includes('تاريخ الطلبات')")
+        assert "عميل المتابعة" in browser.js("document.body.innerText")
+        assert "طلب #1" in browser.js("document.body.innerText")
+        browser.click("الإحصائيات")
+        browser.wait("document.body.innerText.includes('إجمالي الطلبات')")
+        browser.screenshot("15-tracking-history.png")
+        assert db.fetch_one("SELECT count(*) n FROM orders")["n"] == 1
+    finally:
+        shell.close()
+        DatabaseConnection.reset()
