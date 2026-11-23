@@ -231,12 +231,16 @@ class FinancialService:
         shift.closed_by = manager.id
         with self._financial._db.transaction():
             saved = self._financial.save(shift)
+            # Day close checks every driver out automatically.
+            checked_out = 0
+            if self._delivery is not None and hasattr(self._delivery, "check_out_all_drivers"):
+                checked_out = self._delivery.check_out_all_drivers() or 0
             self._audit.log(
                 event_type="shift_closed",
                 user_id=manager.id,
                 user_name=manager.display_name,
                 action="إغلاق الوردية",
-                details={"shift_id": shift_id},
+                details={"shift_id": shift_id, "drivers_checked_out": int(checked_out)},
             )
 
         return saved
@@ -266,8 +270,12 @@ class FinancialService:
         description: str,
         category: str,
         user_id: int,
+        record_ledger: bool = True,
     ) -> CashTransaction:
         """Record a cash-out expense. Immutable — cannot be edited or deleted.
+
+        ``record_ledger=False`` books only the expense row (reports/summary);
+        the caller books the drawer movement itself (driver fee payouts).
 
         Raises:
             ValueError: if amount is invalid or category is unknown.
@@ -301,7 +309,8 @@ class FinancialService:
         # non-legacy mode any ledger failure rolls back the expense save too.
         with self._financial._db.transaction():
             saved = self._financial.save_expense(transaction)
-            self._record_expense_to_ledger(saved)
+            if record_ledger:
+                self._record_expense_to_ledger(saved)
             self._audit.log(
                 event_type="expense_added",
                 user_id=user_id,

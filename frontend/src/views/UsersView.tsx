@@ -52,6 +52,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
   const [formRole, setFormRole] = useState("cashier");
   const [formPin, setFormPin] = useState("");
   const [formSlot, setFormSlot] = useState<string>("");
+  const [formPhone, setFormPhone] = useState("");
 
   const isAdmin = currentUser?.role === "admin";
 
@@ -78,6 +79,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
     setFormRole("cashier");
     setFormPin("");
     setFormSlot("");
+    setFormPhone("");
     setShowForm(true);
   };
 
@@ -90,6 +92,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
     setFormRole(isDriver ? "driver" : (user.role || "cashier"));
     setFormPin(""); // don't pre-fill PIN
     setFormSlot(user.cashier_slot != null ? user.cashier_slot.toString() : "");
+    setFormPhone(user.phone || "");
     setShowForm(true);
   };
 
@@ -100,6 +103,12 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
       const isDriver = formRole === "driver";
       const backendRole = isDriver ? "cashier" : formRole;
 
+      // Drivers are not login users, but they must have a phone number.
+      if (isDriver && !formPhone.trim()) {
+        alert("رقم التليفون مطلوب للطيار");
+        return;
+      }
+
       if (editingUser) {
         await bridge.call("update_user", {
           user_id: editingUser.id,
@@ -108,6 +117,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
           role: backendRole,
           pin: formPin || undefined,
           cashier_slot: isDriver ? null : (formSlot !== "" ? parseInt(formSlot) : -1),
+          phone: formPhone.trim() || undefined,
         });
       } else {
         if (!formPin) {
@@ -120,6 +130,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
           role: backendRole,
           pin: formPin,
           cashier_slot: isDriver ? null : (formSlot !== "" ? parseInt(formSlot) : null),
+          phone: formPhone.trim() || undefined,
         });
       }
       setShowForm(false);
@@ -217,6 +228,11 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
               <span className="text-xs text-gray-400 font-mono block mt-0.5">
                 @{user.username}
               </span>
+              {user.phone && user.cashier_slot == null && (
+                <span className="text-xs text-gray-400 font-mono block mt-0.5" dir="ltr">
+                  {user.phone}
+                </span>
+              )}
               {user.cashier_slot != null && (
                 <span className="text-xs text-gray-500 block mt-0.5">
                   كاشير صندوق #{user.cashier_slot}
@@ -345,6 +361,21 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
                     onChange={(e) => setFormSlot(e.target.value)}
                     placeholder="1"
                     className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white focus:outline-none focus:border-brand-red text-center font-mono"
+                  />
+                </div>
+              )}
+              {formRole === "driver" && (
+                <div>
+                  <label className="text-gray-400 text-xs block mb-1">رقم التليفون *</label>
+                  <input
+                    type="tel"
+                    required
+                    inputMode="tel"
+                    value={formPhone}
+                    onChange={(e) => setFormPhone(e.target.value)}
+                    placeholder="01xxxxxxxxx"
+                    aria-label="رقم تليفون الطيار"
+                    className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-brand-red text-center font-mono"
                   />
                 </div>
               )}

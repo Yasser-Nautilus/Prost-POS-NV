@@ -332,11 +332,14 @@ class OrderService:
         added_items: list[OrderItem],
         removed_items: list[OrderItem],
         manager_pin: str | None = None,
+        reason: str | None = None,
     ) -> Order:
         """Edit a saved order — add or remove items.
 
         Adding items: free.
-        Removing items: requires manager PIN.
+        Removing items: requires manager PIN and (when called from the UI)
+        a reason; the approving manager and the reason are written to the
+        audit log for every removed item.
 
         Returns:
             Updated order.
@@ -365,6 +368,7 @@ class OrderService:
             if not manager_pin:
                 raise PermissionError("يجب إدخال PIN المدير لحذف عنصر")
             manager = self._verify_manager_pin(manager_pin)
+            reason_text = (reason or "").strip()
             # B-03: Audit each removal through AuditService (correct path)
             for item in removed_items:
                 self._audit_svc.log_from_user(
@@ -379,6 +383,9 @@ class OrderService:
                         "product_name": item.product_name,
                         "quantity": item.quantity,
                         "unit_price": item.unit_price,
+                        "reason": reason_text,
+                        "approved_by_id": manager.id,
+                        "approved_by_name": manager.display_name or manager.username,
                     },
                 )
 
@@ -567,6 +574,9 @@ class OrderService:
         # Block cancellation of delivery in transit
         if order.status == OrderStatus.OUT_FOR_DELIVERY:
             raise ValueError("الطلب خارج للتوصيل - لا يمكن إلغاؤه")
+
+        if not (reason or "").strip():
+            raise ValueError("يجب إدخال سبب الإلغاء")
 
         manager = self._verify_manager_pin(manager_pin)
 

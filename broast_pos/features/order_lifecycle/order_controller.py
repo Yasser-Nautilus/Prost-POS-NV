@@ -36,6 +36,10 @@ from broast_pos.infrastructure.printing.print_triggers import PrintTriggers
 
 logger = logging.getLogger(__name__)
 
+# Stable messages the bridge maps to machine-readable codes for the UI.
+MANAGER_PIN_REQUIRED_MSG = "يجب إدخال PIN المدير لحذف عنصر"
+REMOVAL_REASON_REQUIRED_MSG = "يجب إدخال سبب الحذف"
+
 
 @dataclass
 class ConfirmResult:
@@ -609,7 +613,9 @@ class OrderController:
             self._notify_order_changed()
         return order
 
-    def save_amendment(self, manager_pin: str | None = None) -> tuple[bool, str]:
+    def save_amendment(
+        self, manager_pin: str | None = None, reason: str | None = None
+    ) -> tuple[bool, str]:
         """Save amendments to an existing order and print amendment ticket.
 
         Uses the AmendmentTracker to detect added/removed items.
@@ -658,6 +664,14 @@ class OrderController:
                     notes=notes,
                 ))
 
+        if removed_items:
+            # Removing anything from a saved order needs a manager PIN and a
+            # reason, so reports can show who removed what and why.
+            if not manager_pin:
+                return False, MANAGER_PIN_REQUIRED_MSG, True
+            if not (reason or "").strip():
+                return False, REMOVAL_REASON_REQUIRED_MSG, True
+
         from contextlib import nullcontext
         drafts = getattr(self, "_drafts", None)
         try:
@@ -672,6 +686,7 @@ class OrderController:
                     added_items,
                     removed_items,
                     manager_pin,
+                    reason,
                 )
         except PermissionError as exc:
             return False, str(exc), True

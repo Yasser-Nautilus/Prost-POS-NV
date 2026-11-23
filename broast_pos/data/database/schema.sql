@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS users (
     pin_salt      TEXT,                       -- per-user random salt (NULL = legacy unsalted hash)
     role          TEXT    NOT NULL CHECK (role IN ('cashier', 'manager', 'admin')),
     cashier_slot  INTEGER CHECK (cashier_slot IN (1, 2) OR cashier_slot IS NULL),  -- NULL for drivers
+    phone         TEXT,                       -- required for drivers (delivery staff)
     is_active     INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
     created_at    TEXT    NOT NULL DEFAULT (datetime('now', 'localtime'))
 );

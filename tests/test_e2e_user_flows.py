@@ -233,6 +233,7 @@ class TestFullUserSimulation:
             "role": "cashier",  # Role cashier with slot None acts as driver
             "pin": "3333",
             "cashier_slot": None,
+            "phone": "01012345678",
         })
         assert res["success"] is True
         driver_id = res["data"]["id"]

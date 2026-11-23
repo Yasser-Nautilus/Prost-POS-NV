@@ -133,6 +133,19 @@ class PrintTriggers:
         )
         return self._pm.print_driver_settlement_job(settlement, cashier_slot)
 
+    def on_driver_day_sheet(
+        self,
+        sheet: dict[str, Any],
+        cashier_slot: int = 1,
+    ) -> bool:
+        """Print the driver's end-of-day settlement sheet (orders per fee)."""
+        logger.info(
+            "Print trigger: driver day sheet (%s) → slot %d",
+            sheet.get("driver_name"),
+            cashier_slot,
+        )
+        return self._pm.print_driver_day_sheet_job(sheet, cashier_slot)
+
     def on_end_of_day_drivers(
         self,
         summary: dict[str, Any],

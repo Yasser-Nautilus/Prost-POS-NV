@@ -49,6 +49,10 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
   const [successData, setSuccessData] = useState<any | null>(null);
   const [notes, setNotes] = useState("");
   const [expandedTrip, setExpandedTrip] = useState<number | null>(null);
+  // End-of-day settlement (count of orders per delivery fee) + printable sheet
+  const [dayBusy, setDayBusy] = useState(false);
+  const [dayMessage, setDayMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [confirmDay, setConfirmDay] = useState(false);
 
   const loadDrivers = useCallback(async () => {
     setLoading(true);
@@ -124,6 +128,50 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
       setError(e.message || "فشل في تسجيل التسوية");
     } finally {
       setLoading(false);
+    }
+  };
+
+  /** End-of-day: settle all of the driver's trips, book his fees as an
+   *  expense and print the sheet (orders counted per delivery fee). */
+  const handleSettleDay = async () => {
+    if (!selectedDriver) return;
+    setDayBusy(true);
+    setDayMessage(null);
+    try {
+      await bridge.call("settle_driver", { driver_id: selectedDriver.id });
+      let printed = true;
+      try {
+        const res = await bridge.call<{ printed: boolean }>("print_driver_day_sheet", { driver_id: selectedDriver.id });
+        printed = res?.printed !== false;
+      } catch { printed = false; }
+      setDayMessage({
+        kind: "ok",
+        text: printed
+          ? "تمت تسوية آخر اليوم وتسجيل رسوم التوصيل في المصاريف وطباعة الشيت"
+          : "تمت التسوية وتسجيل المصروف، لكن تعذرت طباعة الشيت (استخدم زر الطباعة)",
+      });
+      setConfirmDay(false);
+      await handleBackToTrips();
+    } catch (e: any) {
+      setDayMessage({ kind: "error", text: e.message || "فشل تسوية آخر اليوم" });
+      setConfirmDay(false);
+    } finally {
+      setDayBusy(false);
+    }
+  };
+
+  const handlePrintDaySheet = async () => {
+    if (!selectedDriver) return;
+    setDayBusy(true);
+    try {
+      const res = await bridge.call<{ printed: boolean }>("print_driver_day_sheet", { driver_id: selectedDriver.id });
+      setDayMessage(res?.printed === false
+        ? { kind: "error", text: "تعذرت طباعة الشيت، تأكد من الطابعة" }
+        : { kind: "ok", text: "تمت طباعة الشيت" });
+    } catch (e: any) {
+      setDayMessage({ kind: "error", text: e.message || "فشلت الطباعة" });
+    } finally {
+      setDayBusy(false);
     }
   };
 
@@ -528,6 +576,69 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                     <span className="text-2xl font-black text-brand-red font-mono">
                       {fmtEGP(totalDriverFees)}
                     </span>
+                  </div>
+                );
+              })()}
+
+              {/* End-of-day settlement: orders counted per delivery fee */}
+              {allTripsPreview?.trips?.length > 0 && (() => {
+                const counts: Record<string, number> = {};
+                for (const t of allTripsPreview.trips) {
+                  for (const o of t.orders || []) {
+                    const k = (o.delivery_fee || 0).toFixed(2);
+                    counts[k] = (counts[k] || 0) + 1;
+                  }
+                }
+                const rows = Object.entries(counts)
+                  .map(([fee, n]) => ({ fee: parseFloat(fee), n }))
+                  .sort((a, b) => b.fee - a.fee);
+                const total = rows.reduce((s, r) => s + r.fee * r.n, 0);
+                return (
+                  <div className="mt-4 rounded-2xl border border-brand-border bg-brand-card/40 p-5 space-y-4" aria-label="تسوية آخر اليوم">
+                    <h3 className="text-white font-bold flex items-center gap-2">
+                      <FileText size={16} className="text-brand-red" />
+                      تسوية آخر اليوم — عدد الأوردرات حسب رسم التوصيل
+                    </h3>
+                    <div className="grid grid-cols-3 gap-2 text-xs text-gray-400 px-2">
+                      <span>رسم التوصيل</span><span className="text-center">عدد الأوردرات</span><span className="text-left">الإجمالي</span>
+                    </div>
+                    {rows.map((r) => (
+                      <div key={r.fee} className="grid grid-cols-3 gap-2 items-center bg-brand-surface/60 rounded-xl px-3 py-2 text-sm">
+                        <span className="text-white font-bold">{fmtEGP(r.fee)}</span>
+                        <span className="text-center text-amber-300 font-black">{r.n}</span>
+                        <span className="text-left text-white font-mono">{fmtEGP(r.fee * r.n)}</span>
+                      </div>
+                    ))}
+                    <div className="flex justify-between items-center border-t border-brand-border pt-3">
+                      <span className="text-gray-300 font-bold">إجمالي رسوم السائق</span>
+                      <span className="text-brand-red font-black text-xl font-mono">{fmtEGP(total)}</span>
+                    </div>
+                    {dayMessage && (
+                      <div role="status" className={`rounded-xl px-3 py-2 text-sm ${dayMessage.kind === "ok" ? "bg-green-900/20 text-green-300 border border-green-700/30" : "bg-red-950/30 text-red-300 border border-red-900/40"}`}>
+                        {dayMessage.text}
+                      </div>
+                    )}
+                    {confirmDay ? (
+                      <div className="flex gap-2">
+                        <button onClick={handleSettleDay} disabled={dayBusy}
+                          className="flex-1 py-3 bg-brand-red text-brand-dark font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2">
+                          {dayBusy ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                          تأكيد: تسجيل {fmtEGP(total)} مصروف رسوم توصيل
+                        </button>
+                        <button onClick={() => setConfirmDay(false)} className="px-5 py-3 bg-brand-card border border-brand-border text-gray-300 font-bold rounded-xl">تراجع</button>
+                      </div>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button onClick={() => setConfirmDay(true)} disabled={dayBusy}
+                          className="flex-1 py-3 bg-brand-red text-brand-dark font-bold rounded-xl disabled:opacity-50">
+                          تسوية آخر اليوم
+                        </button>
+                        <button onClick={handlePrintDaySheet} disabled={dayBusy}
+                          className="px-5 py-3 bg-brand-card border border-brand-border text-white font-bold rounded-xl hover:border-brand-red/40 flex items-center gap-2 disabled:opacity-50">
+                          <FileText size={16} /> طباعة الشيت
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })()}

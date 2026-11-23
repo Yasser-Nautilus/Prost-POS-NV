@@ -49,6 +49,7 @@ class User:
     cashier_slot: int | None = None  # 1 or 2, NULL for drivers
     is_active: bool = True
     created_at: str | None = None
+    phone: str | None = None  # required for drivers (cashier_slot is None)
 
     def is_manager_or_above(self) -> bool:
         """Check if user has manager-level privileges."""

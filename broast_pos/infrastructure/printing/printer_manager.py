@@ -32,6 +32,7 @@ from broast_pos.infrastructure.printing.receipt_templates import (
     print_amendment_ticket,
     print_customer_receipt,
     print_daily_sales_report,
+    print_driver_day_sheet,
     print_driver_settlement,
     print_driver_summary,
     print_kitchen_ticket,
@@ -270,6 +271,26 @@ class PrinterManager:
             return print_driver_settlement(printer, settlement)
         except Exception as exc:
             logger.error("Driver settlement print failed: %s", exc)
+            return False
+
+    def print_driver_day_sheet_job(
+        self,
+        sheet: dict[str, Any],
+        cashier_slot: int = 1,
+    ) -> bool:
+        """Print the driver's end-of-day settlement sheet → cashier printer."""
+        if PRINTER_SIMULATE:
+            return self._simulate_print("driver_day_sheet", sheet)
+
+        key = _SLOT_MAP.get(cashier_slot, CASHIER_1)
+        printer = self._printers.get(key)
+        if printer is None:
+            return False
+
+        try:
+            return print_driver_day_sheet(printer, sheet)
+        except Exception as exc:
+            logger.error("Driver day sheet print failed: %s", exc)
             return False
 
     def print_driver_summary_job(

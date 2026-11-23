@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Version tracking (bumped when a new migration is added)
 # ---------------------------------------------------------------------------
-LATEST_VERSION = 12
+LATEST_VERSION = 13
 
 # ---------------------------------------------------------------------------
 # Path to the schema file (sibling of this module)
@@ -422,6 +422,14 @@ def _migrate_v11_to_v12(db: DatabaseConnection) -> None:
         db.execute("UPDATE shifts SET business_date=date(substr(opened_at,1,10)) WHERE business_date IS NULL")
 
 
+def _migrate_v12_to_v13(db: DatabaseConnection) -> None:
+    """Add users.phone (drivers must have a phone number)."""
+    cols = {row["name"] for row in db.fetch_all("PRAGMA table_info(users)")}
+    if "phone" not in cols:
+        with db.transaction():
+            db.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — maps from_version → migration function
 # NOTE: Must be defined AFTER all migration functions are declared.
@@ -438,4 +446,5 @@ _MIGRATIONS: dict = {
     9: _migrate_v9_to_v10,
     10: _migrate_v10_to_v11,
     11: _migrate_v11_to_v12,
+    12: _migrate_v12_to_v13,
 }

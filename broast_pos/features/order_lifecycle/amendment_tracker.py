@@ -57,7 +57,7 @@ class AmendmentTracker:
         self._original_names = {}
         for item in items:
             key = (item.product_id, item.notes or "")
-            self._original[key] = item.quantity
+            self._original[key] = self._original.get(key, 0) + item.quantity
             self._original_names[key] = item.product_name
         logger.debug("Amendment snapshot taken: %d items", len(items))
 
@@ -81,7 +81,7 @@ class AmendmentTracker:
 
         for item in current_items:
             key = (item.product_id, item.notes or "")
-            current_map[key] = item.quantity
+            current_map[key] = current_map.get(key, 0) + item.quantity
             current_names[key] = item.product_name
 
         # Check for additions and quantity increases

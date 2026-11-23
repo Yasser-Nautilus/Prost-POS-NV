@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { X, Calendar, Plus, Power, Loader2, Printer, CheckCircle2, Circle, ArrowLeftRight, ArrowRight } from "lucide-react";
 import { bridge, type CashierSession, type SessionStation } from "../bridge";
 import { PinDialog } from "./PinDialog";
+import { CloseSessionDialog } from "../views/SessionsView";
 
 interface ShiftDialogProps {
   isOpen: boolean;
@@ -34,6 +35,8 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
 
   // PIN gate for close shift (all roles must provide manager PIN per backend)
   const [showPinGate, setShowPinGate] = useState(false);
+  // Cashier counts and closes their own drawer (blind count)
+  const [showCloseDrawer, setShowCloseDrawer] = useState(false);
 
   // Shift transfer (نقل وردية) — manager hands the shift to another cashier
   const [showTransferPin, setShowTransferPin] = useState(false);
@@ -369,8 +372,15 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                   </div>
 
                   {sessionLoaded && (cashSession ? (
-                    <div role="status" className="p-3 rounded-xl border border-brand-teal/40 text-brand-teal text-sm">
-                      درجك مفتوح — {cashSession.station} #{cashSession.id}
+                    <div role="status" className="p-3 rounded-xl border border-brand-teal/40 text-brand-teal text-sm flex items-center justify-between gap-3">
+                      <span>درجك مفتوح — {cashSession.station} #{cashSession.id}</span>
+                      <button
+                        onClick={() => setShowCloseDrawer(true)}
+                        className="py-1.5 px-3 bg-brand-card border border-red-900/40 text-red-300 hover:border-red-500/60 font-bold rounded-lg text-xs flex items-center gap-1.5 active:translate-y-0.5"
+                      >
+                        <Power size={14} />
+                        جرد وإغلاق الدرج
+                      </button>
                     </div>
                   ) : (
                     <div className="p-4 rounded-xl border border-yellow-600/40 space-y-3">
@@ -518,8 +528,8 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                       <Plus size={16} />
                       تسجيل مصروفات خارجة (نثريات)
                     </h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
+                    <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-3 items-end">
+                      <div className="min-w-0">
                         <label className="text-gray-400 text-xs block mb-1">المبلغ (ج.م)</label>
                         <input
                           type="number"
@@ -529,15 +539,15 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                           placeholder="0.00"
                           value={expAmount}
                           onChange={(e) => setExpAmount(e.target.value)}
-                          className="w-full bg-brand-card border border-brand-border/50 rounded-lg p-2 text-white focus:outline-none focus:border-brand-red text-center font-mono font-bold"
+                          className="w-full h-10 box-border bg-brand-card border border-brand-border/50 rounded-lg px-3 text-white focus:outline-none focus:border-brand-red text-center font-mono font-bold text-sm"
                         />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <label className="text-gray-400 text-xs block mb-1">البند</label>
                         <select
                           value={expCat}
                           onChange={(e) => setExpCat(e.target.value)}
-                          className="w-full bg-brand-card border border-brand-border/50 rounded-lg p-2 text-white focus:outline-none focus:border-brand-red"
+                          className="w-full h-10 box-border bg-brand-card border border-brand-border/50 rounded-lg px-3 text-white text-sm focus:outline-none focus:border-brand-red"
                         >
                           <option value="supplies">مستلزمات وخامات</option>
                           <option value="delivery_fees">رسوم توصيل</option>
@@ -552,7 +562,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                           placeholder="مثال: شراء كراتين كول سلو..."
                           value={expDesc}
                           onChange={(e) => setExpDesc(e.target.value)}
-                          className="w-full bg-brand-card border border-brand-border/50 rounded-lg p-2 text-white focus:outline-none focus:border-brand-red"
+                          className="w-full h-10 box-border bg-brand-card border border-brand-border/50 rounded-lg px-3 text-white text-sm focus:outline-none focus:border-brand-red"
                         />
                       </div>
                     </div>
@@ -592,6 +602,13 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
           </div>
         </div>
       </div>
+
+      <CloseSessionDialog
+        isOpen={showCloseDrawer}
+        session={cashSession}
+        onClose={() => setShowCloseDrawer(false)}
+        onSuccess={() => { onShiftStatusChange(); fetchShiftData(); }}
+      />
 
       {/* PIN gate for close shift — always requires manager PIN per backend */}
       <PinDialog

@@ -7,6 +7,7 @@ import {
 import { bridge } from "../bridge";
 import type { CashierSession, XReport, ZReport, SessionStation } from "../bridge";
 import { PinDialog } from "../components/PinDialog";
+import { ManagerApprovalDialog } from "../components/ManagerApprovalDialog";
 
 interface SessionsViewProps {
   currentUser: any;
@@ -152,26 +153,34 @@ const OpenSessionDialog: React.FC<{
 
 // ── Close Session Dialog ─────────────────────────────────────────────────────
 
-const CloseSessionDialog: React.FC<{
+export const CloseSessionDialog: React.FC<{
   isOpen: boolean;
   session: CashierSession | null;
   onClose: () => void;
   onSuccess: () => void;
 }> = ({ isOpen, session, onClose, onSuccess }) => {
+  // Blind count: the drawer's expected cash is never shown here. The backend
+  // compares the count with the ledger; only a large difference asks for a
+  // reason and a manager PIN (the cashier stays logged in).
   const [countStr, setCountStr] = useState("");
-  const [reason, setReason] = useState("");
-  const [showPin, setShowPin] = useState(false);
+  const [needsApproval, setNeedsApproval] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    if (isOpen) {
+      setCountStr("");
+      setNeedsApproval(false);
+      setError("");
+    }
+  }, [isOpen, session?.id]);
+
   if (!isOpen || !session) return null;
 
-  const expectedEgp = session.expected_cash_egp ?? session.opening_float_egp;
-  const counted = parseFloat(countStr) || 0;
-  const varianceEgp = counted - expectedEgp;
-  const needsApproval = Math.abs(varianceEgp) > 20;
+  const counted = parseFloat(countStr);
+  const validCount = Number.isFinite(counted) && counted >= 0;
 
-  const doClose = async (pin?: string) => {
+  const doClose = async (pin?: string, reason?: string): Promise<string | void> => {
     setLoading(true);
     setError("");
     try {
@@ -181,26 +190,25 @@ const CloseSessionDialog: React.FC<{
         variance_reason: reason || undefined,
         manager_pin: pin,
       });
+      setNeedsApproval(false);
       onSuccess();
       onClose();
     } catch (e: any) {
-      setError(e.message);
+      const msg: string = e.message || "";
+      if (!pin && msg.includes("موافقة المدير")) {
+        // Large variance: ask for reason + manager PIN.
+        setNeedsApproval(true);
+      } else if (pin) {
+        return msg;
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = () => {
-    if (needsApproval && !reason.trim()) {
-      setError("يجب كتابة سبب الفرق عندما يكون أكثر من 20 ج.م");
-      return;
-    }
-    if (needsApproval) {
-      setShowPin(true);
-    } else {
-      doClose();
-    }
-  };
+  const stationLabels: Record<string, string> = { ALL: "الكل", COUNTER: "كاونتر", DELIVERY: "توصيل" };
 
   return (
     <>
@@ -209,26 +217,24 @@ const CloseSessionDialog: React.FC<{
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-white flex items-center gap-2">
               <Lock size={20} className="text-red-400" />
-              إغلاق وردية — {session.station}
+              جرد وإغلاق الدرج — {stationLabels[session.station] || session.station} #{session.id}
             </h2>
-            <button onClick={onClose} className="text-gray-500 hover:text-white">
+            <button onClick={onClose} aria-label="إغلاق" className="text-gray-500 hover:text-white">
               <X size={20} />
             </button>
           </div>
 
-          {/* Expected */}
-          <div className="bg-brand-card rounded-xl p-4 border border-brand-border/30">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-400 text-xs">النقدية المتوقعة بالدرج</span>
-              <span className="text-brand-teal font-black text-xl">{expectedEgp.toFixed(2)} ج.م</span>
-            </div>
-          </div>
+          <p className="text-xs text-gray-400">
+            عدّ النقدية الموجودة فعلياً في الدرج وأدخل المبلغ. النظام يقارنه بالمتوقع.
+          </p>
 
-          {/* Count input */}
           <div className="space-y-2">
             <span className="text-xs text-gray-400 font-bold">العدّ الفعلي للنقدية (ج.م)</span>
             <input
               type="number"
+              min="0"
+              step="0.01"
+              aria-label="العد الفعلي للنقدية"
               value={countStr}
               onChange={(e) => setCountStr(e.target.value)}
               placeholder="أدخل المبلغ الفعلي"
@@ -237,57 +243,30 @@ const CloseSessionDialog: React.FC<{
             />
           </div>
 
-          {/* Variance indicator */}
-          {countStr && (
-            <div className={`rounded-xl p-3 border flex items-center gap-2 text-sm font-bold ${
-              Math.abs(varianceEgp) < 0.01
-                ? "bg-brand-teal/10 border-brand-teal/30 text-brand-teal"
-                : Math.abs(varianceEgp) <= 20
-                ? "bg-yellow-950/20 border-yellow-900/30 text-yellow-400"
-                : "bg-red-950/30 border-red-900/40 text-red-400"
-            }`}>
-              {Math.abs(varianceEgp) < 0.01 ? (
-                <><CheckCircle2 size={16} /> لا يوجد فرق</>
-              ) : (
-                <><AlertTriangle size={16} /> فرق: {varianceEgp > 0 ? "+" : ""}{varianceEgp.toFixed(2)} ج.م</>
-              )}
-            </div>
-          )}
-
-          {/* Reason (required for large variance) */}
-          {needsApproval && (
-            <div className="space-y-2">
-              <span className="text-xs text-red-400 font-bold">سبب الفرق (مطلوب للاعتماد)</span>
-              <textarea
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="اكتب سبب الفرق..."
-                className="w-full bg-brand-card border border-red-900/30 rounded-xl px-4 py-2 text-white text-sm outline-none resize-none h-16 focus:border-red-400/50"
-              />
-            </div>
-          )}
-
           {error && (
-            <div className="bg-red-950/30 border border-red-900/40 rounded-xl p-3 text-red-400 text-xs flex items-center gap-2">
+            <div role="alert" className="bg-red-950/30 border border-red-900/40 rounded-xl p-3 text-red-400 text-xs flex items-center gap-2">
               <AlertTriangle size={14} /> {error}
             </div>
           )}
 
           <button
-            onClick={handleSubmit}
-            disabled={loading || !countStr}
+            onClick={() => doClose()}
+            disabled={loading || !validCount}
             className="w-full py-3 bg-gradient-to-l from-red-600 to-red-700 text-white font-bold rounded-xl hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {loading ? <Loader2 size={18} className="animate-spin" /> : <Power size={18} />}
-            إغلاق الوردية
+            إغلاق الدرج
           </button>
         </div>
       </div>
-      <PinDialog
-        isOpen={showPin}
-        onClose={() => setShowPin(false)}
-        onSuccess={(_managerUser, rawPin) => { setShowPin(false); doClose(rawPin); }}
-        title="اعتماد المدير"
+      <ManagerApprovalDialog
+        isOpen={needsApproval}
+        title="فرق كبير في الجرد"
+        subtitle="الفرق أكبر من الحد المسموح، يلزم سبب وموافقة المدير"
+        reasonLabel="سبب الفرق (مطلوب)"
+        confirmLabel="اعتماد وإغلاق الدرج"
+        onClose={() => setNeedsApproval(false)}
+        onConfirm={(pin, reason) => doClose(pin, reason)}
       />
     </>
   );
@@ -889,7 +868,8 @@ const SessionCard: React.FC<{
   session: CashierSession;
   onClose: (s: CashierSession) => void;
   onHandover: (s: CashierSession) => void;
-}> = ({ session, onClose, onHandover }) => {
+  isManagerOrAbove: boolean;
+}> = ({ session, onClose, onHandover, isManagerOrAbove }) => {
   const stationColors: Record<string, string> = {
     ALL: "from-brand-red/20 to-yellow-900/20 border-brand-red/30",
     COUNTER: "from-blue-900/20 to-indigo-900/20 border-blue-800/30",
@@ -941,13 +921,13 @@ const SessionCard: React.FC<{
 
       {/* Actions */}
       <div className="flex gap-2">
-        <button
+        {isManagerOrAbove && <button
           onClick={() => onHandover(session)}
           className="flex-1 py-2.5 bg-blue-950/30 border border-blue-900/30 text-blue-400 font-bold rounded-xl text-sm hover:bg-blue-950/50 hover:border-blue-800/40 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
         >
           <ArrowLeftRight size={14} />
           تسليم
-        </button>
+        </button>}
         <button
           onClick={() => onClose(session)}
           className="flex-1 py-2.5 bg-red-950/30 border border-red-900/30 text-red-400 font-bold rounded-xl text-sm hover:bg-red-950/50 hover:border-red-800/40 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
@@ -1094,7 +1074,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ currentUser }) => {
         {sessions.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {sessions.map((s) => (
-              <SessionCard key={s.id} session={s} onClose={handleCloseSession} onHandover={handleHandover} />
+              <SessionCard key={s.id} session={s} onClose={handleCloseSession} onHandover={handleHandover} isManagerOrAbove={isManagerOrAbove} />
             ))}
           </div>
         ) : (

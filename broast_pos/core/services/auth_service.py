@@ -363,8 +363,14 @@ class AuthService:
         pin: str,
         cashier_slot: int | None = None,
         avatar_path: str | None = None,
+        phone: str | None = None,
+        require_driver_phone: bool = False,
     ) -> User:
-        """Create a new user. Validates username and unique PIN."""
+        """Create a new user. Validates username and unique PIN.
+
+        With ``require_driver_phone`` (set by the user-management screen),
+        drivers (cashier role with no cashier_slot) must have a phone number.
+        """
         username = username.strip()
         display_name = display_name.strip()
         if not username:
@@ -382,6 +388,10 @@ class AuthService:
         if self._pin_in_use(pin):
             raise ValueError("رمز PIN مستخدم بالفعل لمستخدم آخر")
 
+        phone = self._normalise_phone(phone)
+        if require_driver_phone and role == UserRole.CASHIER and cashier_slot is None and not phone:
+            raise ValueError("رقم التليفون مطلوب للطيار")
+
         salt = self._make_salt()
         pin_hash = self._hash_secure(pin, salt)
 
@@ -395,6 +405,7 @@ class AuthService:
             cashier_slot=cashier_slot,
             avatar_path=avatar_path,
             is_active=True,
+            phone=phone,
         )
         from contextlib import nullcontext
         db = getattr(self._users, "_db", None)
@@ -427,6 +438,8 @@ class AuthService:
         cashier_slot: int | None = -1,  # use -1 as sentinel
         avatar_path: str | None = None,
         is_active: bool | None = None,
+        phone: str | None = None,
+        require_driver_phone: bool = False,
     ) -> User:
         """Update an existing user. Validates unique PIN if changed."""
         user = self._users.get_by_id(user_id)
@@ -494,6 +507,17 @@ class AuthService:
 
         if is_active is not None:
             user.is_active = is_active
+
+        if phone is not None:
+            user.phone = self._normalise_phone(phone)
+        if (
+            require_driver_phone
+            and user.role == UserRole.CASHIER
+            and user.cashier_slot is None
+            and user.is_active
+            and not user.phone
+        ):
+            raise ValueError("رقم التليفون مطلوب للطيار")
 
         saved = self._users.save(user)
 
@@ -625,6 +649,19 @@ class AuthService:
             # Repo without a usable get_all_active (e.g. a unit-test mock)
             return None
         return None
+
+    @staticmethod
+    def _normalise_phone(phone: str | None) -> str | None:
+        """Strip spaces/dashes; require 10-15 digits (optional leading +)."""
+        if phone is None:
+            return None
+        cleaned = "".join(ch for ch in phone.strip() if ch not in " -()")
+        if not cleaned:
+            return None
+        digits = cleaned[1:] if cleaned.startswith("+") else cleaned
+        if not digits.isdigit() or not 10 <= len(digits) <= 15:
+            raise ValueError("رقم التليفون غير صحيح")
+        return cleaned
 
     def _pin_in_use(self, raw_pin: str, exclude_user_id: int | None = None) -> bool:
         """True if *raw_pin* already authenticates some other active user."""

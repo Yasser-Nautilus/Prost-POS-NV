@@ -9,6 +9,7 @@ import { DiscountDialog } from "../components/DiscountDialog";
 import { PaymentDialog } from "../components/PaymentDialog";
 import { CustomerLookup } from "../components/CustomerLookup";
 import { PinDialog } from "../components/PinDialog";
+import { ManagerApprovalDialog } from "../components/ManagerApprovalDialog";
 import { TableGrid } from "../components/TableGrid";
 
 interface POSViewProps {
@@ -50,6 +51,12 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
   const [isParkedPanelOpen, setIsParkedPanelOpen] = useState(false);
   const [showPinGate, setShowPinGate] = useState(false);
   const [pendingDeleteIdx, setPendingDeleteIdx] = useState<number | null>(null);
+  // Manager approval (PIN + reason) for removing items from a SAVED order.
+  // Kept for the whole amendment so the cashier is asked once, then passed
+  // to save_amendment. The cashier stays logged in.
+  const [showAmendApproval, setShowAmendApproval] = useState(false);
+  const amendApprovalRef = React.useRef<{ pin: string; reason: string } | null>(null);
+  const pendingAmendActionRef = React.useRef<((pin: string, reason: string) => Promise<string | void>) | null>(null);
 
   // CHANGED: per-item comment editor — which line is being edited + its draft text.
   const [commentIdx, setCommentIdx] = useState<number | null>(null);
@@ -75,6 +82,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
       } else {
         // Fresh/new order — clear amending flag
         setIsAmending(false);
+        amendApprovalRef.current = null;
       }
     };
     const handleParkedChange = (parkedList: any[]) => {
@@ -249,7 +257,32 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
     }
   };
 
+  // Ask a manager (PIN + reason) before the next step, without logging the
+  // cashier out. The approval is kept for the rest of this amendment.
+  const requestAmendApproval = (action: (pin: string, reason: string) => Promise<string | void>) => {
+    pendingAmendActionRef.current = action;
+    setShowAmendApproval(true);
+  };
+
   const handleDeleteItemClick = (idx: number) => {
+    // Saved order: removal always needs a manager PIN + a reason (who/why is
+    // recorded), even when the logged-in user is a manager.
+    if (currentOrder?.id) {
+      const existing = amendApprovalRef.current;
+      if (existing) {
+        performDeleteItem(idx, existing.pin);
+      } else {
+        requestAmendApproval(async (pin, reason) => {
+          try {
+            await bridge.call("remove_item", { index: idx, manager_pin: pin });
+          } catch (e: any) {
+            return e.message as string;
+          }
+          amendApprovalRef.current = { pin, reason };
+        });
+      }
+      return;
+    }
     // Per progress.md: cashiers need manager PIN to remove items; managers/admin can delete freely
     if (currentUser?.role === "manager" || currentUser?.role === "admin") {
       performDeleteItem(idx);
@@ -259,11 +292,11 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
     }
   };
 
-  const performDeleteItem = async (idx: number) => {
+  const performDeleteItem = async (idx: number, managerPin?: string) => {
     const targetIdx = idx !== undefined ? idx : pendingDeleteIdx;
     if (targetIdx === null) return;
     try {
-      await bridge.call("remove_item", { index: targetIdx });
+      await bridge.call("remove_item", { index: targetIdx, ...(managerPin ? { manager_pin: managerPin } : {}) });
       setPendingDeleteIdx(null);
     } catch (e: any) {
       alert(e.message);
@@ -400,8 +433,8 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
     // that is still open). Payment stays a separate step, so this behaves the
     // same for every order type.
     if (isAmending) {
-      try {
-        const amendRes = await bridge.call<{ print_failed?: boolean }>("save_amendment");
+      const finishAmendment = async (amendRes: { print_failed?: boolean } | undefined) => {
+        amendApprovalRef.current = null;
         setIsAmending(false);
         setSelectedTable(null);
         // CHANGED: start a fresh empty order instead of re-fetching the just-saved
@@ -416,8 +449,31 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
         if (amendRes?.print_failed) {
           alert("تعذّرت طباعة تذكرة التعديل — يرجى إبلاغ المدير");
         }
+      };
+      try {
+        const approval = amendApprovalRef.current;
+        const amendRes = await bridge.call<{ print_failed?: boolean }>(
+          "save_amendment",
+          approval ? { manager_pin: approval.pin, reason: approval.reason } : {}
+        );
+        await finishAmendment(amendRes);
       } catch (e: any) {
-        alert("فشل حفظ التعديلات: " + e.message);
+        if (e?.code === "manager_pin_required" || e?.code === "removal_reason_required") {
+          // Items were removed or reduced on a saved order: a manager must
+          // approve with their PIN and give a reason. Cashier stays logged in.
+          requestAmendApproval(async (pin, reason) => {
+            try {
+              const amendRes = await bridge.call<{ print_failed?: boolean }>(
+                "save_amendment", { manager_pin: pin, reason }
+              );
+              await finishAmendment(amendRes);
+            } catch (err: any) {
+              return err.message as string;
+            }
+          });
+        } else {
+          alert("فشل حفظ التعديلات: " + e.message);
+        }
       }
       return;
     }
@@ -551,7 +607,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
             <div className="py-1.5 px-3 bg-yellow-900/20 border border-yellow-700/40 rounded-lg text-xs text-yellow-400 font-bold flex items-center justify-between">
               <span>⚠️ تعديل طلب موجود</span>
               <button
-                onClick={() => { setIsAmending(false); bridge.call("new_order", { order_type: "dine_in" }); }}
+                onClick={() => { amendApprovalRef.current = null; setIsAmending(false); bridge.call("new_order", { order_type: "dine_in" }); }}
                 className="text-[10px] text-gray-400 hover:text-white"
               >
                 إلغاء التعديل
@@ -1035,6 +1091,23 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
           }
         }}
         title="موافقة المدير مطلوبة لحذف عنصر من السلة"
+      />
+
+      <ManagerApprovalDialog
+        isOpen={showAmendApproval}
+        title="موافقة المدير على حذف / تقليل صنف"
+        subtitle={currentOrder?.invoice_no ? `الطلب #${currentOrder.invoice_no}` : undefined}
+        reasonLabel="سبب الحذف (مطلوب)"
+        confirmLabel="تأكيد الحذف"
+        onClose={() => { setShowAmendApproval(false); pendingAmendActionRef.current = null; }}
+        onConfirm={async (pin, reason) => {
+          const action = pendingAmendActionRef.current;
+          if (!action) return;
+          const err = await action(pin, reason);
+          if (err) return err;
+          pendingAmendActionRef.current = null;
+          setShowAmendApproval(false);
+        }}
       />
 
       {/* Parked Orders Slide-Out Panel */}

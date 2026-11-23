@@ -568,6 +568,44 @@ def print_driver_summary(
 
 
 # ===========================================================================
+# 11. Driver end-of-day settlement sheet (orders counted by delivery fee)
+# ===========================================================================
+
+def print_driver_day_sheet(
+    printer: EscPosPrinter,
+    sheet: dict[str, Any],
+) -> bool:
+    """Print the driver's end-of-day settlement: order count per delivery fee."""
+    ok = printer.print_double_line(LINE_WIDTH)
+    ok &= printer.print_text("تسوية آخر اليوم — Driver Day Settlement", align="center")
+    ok &= printer.print_line("-", LINE_WIDTH)
+    ok &= printer.print_text(f"السائق: {sheet.get('driver_name', '')}")
+    if sheet.get("driver_phone"):
+        ok &= printer.print_text(f"التليفون: {sheet.get('driver_phone')}")
+    ok &= printer.print_text(f"التاريخ: {sheet.get('settlement_date', '')}")
+    ok &= printer.print_text(
+        f"الرحلات: {sheet.get('trip_count', 0)}   الأوردرات: {sheet.get('order_count', 0)}"
+    )
+    ok &= printer.print_line("-", LINE_WIDTH)
+    ok &= printer.print_text("رسم التوصيل | عدد الأوردرات | الإجمالي")
+    for row in sheet.get("fee_breakdown", []):
+        ok &= printer.print_text(
+            f"{_fmt_money(row.get('fee', 0)):>10} | {row.get('order_count', 0):>10} | "
+            f"{_fmt_money(row.get('subtotal', 0))}"
+        )
+    ok &= printer.print_line("-", LINE_WIDTH)
+    ok &= printer.print_text(
+        f"إجمالي رسوم التوصيل:  {_fmt_money(sheet.get('total_delivery_fees', 0))}",
+        bold=True,
+    )
+    ok &= printer.print_text("توقيع السائق: ______________")
+    ok &= printer.print_double_line(LINE_WIDTH)
+    ok &= printer.print_text(CUT_LINE, align="center")
+    ok &= printer.cut()
+    return ok
+
+
+# ===========================================================================
 # Template dispatcher
 # ===========================================================================
 
