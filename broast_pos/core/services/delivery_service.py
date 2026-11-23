@@ -20,7 +20,7 @@ from broast_pos.core.models.delivery import (
     DriverAttendance,
     DriverStatus,
 )
-from broast_pos.core.models.order import OrderStatus, OrderType, PaymentMethod
+from broast_pos.core.models.order import OrderStatus, OrderType
 from broast_pos.core.models.user import User
 from broast_pos.data.repositories.audit_repository import AuditRepository
 from broast_pos.data.repositories.delivery_repository import DeliveryRepository
@@ -472,8 +472,7 @@ class DeliveryService:
             order = self._orders.get_by_id(oid)
             if not order or order.status == OrderStatus.CANCELLED:
                 continue
-            if order.payment_method == PaymentMethod.CASH:
-                cash_total += order.total
+            cash_total += order.cash_due_on_delivery
             fees_total += order.delivery_fee or 0.0
 
         # C3: Atomic execution - if remit_trip_cash or status change fails, do not mark settled
@@ -565,8 +564,7 @@ class DeliveryService:
             total = order.total or 0.0
             total_order += total
             total_fees += fee
-            is_cash = order.payment_method == PaymentMethod.CASH
-            collected = total if is_cash else 0.0
+            collected = order.cash_due_on_delivery
             cash_collected += collected
             orders_data.append({
                 "order_id": oid,
@@ -580,6 +578,10 @@ class DeliveryService:
                 "payment_method": order.payment_method.value if order.payment_method else "cash",
                 "collected": collected,
             })
+
+        # Paid flags change at settlement; preserve the actual handover total.
+        if trip.is_settled and trip.cash_collected is not None:
+            cash_collected = trip.cash_collected
 
         return {
             "trip_id": trip.id,

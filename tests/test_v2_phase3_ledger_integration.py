@@ -282,11 +282,11 @@ class TestDriverRemittanceLedgerEntry:
             "INSERT INTO delivery_trips (id, driver_id, driver_name, is_settled, returned_at, created_at) "
             "VALUES (10, 3, 'Driver', 0, datetime('now','localtime'), datetime('now','localtime'))"
         )
-        # Add a cash order on that trip
+        # Unpaid COD order: prepaid cash belongs to the till, not the driver.
         db.execute(
             "INSERT INTO orders (id, invoice_no, shift_id, order_type, status, subtotal, total, "
             "payment_method, is_paid, created_by_id, created_by_name, cashier_slot) "
-            "VALUES (200, 1, 1, 'delivery', 'delivered', 150.0, 150.0, 'cash', 1, 1, 'Manager', 1)"
+            "VALUES (200, 1, 1, 'delivery', 'delivered', 150.0, 150.0, 'cash', 0, 1, 'Manager', 1)"
         )
         db.execute(
             "INSERT INTO delivery_trip_orders (trip_id, order_id) VALUES (10, 200)"

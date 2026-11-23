@@ -35,7 +35,8 @@ class DeliveryTrip:
     A single delivery trip carrying one or more orders.
 
     Financial fields are calculated and stored as snapshots at settlement time:
-    - `cash_collected`: sum of order.total WHERE payment_method = 'cash'
+    - `cash_collected`: cash handed over for orders unpaid before settlement;
+      excludes cash prepaid at the counter
     - `total_delivery_fees`: sum of delivery_fee for ALL orders on this trip
     """
     id: int | None = None
