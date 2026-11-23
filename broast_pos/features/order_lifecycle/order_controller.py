@@ -486,7 +486,8 @@ class OrderController:
         try:
             method = PaymentMethod(payment_method)
             # Resolve the authenticated cashier for the ledger entry.
-            actor = self._auth_svc.get_current_user()
+            auth_svc = getattr(self, "_auth_svc", None)
+            actor = auth_svc.get_current_user() if auth_svc else None
             actor_id = actor.id if actor else None
             actor_name = (actor.display_name or actor.username or "نظام") if actor else "نظام"
             completed = self._order_svc.complete_order(

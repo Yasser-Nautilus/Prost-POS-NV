@@ -324,8 +324,17 @@ class FinancialService:
     # ------------------------------------------------------------------
 
     def get_shift_summary(self, shift_id: int) -> ShiftSummary:
-        """Compute live shift summary (not stored — always fresh)."""
-        return self._financial.get_shift_summary(shift_id)
+        """Compute live shift summary (not stored — always fresh).
+
+        When the cash ledger is available (v2 mode), expected_cash is
+        derived from SUM(cash_ledger.amount_pt WHERE day_id = shift_id)
+        instead of the orders-based approximation (ADR-1).
+        """
+        summary = self._financial.get_shift_summary(shift_id)
+        if self._ledger is not None:
+            ledger_balance_pt = self._ledger.get_day_balance_pt(shift_id)
+            summary.ledger_expected_cash = round(ledger_balance_pt / 100, 2)
+        return summary
 
     def get_shift_history(self) -> list[Shift]:
         """Past closed shifts, most recent first."""

@@ -4,9 +4,12 @@ Financial models — Shift, ShiftTransfer, CashTransaction, ShiftSummary.
 Shift is the primary accounting period. All orders and expenses belong to a shift.
 ShiftSummary is computed (not stored) — it aggregates live data for display.
 
-Expected cash formula (corrected in batch 1.2 — FIN-001):
-    expected_cash = cash_sales − total_expenses − all_pending
-    (pending = money not yet physically in the drawer)
+Expected cash formula (H04 corrected):
+    When cash_ledger is available (v2 / ADR-1):
+        expected_cash = SUM(cash_ledger.amount_pt WHERE day_id = shift_id) / 100
+    Fallback (legacy):
+        expected_cash = cash_sales − total_expenses
+    Pending amounts are unpaid receivables shown separately — not deducted.
 
     total_sales is kept separately as a “total revenue” figure for
     reporting; it must NOT be used for drawer reconciliation because it
@@ -108,6 +111,10 @@ class ShiftSummary:
     pending_kitchen: float = 0.0        # orders still being prepared
     order_breakdown: dict[str, dict] = field(default_factory=dict)
     # e.g. {"dine_in": {"count": 15, "revenue": 2500.0}, ...}
+    ledger_expected_cash: float | None = field(default=None, repr=False)
+    # Set by FinancialService when the cash_ledger is available (ADR-1).
+    # When set, expected_cash returns this value instead of the orders-based
+    # approximation (cash_sales − total_expenses).
 
     @property
     def total_pending(self) -> float:
@@ -121,14 +128,20 @@ class ShiftSummary:
     def expected_cash(self) -> float:
         """Cash that should be in the drawer right now.
 
-        Formula (B-01 corrected):
+        When ledger_expected_cash is set (v2 mode / ADR-1), that value is
+        authoritative — it comes from SUM(cash_ledger.amount_pt) which
+        tracks every real cash movement (sales, expenses, driver remittance,
+        opening float, handover, etc.).
+
+        Fallback (legacy, no ledger wired):
             cash_sales (is_paid=1, CASH only)
           − total_expenses
-          − pending_delivery (CASH unsettled trips only — ONLINE excluded)
-          − pending_dinein   (unpaid cash dine-in)
-          − pending_kitchen  (new/preparing/ready cash orders)
+
+        Pending amounts (pending_delivery, pending_dinein, pending_kitchen) are
+        UNPAID RECEIVABLES — they were never in the drawer to begin with
+        (all have is_paid=0 / is_settled=0).  Deducting them from cash_sales
+        understates the drawer balance.  Show them separately via total_pending.
         """
-        return round(
-            self.cash_sales - self.total_expenses - self.total_pending,
-            2,
-        )
+        if self.ledger_expected_cash is not None:
+            return self.ledger_expected_cash
+        return round(self.cash_sales - self.total_expenses, 2)
