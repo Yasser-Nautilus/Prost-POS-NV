@@ -345,9 +345,6 @@ class POSBridge(QObject):
                 return json.dumps({"success": False, "error": "ليست لديك صلاحيات مدير"})
 
             elif action == "get_users_management":
-                # Admin only: the list exposes every user incl. driver phones.
-                if not self._current_user or self._current_user.role.value != "admin":
-                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير النظام"})
                 users = self._auth.get_users_for_management()
                 return json.dumps({"success": True, "data": [self._user_to_dict(u) for u in users]})
 
@@ -816,7 +813,7 @@ class POSBridge(QObject):
             elif action in ("new_order", "get_current_order", "add_item", "change_item_quantity",
                             "remove_item", "set_item_note", "set_table", "change_table", "set_customer_info",
                             "park_order", "resume_parked_order", "get_parked_orders",
-                            "confirm_order", "complete_payment", "get_table_state",
+                            "confirm_order", "complete_payment", "complete_payment_split", "get_table_state",
                             "get_active_orders", "get_active_by_type", "get_order_history", "cancel_order",
                             "apply_discount", "reprint_receipt",
                             "load_order", "load_order_by_table", "save_amendment"):
@@ -1030,6 +1027,17 @@ class POSBridge(QObject):
                 return json.dumps({"success": True, "message": msg,
                                    "data": {"print_failed": not print_ok}})
             return json.dumps({"success": False, "message": msg, "error": msg})
+        elif action == "complete_payment_split":
+            ok, msg, print_ok = ctrl.complete_payment_split(
+                order_id=payload.get("order_id"),
+                parts=payload.get("parts") or [],
+                cash_received=payload.get("cash_received"),
+                finalize=not payload.get("keep_open", False),
+            )
+            if ok:
+                return json.dumps({"success": True, "message": msg,
+                                   "data": {"print_failed": not print_ok}})
+            return json.dumps({"success": False, "message": msg, "error": msg})
         elif action == "get_order_history":
             return json.dumps({"success": True, "data": [self._order_to_dict(o) for o in ctrl.get_order_history()]})
         elif action == "get_table_state":
@@ -1155,6 +1163,15 @@ class POSBridge(QObject):
             # ARCH-001: call public controller method, not private _delivery_svc
             summary = ctrl.get_all_drivers_daily_summary()
             return json.dumps({"success": True, "data": summary})
+        elif action == "get_driver_stats":
+            if not self._current_user or not self._current_user.is_manager_or_above():
+                return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
+            try:
+                data = ctrl.get_driver_stats(
+                    payload.get("period", "day"), payload.get("date"))
+            except ValueError as e:
+                return json.dumps({"success": False, "error": str(e)})
+            return json.dumps({"success": True, "data": data})
         elif action == "reassign_order":
             if not self._current_user:
                 return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
