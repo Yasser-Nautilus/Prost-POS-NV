@@ -12,10 +12,14 @@ Routing:
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
+from broast_pos.config.config import PRINTER_SIMULATE, PRINTER_SIMULATE_OUTPUT_DIR
 from broast_pos.infrastructure.printing.escpos_printer import EscPosPrinter
 from broast_pos.infrastructure.printing.printer_config import (
     load_printer_config,
@@ -89,6 +93,42 @@ class PrinterManager:
         printer = self._printers.get(key)
         return printer is not None and printer.is_connected
 
+    def get_status(self) -> dict[str, bool]:
+        """H14: readiness of every configured printer, keyed by role.
+
+        Exposes what initialise() connected (or failed to connect) so a
+        caller — the bridge, a UI badge, a health check — can see printer
+        readiness instead of only discovering it on the first failed print.
+        """
+        return {key: printer.is_connected for key, printer in self._printers.items()}
+
+    # ------------------------------------------------------------------
+    # Simulate mode
+    # ------------------------------------------------------------------
+
+    def _simulate_print(self, job: str, data: dict[str, Any]) -> bool:
+        """Write a simulated print record to printouts/ and return True.
+
+        Called instead of the real hardware path when PROST_PRINTER_SIMULATE=1.
+        The file is JSON with a local-time timestamp in the filename so it
+        is easy to find after a test run.
+        """
+        try:
+            out_dir = Path(PRINTER_SIMULATE_OUTPUT_DIR)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = out_dir / f"{ts}_{job}.json"
+            payload = {"job": job, "printed_at": datetime.now().isoformat(), "data": data}
+            filename.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            logger.info("[SIMULATE] %s → %s", job, filename.name)
+            return True
+        except Exception as exc:
+            logger.error("[SIMULATE] Failed to write simulated output for %s: %s", job, exc)
+            return False
+
     # ------------------------------------------------------------------
     # Print jobs — NEVER raise
     # ------------------------------------------------------------------
@@ -99,6 +139,9 @@ class PrinterManager:
         Thread-safe: kitchen lock prevents interleaved output from
         simultaneous cashier orders.
         """
+        if PRINTER_SIMULATE:
+            return self._simulate_print("kitchen_ticket", order)
+
         printer = self._printers.get(KITCHEN)
         if printer is None:
             logger.error("Kitchen printer not configured")
@@ -117,6 +160,9 @@ class PrinterManager:
         changes: list[dict[str, Any]],
     ) -> bool:
         """Print amendment kitchen ticket (تابع) → kitchen printer."""
+        if PRINTER_SIMULATE:
+            return self._simulate_print("amendment_ticket", {"order": order, "changes": changes})
+
         printer = self._printers.get(KITCHEN)
         if printer is None:
             logger.error("Kitchen printer not configured")
@@ -140,6 +186,9 @@ class PrinterManager:
             order: Order data dict.
             cashier_slot: 1 or 2.
         """
+        if PRINTER_SIMULATE:
+            return self._simulate_print(f"receipt_slot{cashier_slot}", order)
+
         key = _SLOT_MAP.get(cashier_slot, CASHIER_1)
         printer = self._printers.get(key)
         if printer is None:
@@ -159,6 +208,11 @@ class PrinterManager:
         shift_period: dict[str, str] | None = None,
     ) -> bool:
         """Print end-of-day sales report → cashier printer."""
+        if PRINTER_SIMULATE:
+            return self._simulate_print(
+                "shift_summary", {"report": report, "shift_period": shift_period}
+            )
+
         key = _SLOT_MAP.get(cashier_slot, CASHIER_1)
         printer = self._printers.get(key)
         if printer is None:
@@ -177,6 +231,9 @@ class PrinterManager:
         cashier_slot: int = 1,
     ) -> bool:
         """Print shift transfer report → cashier printer."""
+        if PRINTER_SIMULATE:
+            return self._simulate_print("shift_transfer", transfer)
+
         key = _SLOT_MAP.get(cashier_slot, CASHIER_1)
         printer = self._printers.get(key)
         if printer is None:
@@ -194,6 +251,9 @@ class PrinterManager:
         cashier_slot: int = 1,
     ) -> bool:
         """Print driver settlement receipt → cashier printer."""
+        if PRINTER_SIMULATE:
+            return self._simulate_print("driver_settlement", settlement)
+
         key = _SLOT_MAP.get(cashier_slot, CASHIER_1)
         printer = self._printers.get(key)
         if printer is None:
@@ -211,6 +271,9 @@ class PrinterManager:
         cashier_slot: int = 1,
     ) -> bool:
         """Print end-of-day driver summary → cashier printer."""
+        if PRINTER_SIMULATE:
+            return self._simulate_print("driver_summary", summary)
+
         key = _SLOT_MAP.get(cashier_slot, CASHIER_1)
         printer = self._printers.get(key)
         if printer is None:

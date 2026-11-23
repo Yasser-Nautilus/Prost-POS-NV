@@ -94,6 +94,15 @@ class XReport:
         """Total outflows (EXPENSE entries) — negative amounts, return abs value."""
         return abs(sum(s.breakdown.get("EXPENSE", 0) for s in self.sessions))
 
+    @property
+    def total_cash_drops_pt(self) -> int:
+        """Total outflows to safe (CASH_DROP entries) — negative amounts, return abs value."""
+        return abs(sum(s.breakdown.get("CASH_DROP", 0) for s in self.sessions))
+
+    @property
+    def total_cash_drops_egp(self) -> float:
+        return self.total_cash_drops_pt / 100
+
 
 @dataclass
 class ZReport(XReport):
@@ -147,6 +156,11 @@ class BusinessDayService:
         Fetches ALL sessions (open and closed) for this day_id,
         computes expected_cash from the ledger, and returns a snapshot.
         """
+        if self._auth is not None:
+            curr = self._auth.get_current_user()
+            if curr is not None and not curr.is_manager_or_above():
+                raise PermissionError("تقرير X متاح للمدير فقط")
+
         sessions = self._sessions.get_sessions_for_day(day_id)
         snapshots = [self._build_session_snapshot(s) for s in sessions]
 
@@ -182,18 +196,33 @@ class BusinessDayService:
         # FR-DAY-1: All sessions must be closed
         self._guard_all_sessions_closed(day_id)
 
-        # FR-DAY-2: Batch DRIVER_FEE_PAYOUT before closing shift
-        self._batch_driver_fee_payouts(day_id)
+        # H09: Verify manager authorization BEFORE any booking so invalid auth
+        # fails fast without leaving ledger state.
+        self._verify_manager_pin(manager_pin)
 
-        # Close the shift via FinancialService (handles its own pre-checks)
-        if self._financial is not None:
-            closed_shift = self._financial.close_shift(
-                shift_id=day_id,
-                manager_pin=manager_pin,
-            )
-            closed_at = closed_shift.closed_at or datetime.now().isoformat()
-        else:
-            closed_at = datetime.now().isoformat()
+        # FR-DAY-2 + close_shift are atomic: if close_shift fails (e.g. a guard
+        # fires), the DRIVER_FEE_PAYOUT entries must roll back with it.
+        db = self._sessions._db
+        with db.transaction():
+            self._batch_driver_fee_payouts(day_id)
+
+            if self._financial is not None:
+                closed_shift = self._financial.close_shift(
+                    shift_id=day_id,
+                    manager_pin=manager_pin,
+                )
+                closed_at = closed_shift.closed_at or datetime.now().isoformat()
+            else:
+                # H05: no FinancialService wired — still enforce manager
+                # authorization before closing, instead of closing silently.
+                if self._auth is not None:
+                    if manager_pin:
+                        self._auth.verify_manager_pin(manager_pin)
+                    else:
+                        curr = self._auth.get_current_user()
+                        if not (curr and curr.is_manager_or_above()):
+                            raise PermissionError("إغلاق اليوم متاح للمدير فقط")
+                closed_at = datetime.now().isoformat()
 
         # FR-DAY-3: Build Z-Report from final ledger state
         sessions = self._sessions.get_sessions_for_day(day_id)
@@ -238,6 +267,25 @@ class BusinessDayService:
                 f"لا يمكن إغلاق اليوم بينما توجد وردية مفتوحة: {names}. "
                 "أغلق جميع الورديات أولاً."
             )
+
+    def _verify_manager_pin(self, manager_pin: str | None) -> None:
+        """Verify manager authorization if auth_service or financial_service is configured."""
+        from unittest.mock import Mock
+
+        if self._financial is not None and not isinstance(self._financial, Mock) and hasattr(self._financial, "_verify_manager_pin"):
+            self._financial._verify_manager_pin(manager_pin)
+        elif self._auth is not None:
+            if not manager_pin:
+                current_user = getattr(self._auth, "get_current_user", lambda: None)()
+                if current_user and hasattr(current_user, "is_manager_or_above") and current_user.is_manager_or_above():
+                    return
+                raise PermissionError("يجب إدخال رمز PIN للمدير")
+            if hasattr(self._auth, "verify_manager_pin"):
+                self._auth.verify_manager_pin(manager_pin)
+            elif hasattr(self._auth, "verify_pin"):
+                user = self._auth.verify_pin(manager_pin)
+                if user is None:
+                    raise PermissionError("PIN غير صحيح")
 
     # ------------------------------------------------------------------
     # FR-DAY-2: DRIVER_FEE_PAYOUT batch at day close

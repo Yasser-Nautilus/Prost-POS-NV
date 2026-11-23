@@ -310,6 +310,46 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
             for r in rows
         ]
 
+    def get_all_drivers_shift_summary(self, shift_id: int) -> list[dict]:
+        """Per-driver summary for ONE shift (H16: shift-scoped report).
+
+        Trips have no shift column, so a trip belongs to a shift through its
+        orders (orders.shift_id). Fees are summed per distinct trip, so a trip
+        with several orders is not counted once per order.
+        """
+        rows = self._db.fetch_all(
+            """SELECT t.driver_id,
+                      t.driver_name,
+                      COUNT(*) AS trip_count,
+                      COALESCE(SUM(t.order_count), 0) AS order_count,
+                      COALESCE(SUM(t.fees), 0) AS fees_earned
+               FROM (
+                   SELECT dt.id,
+                          dt.driver_id,
+                          dt.driver_name,
+                          COALESCE(dt.total_delivery_fees, 0) AS fees,
+                          COUNT(dto.order_id) AS order_count
+                   FROM delivery_trips dt
+                   JOIN delivery_trip_orders dto ON dto.trip_id = dt.id
+                   JOIN orders o ON o.id = dto.order_id
+                   WHERE o.shift_id = ?
+                   GROUP BY dt.id
+               ) t
+               GROUP BY t.driver_id, t.driver_name
+               ORDER BY t.driver_name""",
+            (shift_id,),
+        )
+        return [
+            {
+                "driver_id": r["driver_id"],
+                "driver_name": r["driver_name"],
+                "trip_count": r["trip_count"],
+                "order_count": r["order_count"],
+                "fees_earned": r["fees_earned"],
+            }
+            for r in rows
+        ]
+
     def get_driver_daily_trips(self, driver_id: int,
                                date_str: str) -> list[DeliveryTrip]:
         """All trips for one driver on a date."""

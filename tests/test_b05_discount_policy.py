@@ -257,11 +257,16 @@ def _build_ctrl():
     )
     svc._auth = auth
 
+    product = MagicMock(id=1, name="بيتزا", price=200.0, is_active=True)
+    products = MagicMock()
+    products.get_product.return_value = product
+
     ctrl = OrderController(
         order_service=svc,
         financial_service=MagicMock(),
         auth_service=auth,
         print_triggers=MagicMock(spec=PrintTriggers),
+        product_service=products,
     )
     return ctrl, svc
 

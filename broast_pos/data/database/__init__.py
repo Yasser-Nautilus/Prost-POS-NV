@@ -1,6 +1,6 @@
 # Database connection and schema management
 from broast_pos.data.database.connection import DatabaseConnection
 from broast_pos.data.database.migrations import initialise_database
-from broast_pos.data.database.seed import seed_database
+from broast_pos.data.database.seed import seed_database, validate_no_default_admin
 
-__all__ = ["DatabaseConnection", "initialise_database", "seed_database"]
+__all__ = ["DatabaseConnection", "initialise_database", "seed_database", "validate_no_default_admin"]

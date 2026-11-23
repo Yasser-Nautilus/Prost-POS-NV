@@ -22,9 +22,11 @@ logger = logging.getLogger(__name__)
 class OrderChange:
     """Represents a single change in an amendment."""
 
-    action: str  # "added" or "removed"
+    action: str       # "added" or "removed"
     product_name: str
-    quantity: int
+    product_id: int   # stable identity — used to route the change back to the service
+    notes: str        # distinguishes same-product lines with different instructions
+    quantity: int     # delta (units added / units to subtract)
 
 
 class AmendmentTracker:
@@ -90,6 +92,8 @@ class AmendmentTracker:
                 changes.append(OrderChange(
                     action="added",
                     product_name=name,
+                    product_id=key[0],
+                    notes=key[1],
                     quantity=qty - orig_qty,
                 ))
 
@@ -101,14 +105,18 @@ class AmendmentTracker:
                 changes.append(OrderChange(
                     action="removed",
                     product_name=name,
+                    product_id=key[0],
+                    notes=key[1],
                     quantity=orig_qty - curr_qty,
                 ))
 
-        # Convert to dicts for printer
+        # Convert to dicts for downstream consumers (printer, controller)
         return [
             {
                 "action": c.action,
                 "product_name": c.product_name,
+                "product_id": c.product_id,
+                "notes": c.notes,
                 "quantity": c.quantity,
             }
             for c in changes

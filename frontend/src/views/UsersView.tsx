@@ -10,7 +10,7 @@ interface UsersViewProps {
 const ROLE_OPTIONS = [
   { value: "cashier",  label: "كاشير صندوق",          color: "text-brand-teal" },
   { value: "driver",   label: "طيار (مندوب توصيل)",   color: "text-purple-400" },
-  { value: "manager",  label: "مدير المطعم",          color: "text-brand-gold" },
+  { value: "manager",  label: "مدير المطعم",          color: "text-brand-red" },
   { value: "admin",    label: "مدير النظام",           color: "text-red-400" },
 ];
 
@@ -23,7 +23,7 @@ const ROLE_LABELS: Record<string, string> = {
 
 const ROLE_COLORS: Record<string, string> = {
   cashier: "text-brand-teal bg-brand-teal/10 border-brand-teal/30",
-  manager: "text-brand-gold bg-brand-gold/10 border-brand-gold/30",
+  manager: "text-brand-red bg-brand-red/10 border-brand-red/30",
   admin:   "text-red-400 bg-red-900/20 border-red-800/30",
   driver:  "text-purple-400 bg-purple-900/20 border-purple-800/30",
 };
@@ -146,7 +146,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
   if (loading && users.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-white space-y-2 h-[calc(100vh-64px)] bg-brand-dark">
-        <Loader2 className="animate-spin text-brand-gold" size={32} />
+        <Loader2 className="animate-spin text-brand-red" size={32} />
         <p className="text-gray-400 text-xs">جاري تحميل المستخدمين...</p>
       </div>
     );
@@ -158,7 +158,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-2xl bg-brand-gold/10 text-brand-gold flex items-center justify-center">
+          <div className="h-10 w-10 rounded-2xl bg-brand-red/10 text-brand-red flex items-center justify-center">
             <Users size={20} />
           </div>
           <div>
@@ -172,7 +172,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
           {isAdmin && (
             <button
               onClick={openNewUser}
-              className="py-2 px-4 bg-brand-gold text-brand-dark hover:bg-opacity-90 rounded-xl text-sm font-bold flex items-center gap-1.5 transition-all"
+              className="py-2 px-4 bg-brand-red text-brand-dark hover:bg-opacity-90 rounded-xl text-sm font-bold flex items-center gap-1.5 transition-all"
             >
               <Plus size={16} />
               مستخدم جديد
@@ -180,7 +180,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
           )}
           <button
             onClick={fetchUsers}
-            className="p-2 bg-brand-card border border-brand-border/40 hover:border-brand-gold text-gray-400 hover:text-brand-gold rounded-xl transition-all"
+            className="p-2 bg-brand-card border border-brand-border/40 hover:border-brand-red text-gray-400 hover:text-brand-red rounded-xl transition-all"
           >
             <RefreshCw size={16} />
           </button>
@@ -198,7 +198,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
           >
             {/* Avatar / Role badge */}
             <div className="flex justify-between items-start">
-              <div className="h-12 w-12 rounded-2xl bg-brand-surface flex items-center justify-center text-2xl font-black text-brand-gold">
+              <div className="h-12 w-12 rounded-2xl bg-brand-surface flex items-center justify-center text-2xl font-black text-brand-red">
                 {(user.display_name || user.username || "?")[0]?.toUpperCase()}
               </div>
               <span
@@ -239,7 +239,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={() => openEditUser(user)}
-                  className="flex-1 py-1.5 text-xs font-bold text-brand-gold border border-brand-gold/30 bg-brand-gold/5 hover:bg-brand-gold/10 rounded-lg flex items-center justify-center gap-1.5 transition-all"
+                  className="flex-1 py-1.5 text-xs font-bold text-brand-red border border-brand-red/30 bg-brand-red/5 hover:bg-brand-red/10 rounded-lg flex items-center justify-center gap-1.5 transition-all"
                 >
                   <Edit3 size={12} />
                   تعديل
@@ -265,7 +265,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md">
           <div className="w-full max-w-md mx-4 bg-brand-surface border border-brand-border rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="p-5 border-b border-brand-border/40 flex items-center justify-between">
-              <h3 className="font-bold text-lg text-brand-gold">
+              <h3 className="font-bold text-lg text-brand-red">
                 {editingUser ? "تعديل المستخدم" : "مستخدم جديد"}
               </h3>
               <button
@@ -288,7 +288,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
                     value={formUsername}
                     onChange={(e) => setFormUsername(e.target.value)}
                     placeholder="cashier01"
-                    className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-brand-gold font-mono text-sm"
+                    className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-brand-red font-mono text-sm"
                   />
                 </div>
                 <div>
@@ -299,7 +299,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
                     value={formDisplayName}
                     onChange={(e) => setFormDisplayName(e.target.value)}
                     placeholder="أحمد محمد"
-                    className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-brand-gold text-right"
+                    className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-brand-red text-right"
                   />
                 </div>
               </div>
@@ -310,7 +310,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
                   <select
                     value={formRole}
                     onChange={(e) => setFormRole(e.target.value)}
-                    className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white focus:outline-none focus:border-brand-gold"
+                    className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white focus:outline-none focus:border-brand-red"
                   >
                     {ROLE_OPTIONS.map((r) => (
                       <option key={r.value} value={r.value}>
@@ -330,7 +330,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
                     onChange={(e) => setFormPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
                     placeholder="4 أرقام"
                     maxLength={4}
-                    className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-brand-gold font-mono text-center text-xl tracking-widest"
+                    className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-brand-red font-mono text-center text-xl tracking-widest"
                   />
                 </div>
               </div>
@@ -344,7 +344,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
                     value={formSlot}
                     onChange={(e) => setFormSlot(e.target.value)}
                     placeholder="1"
-                    className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white focus:outline-none focus:border-brand-gold text-center font-mono"
+                    className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white focus:outline-none focus:border-brand-red text-center font-mono"
                   />
                 </div>
               )}
@@ -364,7 +364,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-3 bg-brand-gold text-brand-dark hover:bg-opacity-90 rounded-xl font-bold flex items-center justify-center gap-2"
+                  className="flex-1 py-3 bg-brand-red text-brand-dark hover:bg-opacity-90 rounded-xl font-bold flex items-center justify-center gap-2"
                 >
                   <Check size={18} />
                   حفظ

@@ -334,6 +334,10 @@ def _migrate_v4_to_v5(db: DatabaseConnection) -> None:
         CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_remit
         ON cash_ledger(trip_id) WHERE entry_type = 'DRIVER_REMITTANCE'
     """)
+    db.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_driver_payout
+        ON cash_ledger(trip_id) WHERE entry_type = 'DRIVER_FEE_PAYOUT'
+    """)
 
     db.commit()
 

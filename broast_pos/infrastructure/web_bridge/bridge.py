@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import date
 from typing import Any
 
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
@@ -77,6 +78,8 @@ class POSBridge(QObject):
             auth_service=self._auth,
             print_triggers=self._print,
             cashier_slot=user.cashier_slot or 1,
+            product_service=self._product,
+            customer_service=self._customer,
         )
         self._order_ctrl.on_order_changed(self._on_order_changed_cb)
         self._order_ctrl.on_parked_changed(self._on_parked_changed_cb)
@@ -106,6 +109,47 @@ class POSBridge(QObject):
                 business_day_service=self._business_day_svc,
                 auth_service=self._auth,
             )
+
+    def _session_still_valid(self) -> bool:
+        """H20: ask the auth service whether this session's PIN is unchanged.
+
+        A bridge built without an auth service (partial test doubles) has no
+        way to check and keeps its previous behaviour.
+        """
+        auth = getattr(self, "_auth", None)
+        return True if auth is None else bool(auth.validate_session())
+
+    def _clear_session(self) -> None:
+        """Drop the logged-in user and every per-user controller."""
+        self._current_user = None
+        self._order_ctrl = None
+        self._delivery_ctrl = None
+        self._financial_ctrl = None
+        self._reports_ctrl = None
+        self._session_ctrl = None
+
+    @staticmethod
+    def _report_scope(payload: dict[str, Any]) -> tuple[date | None, int | None]:
+        """H16: read the report scope from a payload → (target_date, shift_id).
+
+        ``shift_id`` selects one shift, ``date`` ("YYYY-MM-DD") one calendar
+        day; neither means today. Whether both together are allowed is decided
+        by ReportsController.validate_scope().
+
+        Raises:
+            ValueError: shift_id is not an integer or date is not YYYY-MM-DD.
+        """
+        shift_id = payload.get("shift_id")
+        if shift_id is not None and (isinstance(shift_id, bool) or not isinstance(shift_id, int)):
+            raise ValueError("رقم الوردية غير صحيح")
+        raw_date = payload.get("date")
+        target_date = None
+        if raw_date:
+            try:
+                target_date = date.fromisoformat(str(raw_date))
+            except ValueError:
+                raise ValueError("التاريخ غير صحيح — الصيغة YYYY-MM-DD")
+        return target_date, shift_id
 
     def _on_order_changed_cb(self):
         order = self._order_ctrl._current_order if self._order_ctrl else None
@@ -221,9 +265,34 @@ class POSBridge(QObject):
             payload = json.loads(payload_json) if payload_json else {}
             logger.info("Bridge received action: %s", action)
 
+            # H20: revalidate authority from current DB state on every call —
+            # a deactivation/demotion/PIN change must take effect immediately,
+            # not only after the next full login. Clears the cached session
+            # if the user was deactivated since login.
+            if self._current_user is not None:
+                self._current_user = self._auth.refresh_current_user()
+
             # ── Auth guard: reject unauthenticated calls ───────────────────────
             if action not in _PUBLIC_ACTIONS and not self._current_user:
                 return json.dumps({"success": False, "error": "غير مصرح — يجب تسجيل الدخول أولاً"})
+
+            # ── H20: reject sessions whose PIN changed (or user was deactivated) ──
+            # Runs on every protected call, plus get_current_user so the UI's
+            # checkAuth sees "logged out" instead of a stale user.
+            if (
+                self._current_user
+                and action != "logout"          # logging out is always allowed
+                and (action not in _PUBLIC_ACTIONS or action == "get_current_user")
+                and not self._session_still_valid()
+            ):
+                self._clear_session()
+                if action == "get_current_user":
+                    return json.dumps({"success": True, "data": None})
+                return json.dumps({
+                    "success": False,
+                    "code": "session_expired",
+                    "error": "انتهت الجلسة — تم تغيير رمز PIN، يجب تسجيل الدخول من جديد",
+                })
 
             # ── Auth ──────────────────────────────────────────────────────────
             if action == "login":
@@ -237,11 +306,7 @@ class POSBridge(QObject):
 
             elif action == "logout":
                 self._auth.logout()
-                self._current_user = None
-                self._order_ctrl = None
-                self._delivery_ctrl = None
-                self._financial_ctrl = None
-                self._reports_ctrl = None
+                self._clear_session()
                 return json.dumps({"success": True})
 
             elif action == "get_current_user":
@@ -504,6 +569,15 @@ class POSBridge(QObject):
                     shift_id = active.id if active else None
                 if shift_id is None:
                     return json.dumps({"success": False, "error": "لا توجد وردية مفتوحة"})
+                # H08: route through business_day_svc when available to enforce
+                # FR-DAY-1 (all sessions closed) before marking the shift closed.
+                if self._session_ctrl is not None:
+                    data = self._session_ctrl.close_business_day(
+                        day_id=shift_id,
+                        manager_pin=payload.get("manager_pin", ""),
+                    )
+                    self._trigger_shift_status_changed()
+                    return json.dumps({"success": True, "data": data})
                 ok = self._financial_ctrl.close_shift(
                     shift_id=shift_id,
                     manager_pin=payload.get("manager_pin", "")
@@ -537,10 +611,15 @@ class POSBridge(QObject):
             elif action == "get_report_daily_sales":
                 if not self._reports_ctrl:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
-                # Correct method: generate_daily_summary on ReportsController
+                # Manager/Admin only — matches the hidden "التقارير المالية" tab
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
+                # H16: payload "shift_id" → that shift's report; payload "date"
+                # (YYYY-MM-DD) → that calendar day; neither → today. Not both.
                 try:
+                    target_date, shift_id = self._report_scope(payload)
                     data = self._reports_ctrl.generate_daily_summary(
-                        target_date=None, shift_id=payload.get("shift_id")
+                        target_date=target_date, shift_id=shift_id
                     )
                 except ValueError as e:
                     return json.dumps({"success": False, "error": str(e)})
@@ -549,13 +628,27 @@ class POSBridge(QObject):
             elif action == "get_report_product_sales":
                 if not self._reports_ctrl:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
-                # Correct method: get_bestsellers on ReportsController
-                data = self._reports_ctrl.get_bestsellers()[:payload.get("limit", 20)]
+                # Manager/Admin only — matches the hidden "التقارير المالية" tab
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
+                # H16: same scope as get_report_daily_sales (shift_id | date | today)
+                try:
+                    target_date, shift_id = self._report_scope(payload)
+                    self._reports_ctrl.validate_scope(target_date, shift_id)
+                except ValueError as e:
+                    return json.dumps({"success": False, "error": str(e)})
+                data = self._reports_ctrl.get_bestsellers(target_date, shift_id)
+                data = data[:payload.get("limit", 20)]
                 return json.dumps({"success": True, "data": data})
 
             elif action == "print_shift_summary":
                 if not self._reports_ctrl or not self._current_user:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
+                # Manager/Admin only — the frontend only ever renders this
+                # button for isManagerOrAbove; a cashier must not be able to
+                # reach the full financial report by calling the bridge directly.
+                if not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
                 # Auto-resolve shift_id if not provided (mirrors other shift actions)
                 shift_id = payload.get("shift_id")
                 if shift_id is None and self._financial:
@@ -570,6 +663,13 @@ class POSBridge(QObject):
                 if not printed:
                     return json.dumps({"success": False, "error": "فشل في طباعة تقرير الوردية"})
                 return json.dumps({"success": True})
+
+            elif action == "get_printer_status":
+                # H14: visible readiness per printer — the UI can show a
+                # warning badge instead of only finding out on a failed print.
+                if not self._printer:
+                    return json.dumps({"success": True, "data": {}})
+                return json.dumps({"success": True, "data": self._printer.get_status()})
 
             # ── Order Workspace ───────────────────────────────────────────────
             elif action in ("new_order", "get_current_order", "add_item", "change_item_quantity",
@@ -707,13 +807,17 @@ class POSBridge(QObject):
         elif action == "get_current_order":
             return json.dumps({"success": True, "data": self._order_to_dict(ctrl.current_order)})
         elif action == "add_item":
-            ctrl.add_item(
-                product_id=payload.get("product_id"),
-                product_name=payload.get("product_name"),
-                unit_price=payload.get("unit_price"),
-                quantity=payload.get("quantity", 1),
-                notes=payload.get("notes", "")
-            )
+            # H19: product_name/unit_price from the client are accepted but
+            # ignored by the controller — price/name always come from the
+            # catalogue via product_id.
+            try:
+                ctrl.add_item(
+                    product_id=payload.get("product_id"),
+                    quantity=payload.get("quantity", 1),
+                    notes=payload.get("notes", "")
+                )
+            except ValueError as e:
+                return json.dumps({"success": False, "error": str(e)})
             return json.dumps({"success": True})
         elif action == "change_item_quantity":
             ctrl.change_quantity(index=payload.get("index"), delta=payload.get("delta"))
@@ -735,16 +839,23 @@ class POSBridge(QObject):
                 return json.dumps({"success": True, "message": msg})
             return json.dumps({"success": False, "error": msg})
         elif action == "set_customer_info":
-            ctrl.set_customer_info(
-                customer_id=payload.get("customer_id"),
-                phone=payload.get("phone", ""),
-                name=payload.get("name", ""),
-                address=payload.get("address", ""),
-                zone=payload.get("zone", ""),
-                delivery_fee=payload.get("delivery_fee", 0.0),
-                # B-02: pass payment_method so delivery cash/online is recorded
-                payment_method=payload.get("payment_method"),
-            )
+            # H19: zone/delivery_fee from the client are accepted but ignored
+            # whenever address_id is given — the fee is resolved from the
+            # customer's saved address on the backend.
+            try:
+                ctrl.set_customer_info(
+                    customer_id=payload.get("customer_id"),
+                    phone=payload.get("phone", ""),
+                    name=payload.get("name", ""),
+                    address=payload.get("address", ""),
+                    zone=payload.get("zone", ""),
+                    delivery_fee=payload.get("delivery_fee", 0.0),
+                    address_id=payload.get("address_id"),
+                    # B-02: pass payment_method so delivery cash/online is recorded
+                    payment_method=payload.get("payment_method"),
+                )
+            except ValueError as e:
+                return json.dumps({"success": False, "error": str(e)})
             return json.dumps({"success": True})
         elif action == "park_order":
             return json.dumps({"success": ctrl.park_current()})
@@ -959,7 +1070,18 @@ class POSBridge(QObject):
                 "error": "نظام الجلسات غير مفعل (تأكد من الإعداد الأولي)"
             })
 
+        # H05: Reject unauthenticated requests immediately — actor comes from login
+        if self._current_user is None:
+            return json.dumps({
+                "success": False,
+                "error": "يجب تسجيل الدخول أولاً"
+            })
+
         ctrl = self._session_ctrl
+
+        # Resolve actor from authentication — never trust caller-supplied ids
+        actor = self._current_user
+        actor_is_manager = actor.is_manager_or_above()
 
         # Resolve day_id from payload, or fall back to active shift
         day_id = payload.get("day_id")
@@ -970,33 +1092,86 @@ class POSBridge(QObject):
 
         try:
             if action == "open":
+                # H09: reject session open against a closed/inactive business day
+                open_day_id = day_id or payload.get("day_id")
+                if open_day_id is not None and self._financial is not None:
+                    shift = self._financial._financial.get_by_id(open_day_id)
+                    if shift is None or not shift.is_active:
+                        return json.dumps({
+                            "success": False,
+                            "error": "لا يمكن فتح وردية في يوم عمل مغلق",
+                        })
+
+                # H05: cashiers may only open their own session; managers can
+                # supply a user_id to open on behalf of another cashier.
+                if actor_is_manager:
+                    target_user_id = payload.get("user_id", actor.id)
+                else:
+                    target_user_id = actor.id
                 data = ctrl.open_session(
                     day_id=day_id or payload["day_id"],
-                    user_id=payload.get("user_id", self._current_user.id),
+                    user_id=target_user_id,
                     station=payload.get("station", "ALL"),
                     opening_float_egp=float(payload.get("opening_float_egp", 0)),
-                    actor_id=self._current_user.id,
+                    actor_id=actor.id,
                 )
                 return json.dumps({"success": True, "data": data})
 
             elif action == "close":
+                # H05: cashiers may only close their own session.
+                session_id = payload["session_id"]
+                if not actor_is_manager and self._session_svc is not None:
+                    owned = self._session_svc.get_session_by_id(session_id)
+                    if owned is None or owned.user_id != actor.id:
+                        return json.dumps({
+                            "success": False,
+                            "error": "لا يمكن إغلاق درج كاشير آخر",
+                        })
                 data = ctrl.close_session(
-                    session_id=payload["session_id"],
+                    session_id=session_id,
                     counted_cash_egp=float(payload.get("counted_cash_egp", 0)),
-                    actor_id=self._current_user.id,
+                    actor_id=actor.id,
                     variance_reason=payload.get("variance_reason"),
                     manager_pin=payload.get("manager_pin"),
                 )
                 return json.dumps({"success": True, "data": data})
 
             elif action == "handover":
+                # H05: cashiers may only handover their own session; recipient cannot be a driver
+                from_session_id = payload["from_session_id"]
+                outgoing_session = None
+                if self._session_svc is not None:
+                    outgoing_session = self._session_svc.get_session_by_id(from_session_id)
+                if not actor_is_manager:
+                    if outgoing_session is None or outgoing_session.user_id != actor.id:
+                        return json.dumps({
+                            "success": False,
+                            "error": "لا يمكن تسليم درج كاشير آخر",
+                        })
+                to_user_id = payload["to_user_id"]
+                if self._auth is not None:
+                    to_user = self._auth.get_user_by_id(to_user_id)
+                    if to_user is not None and to_user.cashier_slot is None:
+                        return json.dumps({
+                            "success": False,
+                            "error": "المستخدم المستلم ليس كاشيراً مسجلاً — لا يمكن نقل الوردية لسائق توصيل",
+                        })
+                if outgoing_session is None:
+                    return json.dumps({
+                        "success": False,
+                        "error": "وردية التسليم غير موجودة",
+                    })
+                # H05: the recipient's new session always takes over the SAME
+                # physical station as the outgoing one — a handover changes
+                # who is responsible for a drawer, never which drawer it is.
+                # Never trust a client-supplied station here.
                 data = ctrl.do_handover(
-                    from_session_id=payload["from_session_id"],
-                    to_user_id=payload["to_user_id"],
-                    station=payload.get("station", "ALL"),
+                    from_session_id=from_session_id,
+                    to_user_id=to_user_id,
+                    station=outgoing_session.station.value,
                     counted_cash_egp=float(payload.get("counted_cash_egp", 0)),
                     cash_drop_egp=float(payload.get("cash_drop_egp", 0)),
-                    actor_id=self._current_user.id,
+                    actor_id=actor.id,
                     variance_reason=payload.get("variance_reason"),
                     manager_pin=payload.get("manager_pin"),
                 )
@@ -1005,31 +1180,59 @@ class POSBridge(QObject):
             elif action == "get_active":
                 if day_id is None:
                     return json.dumps({"success": True, "data": []})
-                data = ctrl.get_active_sessions(day_id)
+                data = ctrl.get_active_sessions(day_id, actor_id=actor.id)
                 return json.dumps({"success": True, "data": data})
 
             elif action == "get_all":
                 if day_id is None:
                     return json.dumps({"success": True, "data": []})
-                data = ctrl.get_all_sessions(day_id)
+                data = ctrl.get_all_sessions(day_id, actor_id=actor.id)
                 return json.dumps({"success": True, "data": data})
 
             elif action == "get_balance":
-                data = ctrl.get_session_balance(payload["session_id"])
+                # H05: cashiers cannot read another cashier's balance; and
+                # cannot see their own open-session expected cash before the
+                # blind count is committed (prevents "counting to target").
+                session_id = payload["session_id"]
+                if not actor_is_manager and self._session_svc is not None:
+                    owned = self._session_svc.get_session_by_id(session_id)
+                    if owned is None or owned.user_id != actor.id:
+                        return json.dumps({
+                            "success": False,
+                            "error": "لا يمكن قراءة رصيد درج كاشير آخر",
+                        })
+                    if owned.is_open:
+                        return json.dumps({
+                            "success": False,
+                            "error": "لا يمكن قراءة الرصيد المتوقع قبل إجراء الجرد",
+                        })
+                data = ctrl.get_session_balance(session_id, actor_id=actor.id)
                 return json.dumps({"success": True, "data": data})
 
             elif action == "x_report":
+                if not actor_is_manager:
+                    return json.dumps({
+                        "success": False,
+                        "error": "تقرير X متاح للمدير فقط",
+                    })
                 if day_id is None:
                     return json.dumps({"success": False, "error": "لا توجد وردية مفتوحة"})
-                data = ctrl.generate_x_report(day_id)
+                data = ctrl.generate_x_report(day_id, actor_id=actor.id)
                 return json.dumps({"success": True, "data": data})
 
             elif action == "close_day":
+                manager_pin = payload.get("manager_pin")
+                if not actor_is_manager and not manager_pin:
+                    return json.dumps({
+                        "success": False,
+                        "error": "إغلاق اليوم متاح للمدير فقط",
+                    })
                 if day_id is None:
                     return json.dumps({"success": False, "error": "لا توجد وردية مفتوحة"})
                 data = ctrl.close_business_day(
                     day_id=day_id,
-                    manager_pin=payload.get("manager_pin"),
+                    manager_pin=manager_pin,
+                    actor_id=actor.id,
                 )
                 return json.dumps({"success": True, "data": data})
 

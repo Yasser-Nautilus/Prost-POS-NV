@@ -76,7 +76,7 @@ export const DiscountDialog: React.FC<DiscountDialogProps> = ({
 
         {/* Header */}
         <div className="flex justify-between items-center px-6 py-4 border-b border-brand-border/60 bg-brand-card">
-          <h3 className="font-bold text-lg text-brand-gold">
+          <h3 className="font-bold text-lg text-brand-red">
             {step === "pin" ? "موافقة المدير مطلوبة لتطبيق الخصم" : "تطبيق الخصم على الطلب"}
           </h3>
           <button
@@ -98,7 +98,7 @@ export const DiscountDialog: React.FC<DiscountDialogProps> = ({
                   onClick={() => { setDiscountType("flat"); setAmount(""); }}
                   className={`py-3 rounded-xl border font-bold flex items-center justify-center gap-2 transition-all ${
                     discountType === "flat"
-                      ? "bg-brand-gold/10 border-brand-gold text-brand-gold"
+                      ? "bg-brand-red/10 border-brand-red text-brand-red"
                       : "bg-brand-card border-brand-border/50 text-gray-400 hover:text-white"
                   }`}
                 >
@@ -110,7 +110,7 @@ export const DiscountDialog: React.FC<DiscountDialogProps> = ({
                   onClick={() => { setDiscountType("percent"); setAmount(""); }}
                   className={`py-3 rounded-xl border font-bold flex items-center justify-center gap-2 transition-all ${
                     discountType === "percent"
-                      ? "bg-brand-gold/10 border-brand-gold text-brand-gold"
+                      ? "bg-brand-red/10 border-brand-red text-brand-red"
                       : "bg-brand-card border-brand-border/50 text-gray-400 hover:text-white"
                   }`}
                 >
@@ -143,13 +143,13 @@ export const DiscountDialog: React.FC<DiscountDialogProps> = ({
                 }}
                 onConfirm={handleApplyClick}
                 confirmLabel={loading ? "جاري التطبيق..." : "تطبيق الخصم"}
-                confirmColor="bg-brand-gold text-brand-dark hover:bg-opacity-90 font-bold"
+                confirmColor="bg-brand-red text-brand-dark hover:bg-opacity-90 font-bold"
               />
             </>
           ) : (
             /* PIN step — cashier must supply manager PIN */
             <>
-              <div className="flex items-center gap-2 justify-center text-brand-gold mb-4">
+              <div className="flex items-center gap-2 justify-center text-brand-red mb-4">
                 <Lock size={18} />
               </div>
 
@@ -158,8 +158,8 @@ export const DiscountDialog: React.FC<DiscountDialogProps> = ({
                   {[0, 1, 2, 3].map((idx) => (
                     <div
                       key={idx}
-                      className={`w-4 h-4 rounded-full border border-brand-gold/60 transition-colors ${
-                        pin.length > idx ? "bg-brand-gold" : "bg-transparent"
+                      className={`w-4 h-4 rounded-full border border-brand-red/60 transition-colors ${
+                        pin.length > idx ? "bg-brand-red" : "bg-transparent"
                       }`}
                     />
                   ))}
@@ -184,7 +184,7 @@ export const DiscountDialog: React.FC<DiscountDialogProps> = ({
                 onChange={(val) => { if (val.length <= 4) setPin(val); }}
                 onConfirm={() => { if (pin) applyWithPin(pin); }}
                 confirmLabel={loading ? "جاري التحقق..." : "تأكيد الرمز"}
-                confirmColor="bg-brand-gold text-brand-dark hover:bg-opacity-90 font-bold"
+                confirmColor="bg-brand-red text-brand-dark hover:bg-opacity-90 font-bold"
               />
             </>
           )}

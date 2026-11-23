@@ -377,6 +377,8 @@ class TestReportAndSummaryErrorPropagation:
         user = MagicMock()
         user.cashier_slot = 1
         bridge._current_user = user
+        bridge._auth = MagicMock()
+        bridge._auth.refresh_current_user.return_value = user
 
         res_raw = POSBridge.dispatch(bridge, "print_shift_summary", json.dumps({"shift_id": 1}))
         res = json.loads(res_raw)
@@ -393,6 +395,8 @@ class TestReportAndSummaryErrorPropagation:
         user = MagicMock()
         user.cashier_slot = 1
         bridge._current_user = user
+        bridge._auth = MagicMock()
+        bridge._auth.refresh_current_user.return_value = user
 
         res_raw = POSBridge.dispatch(bridge, "print_shift_summary", json.dumps({"shift_id": 1}))
         res = json.loads(res_raw)

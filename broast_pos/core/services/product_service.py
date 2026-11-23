@@ -28,6 +28,11 @@ class ProductService:
         """Sorted list of active categories for POS grid tabs."""
         return self._products.get_categories()
 
+    def get_product(self, product_id: int) -> Product | None:
+        """Look up a single product by id — the authoritative source for
+        its name and price (H19: never trust a client-supplied price)."""
+        return self._products.get_by_id(product_id)
+
     def get_all_categories(self) -> list[Category]:
         """Sorted list of all categories (active and inactive)."""
         return self._products.get_all_categories()

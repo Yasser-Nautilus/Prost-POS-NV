@@ -217,12 +217,46 @@ class DeliveryService:
 
         return trip
 
+    def _resolve_transitionable_orders(
+        self, trip: DeliveryTrip, from_statuses: set[OrderStatus], new_status: OrderStatus,
+    ) -> list[int]:
+        """H13: Pre-validate every order on the trip before anything is written.
+
+        Orders not currently in from_statuses are left alone (unchanged
+        legacy behaviour — e.g. an order already past this stage). Any
+        order that IS in from_statuses but whose transition to new_status
+        is not legal raises immediately, before the trip timestamp or any
+        other order has been touched.
+        """
+        if self._order_svc is None:
+            raise RuntimeError(
+                "OrderService not injected into DeliveryService — "
+                "cannot change order status without it"
+            )
+        to_transition: list[int] = []
+        for oid in trip.order_ids:
+            order = self._orders.get_by_id(oid)
+            if order is None or order.status not in from_statuses:
+                continue
+            if not self._order_svc.can_transition(order, new_status):
+                raise ValueError(
+                    f"لا يمكن الانتقال من '{order.status.value}' إلى "
+                    f"'{new_status.value}' للطلب #{oid} — تم إلغاء العملية بالكامل"
+                )
+            to_transition.append(oid)
+        return to_transition
+
     def mark_dispatched(self, trip_id: int) -> DeliveryTrip:
         """Record that the driver has left with the orders.
 
         Updates all orders on the trip to OUT_FOR_DELIVERY status.
         B-06: Accepts orders in NEW, PREPARING, or READY state
               (not just NEW) so KDS workflows don’t block dispatch.
+
+        H13: Every order's transition is validated up front, then the trip
+        timestamp and all order transitions are written in one database
+        transaction — a failure on any order rolls back everything,
+        including the trip timestamp and any earlier order in the batch.
 
         Raises:
             ValueError: if trip not found, already dispatched, or any
@@ -234,13 +268,14 @@ class DeliveryService:
         if trip.is_dispatched:
             raise ValueError("الرحلة تم إرسالها بالفعل")
 
-        self._delivery.mark_dispatched(trip_id)
-
-        # B-06: dispatch from NEW, PREPARING, or READY — errors propagate
         _dispatchable = {OrderStatus.NEW, OrderStatus.PREPARING, OrderStatus.READY}
-        for oid in trip.order_ids:
-            order = self._orders.get_by_id(oid)
-            if order and order.status in _dispatchable:
+        to_dispatch = self._resolve_transitionable_orders(
+            trip, _dispatchable, OrderStatus.OUT_FOR_DELIVERY,
+        )
+
+        with self._delivery._db.transaction():
+            self._delivery.mark_dispatched(trip_id)
+            for oid in to_dispatch:
                 self._change_order_status(
                     order_id=oid,
                     new_status=OrderStatus.OUT_FOR_DELIVERY,
@@ -269,6 +304,11 @@ class DeliveryService:
 
         Updates all orders on the trip to DELIVERED status.
 
+        H13: Every order's transition is validated up front, then the trip
+        timestamp and all order transitions are written in one database
+        transaction — a failure on any order rolls back everything,
+        including the trip timestamp and any earlier order in the batch.
+
         Raises:
             ValueError: if trip not found or not dispatched.
         """
@@ -280,12 +320,13 @@ class DeliveryService:
         if trip.is_returned:
             raise ValueError("الرحلة مسجلة عودة بالفعل")
 
-        self._delivery.mark_returned(trip_id)
+        to_deliver = self._resolve_transitionable_orders(
+            trip, {OrderStatus.OUT_FOR_DELIVERY}, OrderStatus.DELIVERED,
+        )
 
-        # Update order statuses through the centralized change_order_status
-        for oid in trip.order_ids:
-            order = self._orders.get_by_id(oid)
-            if order and order.status == OrderStatus.OUT_FOR_DELIVERY:
+        with self._delivery._db.transaction():
+            self._delivery.mark_returned(trip_id)
+            for oid in to_deliver:
                 self._change_order_status(
                     order_id=oid,
                     new_status=OrderStatus.DELIVERED,

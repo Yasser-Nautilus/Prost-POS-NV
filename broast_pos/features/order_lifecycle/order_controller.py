@@ -25,8 +25,10 @@ from broast_pos.core.models.order import (
 )
 from broast_pos.core.policies.discount import compute_discount
 from broast_pos.core.services.auth_service import AuthService
+from broast_pos.core.services.customer_service import CustomerService
 from broast_pos.core.services.financial_service import FinancialService
 from broast_pos.core.services.order_service import OrderService
+from broast_pos.core.services.product_service import ProductService
 from broast_pos.features.order_lifecycle.amendment_tracker import AmendmentTracker
 from broast_pos.infrastructure.printing.print_triggers import PrintTriggers
 
@@ -57,12 +59,18 @@ class OrderController:
         auth_service: AuthService,
         print_triggers: PrintTriggers,
         cashier_slot: int = 1,
+        product_service: ProductService | None = None,
+        customer_service: CustomerService | None = None,
     ) -> None:
         self._order_svc = order_service
         self._financial_svc = financial_service
         self._auth_svc = auth_service
         self._print = print_triggers
         self._cashier_slot = cashier_slot
+        # H19: resolve product price/name and zone delivery fee here, never
+        # trust the client's numbers.
+        self._products = product_service
+        self._customers = customer_service
 
         # In-memory state
         self._current_order: Order | None = None
@@ -117,17 +125,37 @@ class OrderController:
     def add_item(
         self,
         product_id: int,
-        product_name: str,
-        unit_price: float,
+        product_name: str = "",
+        unit_price: float = 0.0,
         quantity: int = 1,
         notes: str = "",
     ) -> None:
         """Add an item to the current in-memory order.
 
         If the product already exists, increment quantity.
+
+        H19: product_name/unit_price are accepted for backward-compatible
+        call shapes but are ALWAYS ignored — the name and price come from
+        the product catalogue by product_id, never from the caller. This
+        closes the bridge-boundary gap where a client could set its own
+        price for an active product.
+
+        Raises:
+            ValueError: if product_service isn't wired, or the product
+                        doesn't exist / isn't active.
         """
         if self._current_order is None:
             return
+        # H03: a paid order's total must never change — even just on screen —
+        # once payment has been recorded.
+        if self._current_order.is_paid:
+            return
+
+        if self._products is None:
+            raise ValueError("خدمة المنتجات غير مهيأة")
+        product = self._products.get_product(product_id)
+        if product is None or not product.is_active:
+            raise ValueError("المنتج غير موجود أو غير متاح")
 
         # Check if already in order
         for item in self._current_order.items:
@@ -139,8 +167,8 @@ class OrderController:
 
         item = OrderItem(
             product_id=product_id,
-            product_name=product_name,
-            unit_price=unit_price,
+            product_name=product.name,
+            unit_price=product.price,
             quantity=quantity,
             notes=notes,
         )
@@ -151,6 +179,9 @@ class OrderController:
     def change_quantity(self, index: int, delta: int) -> None:
         """Change item quantity by delta (+/-)."""
         if self._current_order is None:
+            return
+        # H03: a paid order's total must never change after payment.
+        if self._current_order.is_paid:
             return
         if 0 <= index < len(self._current_order.items):
             self._current_order.items[index].quantity += delta
@@ -169,6 +200,10 @@ class OrderController:
         """
         if self._current_order is None:
             return False, "لا يوجد طلب حالي"
+
+        # H03: a paid order's total must never change after payment.
+        if self._current_order.is_paid:
+            return False, "لا يمكن تعديل طلب مدفوع بالفعل"
 
         if 0 <= index < len(self._current_order.items):
             # If order is already saved, require manager PIN
@@ -242,21 +277,49 @@ class OrderController:
         address: str = "",
         zone: str = "",
         delivery_fee: float = 0.0,
+        address_id: int | None = None,
         payment_method: str | None = None,
     ) -> None:
         """Set customer info for delivery/pickup orders.
 
         Args:
+            address_id: The customer's saved address id. When given, the
+                        zone name and delivery fee are resolved from it on
+                        the backend (H19) — the zone/delivery_fee
+                        parameters below are then ignored. When omitted
+                        (e.g. a payment-method-only re-send, or a pickup
+                        order), the order's existing zone/fee are kept
+                        as-is rather than trusting the client's numbers.
             payment_method: For delivery, either 'cash' (driver collects) or
                             'online' (pre-paid). Defaults to 'cash' if omitted.
         """
+        if self._current_order and self._current_order.is_paid:
+            # H03: delivery_fee feeds directly into total — must not change
+            # the displayed total of an order that is already paid.
+            return
         if self._current_order:
+            resolved_zone = self._current_order.customer_zone
+            resolved_fee = self._current_order.delivery_fee
+            if address_id is not None:
+                if self._customers is None:
+                    raise ValueError("خدمة العملاء غير مهيأة")
+                saved_address = self._customers.get_address(address_id)
+                if saved_address is None or saved_address.customer_id != customer_id:
+                    raise ValueError("عنوان العميل غير موجود")
+                resolved_zone = saved_address.zone_name
+                resolved_fee = saved_address.delivery_fee
+            elif self._current_order.customer_id is None:
+                # No address resolved yet (first call, e.g. pickup): never
+                # trust the client's delivery_fee — default to zero.
+                resolved_zone = ""
+                resolved_fee = 0.0
+
             self._current_order.customer_id = customer_id
             self._current_order.customer_phone = phone
             self._current_order.customer_name = name
             self._current_order.customer_address = address
-            self._current_order.customer_zone = zone
-            self._current_order.delivery_fee = delivery_fee
+            self._current_order.customer_zone = resolved_zone
+            self._current_order.delivery_fee = resolved_fee
 
             # B-02: delivery payment method defaults to CASH
             if payment_method is not None:
@@ -491,56 +554,50 @@ class OrderController:
         Removing items requires manager PIN.
 
         Returns:
-            (success, message)
+            (success, message, print_ok)
         """
         if self._current_order is None or self._current_order.id is None:
-            return False, "لا يوجد طلب محفوظ للتعديل"
+            return False, "لا يوجد طلب محفوظ للتعديل", False
 
-        # Compute diff from snapshot
+        # Compute diff from snapshot — each change now carries product_id and notes.
         changes = self._amendment_tracker.diff(self._current_order.items)
         if not changes:
-            return True, "لا توجد تغييرات"
+            return True, "لا توجد تغييرات", True
 
-        # Build lookup maps from the current order's actual items
-        current_items_by_name: dict = {
-            item.product_name: item for item in self._current_order.items
+        # Build add/remove lists directly from the stable diff identity fields.
+        # Look up unit_price for additions from the current in-memory order.
+        current_by_key: dict = {
+            (item.product_id, item.notes or ""): item
+            for item in self._current_order.items
         }
-        # Build lookup map from snapshot (for removed items — they no longer exist
-        # in current_order but were in the original)
-        snapshot_items_by_name: dict = {}
-        if self._amendment_tracker._original_names:
-            for (pid, _notes), name in self._amendment_tracker._original_names.items():
-                snapshot_items_by_name[name] = pid
 
         added_items: list[OrderItem] = []
         removed_items: list[OrderItem] = []
         for change in changes:
-            name = change["product_name"]
+            pid = change["product_id"]
+            notes = change["notes"]
             qty = int(change["quantity"])
 
             if change["action"] == "added":
-                # Get the real item from current order
-                real_item = current_items_by_name.get(name)
-                product_id = real_item.product_id if real_item else 0
-                unit_price = real_item.unit_price if real_item else 0.0
+                real_item = current_by_key.get((pid, notes))
                 added_items.append(OrderItem(
-                    product_id=product_id,
-                    product_name=name,
-                    unit_price=unit_price,
+                    product_id=pid,
+                    product_name=change["product_name"],
+                    unit_price=real_item.unit_price if real_item else 0.0,
                     quantity=qty,
+                    notes=notes,
                 ))
             elif change["action"] == "removed":
-                # Get product_id from snapshot
-                product_id = snapshot_items_by_name.get(name, 0)
                 removed_items.append(OrderItem(
-                    product_id=product_id,
-                    product_name=name,
+                    product_id=pid,
+                    product_name=change["product_name"],
                     unit_price=0,
                     quantity=qty,
+                    notes=notes,
                 ))
 
         try:
-            self._order_svc.amend_order(
+            saved = self._order_svc.amend_order(
                 self._current_order.id,
                 added_items,
                 removed_items,
@@ -550,6 +607,9 @@ class OrderController:
             return False, str(exc), True
         except Exception as exc:
             return False, f"فشل في حفظ التعديل: {exc}", True
+
+        # Reload from service so controller state matches what was persisted.
+        self._current_order = saved
 
         # Print amendment kitchen ticket (never blocks save — only informs)
         order_dict = self._order_to_dict(self._current_order)

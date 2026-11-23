@@ -19,6 +19,7 @@ import sys
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QApplication
 
+from broast_pos.config import config
 from broast_pos.config.config import LOGS_PATH, get_app_name
 from broast_pos.core.services.audit_service import AuditService
 from broast_pos.core.services.auth_service import AuthService
@@ -33,7 +34,7 @@ from broast_pos.core.services.product_service import ProductService
 from broast_pos.core.services.report_service import ReportService
 from broast_pos.data.database.connection import DatabaseConnection
 from broast_pos.data.database.migrations import initialise_database
-from broast_pos.data.database.seed import seed_database
+from broast_pos.data.database.seed import seed_database, validate_no_default_admin
 from broast_pos.data.repositories.audit_repository import AuditRepository
 from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
 from broast_pos.data.repositories.cashier_session_repository import (
@@ -94,11 +95,38 @@ def _setup_logging() -> None:
     root.addHandler(file_handler)
 
 
+def _configure_printing(printer_manager: PrinterManager) -> PrintTriggers:
+    """H14: initialise all configured printers and build print-trigger wiring.
+
+    Extracted out of main() so tests can exercise this exact startup step
+    (with a safe dummy transport) instead of re-implementing it.
+    """
+    printer_manager.initialise()
+    return PrintTriggers(printer_manager)
+
+
+def _wire_printer_shutdown(app: QApplication, printer_manager: PrinterManager) -> None:
+    """H14: disconnect printers gracefully on app exit.
+
+    Extracted out of main() so tests can verify this exact wiring runs the
+    real shutdown() method, not a hand-rolled stand-in.
+    """
+    app.aboutToQuit.connect(printer_manager.shutdown)
+
 
 def main() -> int:
     """Application entry point — returns exit code."""
     _setup_logging()
     logger.info("Starting %s …", get_app_name())
+
+    # ------------------------------------------------------------------
+    # 0. Configuration & Security Pre-flight
+    # ------------------------------------------------------------------
+    try:
+        config.validate_production_secrets()
+    except Exception as exc:
+        logger.critical("Security configuration check failed: %s", exc)
+        return 1
 
     # ------------------------------------------------------------------
     # 1. Database
@@ -107,6 +135,7 @@ def main() -> int:
         db = DatabaseConnection.get_instance()
         initialise_database(db)
         seed_database(db)
+        validate_no_default_admin(db)
         logger.info("Database ready (WAL mode)")
     except Exception as exc:
         logger.critical("Database init failed: %s", exc)
@@ -196,7 +225,7 @@ def main() -> int:
     # 4. Printing infrastructure
     # ------------------------------------------------------------------
     printer_manager = PrinterManager()
-    print_triggers = PrintTriggers(printer_manager)
+    print_triggers = _configure_printing(printer_manager)
 
     # ------------------------------------------------------------------
     # 5. Qt Application
@@ -234,6 +263,9 @@ def main() -> int:
 
     shell = WebShell(bridge)
     shell.show()
+
+    # Disconnect printers gracefully on app exit
+    _wire_printer_shutdown(app, printer_manager)
 
     # ------------------------------------------------------------------
     # 7. Background Tasks

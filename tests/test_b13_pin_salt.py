@@ -87,3 +87,46 @@ def test_login_by_pin_finds_salted_user(auth):
     svc, _ = auth
     svc.create_user("cash", "Cash", UserRole.CASHIER, "2222", cashier_slot=1)
     assert svc.login_by_pin("2222").username == "cash"
+
+
+def test_old_dev_pepper_authenticates_and_rehashes_to_current_pepper(auth, monkeypatch):
+    """A dev account made before the pepper change remains usable once."""
+    svc, repo = auth
+    old_pepper = auth_service._LEGACY_DEV_PEPPER
+    monkeypatch.setattr(auth_service, "_PIN_PEPPER", old_pepper)
+    salt = AuthService._make_salt()
+    old_hash = AuthService._hash_secure("8642", salt)
+    repo._db.execute(
+        "INSERT INTO users (username, display_name, pin_hash, pin_salt, role, is_active) "
+        "VALUES (?, ?, ?, ?, ?, 1)",
+        ("old-dev", "Old Dev", old_hash, salt, "manager"),
+    )
+    repo._db.commit()
+
+    new_pepper = "new-development-pepper-for-test"
+    monkeypatch.setattr(auth_service, "_PIN_PEPPER", new_pepper)
+
+    assert svc.login_by_pin("8642").username == "old-dev"
+    migrated = repo.get_all_active()[0]
+    assert migrated.pin_hash != old_hash
+    assert migrated.pin_hash == AuthService._hash_secure("8642", migrated.pin_salt)
+    assert svc.login_by_pin("8642").username == "old-dev"
+
+
+def test_old_dev_pepper_fallback_is_disabled_in_production(auth, monkeypatch):
+    """The development compatibility pepper must never work in production."""
+    svc, repo = auth
+    old_pepper = auth_service._LEGACY_DEV_PEPPER
+    monkeypatch.setattr(auth_service, "_PIN_PEPPER", old_pepper)
+    salt = AuthService._make_salt()
+    old_hash = AuthService._hash_secure("9753", salt)
+    repo._db.execute(
+        "INSERT INTO users (username, display_name, pin_hash, pin_salt, role, is_active) "
+        "VALUES (?, ?, ?, ?, ?, 1)",
+        ("old-prod", "Old Prod", old_hash, salt, "manager"),
+    )
+    repo._db.commit()
+
+    monkeypatch.setattr(auth_service, "_PIN_PEPPER", "new-production-pepper")
+    monkeypatch.setattr(auth_service.config, "ENVIRONMENT", "prod")
+    assert svc._find_user_by_pin("9753") is None

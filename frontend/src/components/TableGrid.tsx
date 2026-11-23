@@ -27,7 +27,7 @@ export const TableGrid: React.FC<TableGridProps> = ({
       <div className="w-full max-w-lg mx-4 bg-brand-surface border border-brand-border rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
         {/* Header */}
         <div className="p-5 border-b border-brand-border/40 flex items-center justify-between">
-          <h3 className="font-bold text-xl text-brand-gold">اختيار رقم الطاولة</h3>
+          <h3 className="font-bold text-xl text-brand-red">اختيار رقم الطاولة</h3>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-brand-border/30"
@@ -47,7 +47,7 @@ export const TableGrid: React.FC<TableGridProps> = ({
             مشغولة
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="w-3 h-3 rounded-full bg-brand-gold inline-block" />
+            <span className="w-3 h-3 rounded-full bg-brand-red inline-block" />
             مختارة
           </span>
         </div>
@@ -71,7 +71,7 @@ export const TableGrid: React.FC<TableGridProps> = ({
                     transition-all duration-200 active:scale-95
                     ${
                       isSelected
-                        ? "bg-brand-gold/15 border-brand-gold text-brand-gold shadow-lg shadow-brand-gold/20"
+                        ? "bg-brand-red/15 border-brand-red text-brand-red shadow-lg shadow-brand-red/20"
                         : isOccupied
                         ? "bg-red-950/40 border-red-700/70 text-red-400 shadow-md shadow-red-900/20"
                         : "bg-brand-card border-brand-border/40 text-gray-300 hover:text-white hover:border-brand-border hover:bg-brand-card/80"
@@ -79,7 +79,7 @@ export const TableGrid: React.FC<TableGridProps> = ({
                   `}
                 >
                   <span className="text-[9px] text-gray-500 uppercase tracking-wider">طاولة</span>
-                  <span className={`text-2xl font-black font-mono ${isSelected ? "text-brand-gold" : isOccupied ? "text-red-400" : ""}`}>
+                  <span className={`text-2xl font-black font-mono ${isSelected ? "text-brand-red" : isOccupied ? "text-red-400" : ""}`}>
                     {tableNo}
                   </span>
 
@@ -92,7 +92,7 @@ export const TableGrid: React.FC<TableGridProps> = ({
 
                   {/* Selected indicator */}
                   {isSelected && (
-                    <div className="absolute top-1.5 left-1.5 h-3 w-3 rounded-full bg-brand-gold animate-pulse" />
+                    <div className="absolute top-1.5 left-1.5 h-3 w-3 rounded-full bg-brand-red animate-pulse" />
                   )}
 
                   {/* Occupied indicator */}
@@ -115,7 +115,7 @@ export const TableGrid: React.FC<TableGridProps> = ({
           <button
             onClick={onClose}
             disabled={!selectedTable}
-            className="py-2.5 px-6 rounded-xl font-bold text-sm bg-brand-gold text-brand-dark hover:bg-opacity-90 disabled:opacity-40 disabled:cursor-not-allowed active:translate-y-0.5 transition-all"
+            className="py-2.5 px-6 rounded-xl font-bold text-sm bg-brand-red text-brand-dark hover:bg-opacity-90 disabled:opacity-40 disabled:cursor-not-allowed active:translate-y-0.5 transition-all"
           >
             تأكيد الطاولة
           </button>
