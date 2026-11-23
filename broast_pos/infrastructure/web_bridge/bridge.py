@@ -12,7 +12,11 @@ from broast_pos.data.repositories.parked_draft_repository import ParkedDraftRepo
 from broast_pos.features.delivery_system.delivery_controller import DeliveryController
 from broast_pos.features.financial.financial_controller import FinancialController
 from broast_pos.features.financial.session_controller import SessionController
-from broast_pos.features.order_lifecycle.order_controller import OrderController
+from broast_pos.features.order_lifecycle.order_controller import (
+    MANAGER_PIN_REQUIRED_MSG,
+    REMOVAL_REASON_REQUIRED_MSG,
+    OrderController,
+)
 from broast_pos.features.reports.reports_controller import ReportsController
 
 logger = logging.getLogger(__name__)
@@ -185,6 +189,7 @@ class POSBridge(QObject):
             "avatar_path": u.avatar_path,
             "role": u.role.value,
             "cashier_slot": u.cashier_slot,
+            "phone": u.phone,
             "is_active": u.is_active,
         }
 
@@ -343,6 +348,8 @@ class POSBridge(QObject):
                         role=role,
                         pin=payload.get("pin", ""),
                         cashier_slot=payload.get("cashier_slot"),
+                        phone=payload.get("phone"),
+                        require_driver_phone=True,
                     )
                     return json.dumps({"success": True, "data": self._user_to_dict(user)})
                 except ValueError as e:
@@ -363,6 +370,11 @@ class POSBridge(QObject):
                         pin=payload.get("pin"),
                         cashier_slot=payload.get("cashier_slot", -1),
                         is_active=payload.get("is_active"),
+                        phone=payload.get("phone"),
+                        # Only an explicit "make/keep this a driver" (slot null) needs a phone.
+                        require_driver_phone=(
+                            "cashier_slot" in payload and payload["cashier_slot"] is None
+                        ),
                     )
                     return json.dumps({"success": True, "data": self._user_to_dict(user)})
                 except ValueError as e:
@@ -698,7 +710,8 @@ class POSBridge(QObject):
                             "return_trip", "settle_trip", "get_trip_details",
                             "get_driver_attendance_today", "get_daily_driver_summary",
                             "get_unassigned_deliveries", "get_driver_settlement_preview",
-                            "settle_driver", "get_driver_settlements"):
+                            "settle_driver", "get_driver_settlements",
+                            "print_driver_day_sheet"):
                 if not self._delivery_ctrl:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
                 return self._dispatch_delivery(action, payload)
@@ -912,11 +925,23 @@ class POSBridge(QObject):
                 return json.dumps({"success": True, "data": self._order_to_dict(order)})
             return json.dumps({"success": False, "error": "لا يوجد طلب لهذه الطاولة"})
         elif action == "save_amendment":
-            ok, msg, print_ok = ctrl.save_amendment(payload.get("manager_pin"))
+            ok, msg, print_ok = ctrl.save_amendment(
+                payload.get("manager_pin"), payload.get("reason")
+            )
             if ok:
                 return json.dumps({"success": True, "message": msg,
                                    "data": {"print_failed": not print_ok}})
-            return json.dumps({"success": False, "error": msg})
+            # Machine-readable code so the UI can ask for the manager PIN /
+            # removal reason and retry instead of just showing an error.
+            code = None
+            if msg == MANAGER_PIN_REQUIRED_MSG:
+                code = "manager_pin_required"
+            elif msg == REMOVAL_REASON_REQUIRED_MSG:
+                code = "removal_reason_required"
+            resp = {"success": False, "error": msg}
+            if code:
+                resp["code"] = code
+            return json.dumps(resp)
         elif action == "get_active_orders":
             return json.dumps({"success": True, "data": [self._order_to_dict(o) for o in ctrl.get_active_orders()]})
         elif action == "get_active_by_type":
@@ -1060,6 +1085,14 @@ class POSBridge(QObject):
                     "total_order_value": result.total_order_value,
                     "settled_at": result.settled_at,
                 }})
+            return json.dumps({"success": False, "error": result})
+        elif action == "print_driver_day_sheet":
+            ok, result = ctrl.print_driver_day_sheet(
+                driver_id=payload.get("driver_id"),
+                settlement_date=payload.get("date"),
+            )
+            if ok:
+                return json.dumps({"success": True, "data": {"printed": result["printed"]}})
             return json.dumps({"success": False, "error": result})
         elif action == "get_driver_settlements":
             records = ctrl.get_driver_settlements(
