@@ -206,14 +206,14 @@ function App() {
       {demoModeBanner}
 
       {/* Top Premium Navbar Header */}
-      <header className="h-16 bg-brand-surface border-b border-brand-border/60 flex items-center justify-between px-6 z-20">
+      <header className="h-20 bg-brand-surface border-b border-brand-border/60 flex items-center justify-between px-6 z-20">
 
         {/* Right side: Logo & Navigation */}
         <div className="flex items-center gap-6">
           {/* Logo */}
           <div className="flex items-center gap-2">
-            <img src={prostshP} alt={brandFirst} className="h-9 w-auto drop-shadow" />
-            <span className="font-extrabold text-lg text-white">
+            <img src={prostshP} alt={brandFirst} className="h-12 w-auto drop-shadow" />
+            <span className="font-extrabold text-xl text-white">
               {brandFirst} <span className="red-gradient-text">{brandRest}</span>
             </span>
           </div>
@@ -230,13 +230,13 @@ function App() {
                     onClick={() => setActiveTab(n.id)}
                     title={n.label}
                     aria-label={n.label}
-                    className={`group flex items-center py-2 ${activeTab === n.id ? "px-3" : "px-2.5 xl:px-3"} rounded-xl text-sm font-bold whitespace-nowrap transition-all ${
+                    className={`group flex items-center min-h-12 min-w-12 justify-center py-3 ${activeTab === n.id ? "px-4" : "px-3.5 xl:px-4"} rounded-xl text-base font-bold whitespace-nowrap transition-all ${
                       activeTab === n.id
                         ? "bg-brand-red/10 text-brand-red border border-brand-red/30"
                         : "text-gray-400 hover:text-white hover:bg-brand-card/40 border border-transparent"
                     }`}
                   >
-                    <Icon size={16} className="shrink-0" />
+                    <Icon size={24} className="shrink-0" />
                     {/* Crowded bar: the active tab keeps its label; the others
                         slide their name in on hover (always visible on wide screens). */}
                     <span
@@ -259,13 +259,13 @@ function App() {
           {/* Shift indicator */}
           <button
             onClick={() => setIsShiftOpen(true)}
-            className={`py-1.5 px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 active:scale-95 transition-all ${
+            className={`min-h-12 py-2 px-4 rounded-xl border text-sm font-semibold flex items-center gap-2 active:scale-95 transition-all ${
               activeShift
                 ? "bg-brand-teal/10 border-brand-teal/30 text-brand-teal"
                 : "bg-red-950/20 border-red-900/30 text-red-400"
             }`}
           >
-            <Calendar size={14} />
+            <Calendar size={22} />
             <span>{activeShift ? "الوردية مفتوحة" : "الوردية مغلقة"}</span>
           </button>
 
@@ -276,12 +276,12 @@ function App() {
               aria-label="قائمة المستخدم"
               aria-expanded={isUserMenuOpen}
               title={currentUser.display_name}
-              className="flex items-center gap-1.5 bg-brand-card/80 py-1.5 px-2 rounded-xl border border-brand-border/40 hover:border-brand-red/40 active:scale-95 transition-all"
+              className="flex items-center gap-2 min-h-12 min-w-12 justify-center bg-brand-card/80 py-2 px-3 rounded-xl border border-brand-border/40 hover:border-brand-red/40 active:scale-95 transition-all"
             >
-              <div className="h-6 w-6 rounded-full bg-brand-red/20 text-brand-red flex items-center justify-center">
-                <User size={14} />
+              <div className="h-9 w-9 rounded-full bg-brand-red/20 text-brand-red flex items-center justify-center">
+                <User size={22} />
               </div>
-              <ChevronDown size={12} className="text-gray-400" />
+              <ChevronDown size={18} className="text-gray-400" />
             </button>
             {isUserMenuOpen && (
               <>
