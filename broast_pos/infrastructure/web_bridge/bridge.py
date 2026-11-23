@@ -262,6 +262,19 @@ class POSBridge(QObject):
             ],
         }
 
+    def _audit_event(self, event_type, entity_type, entity_id, before=None, after=None):
+        """Best-effort audit entry for the current user; never breaks the action."""
+        if self._audit_svc is None or self._current_user is None:
+            return
+        try:
+            self._audit_svc.log_from_user(
+                event_type=event_type, actor=self._current_user,
+                entity_type=entity_type, entity_id=entity_id,
+                before=before, after=after,
+            )
+        except Exception:
+            logger.exception("audit log failed for %s", event_type)
+
     def _zone_to_dict(self, z: Zone) -> dict[str, Any]:
         return {"id": z.id, "name": z.name, "delivery_fee": z.delivery_fee, "is_active": z.is_active}
 
@@ -520,6 +533,110 @@ class POSBridge(QObject):
             elif action == "get_active_zones":
                 zones = self._customer.get_active_zones()
                 return json.dumps({"success": True, "data": [self._zone_to_dict(z) for z in zones]})
+
+            elif action == "search_customers":
+                if not self._current_user:
+                    return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
+                found = self._customer.search_customers(payload.get("query", ""))
+                return json.dumps({"success": True, "data": [self._customer_to_dict(c) for c in found]})
+
+            elif action == "update_customer":
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
+                try:
+                    before = self._customer.get_customer_by_id(payload.get("customer_id"))
+                    cust = self._customer.update_customer(
+                        customer_id=payload.get("customer_id"),
+                        name=payload.get("name"),
+                        phone=payload.get("phone"),
+                    )
+                except ValueError as e:
+                    return json.dumps({"success": False, "error": str(e)})
+                self._audit_event(
+                    "customer_updated", "customer", cust.id,
+                    before={"name": before.name, "phone": before.phone} if before else None,
+                    after={"name": cust.name, "phone": cust.phone},
+                )
+                return json.dumps({"success": True, "data": self._customer_to_dict(cust)})
+
+            # ── Delivery zones (manager+) ─────────────────────────────────────
+            elif action == "get_all_zones":
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
+                return json.dumps({"success": True, "data": [self._zone_to_dict(z) for z in self._customer.get_all_zones()]})
+
+            elif action == "create_zone":
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
+                try:
+                    zone = self._customer.create_zone(
+                        name=payload.get("name", ""),
+                        delivery_fee=float(payload.get("delivery_fee", 0)),
+                    )
+                except (ValueError, TypeError) as e:
+                    return json.dumps({"success": False, "error": str(e)})
+                self._audit_event("zone_created", "zone", zone.id,
+                                  after={"name": zone.name, "delivery_fee": zone.delivery_fee})
+                return json.dumps({"success": True, "data": self._zone_to_dict(zone)})
+
+            elif action == "update_zone":
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
+                try:
+                    old = next((z for z in self._customer.get_all_zones() if z.id == payload.get("zone_id")), None)
+                    fee = payload.get("delivery_fee")
+                    zone = self._customer.update_zone(
+                        zone_id=payload.get("zone_id"),
+                        name=payload.get("name"),
+                        delivery_fee=float(fee) if fee is not None else None,
+                        is_active=payload.get("is_active"),
+                    )
+                except (ValueError, TypeError) as e:
+                    return json.dumps({"success": False, "error": str(e)})
+                self._audit_event(
+                    "zone_updated", "zone", zone.id,
+                    before={"name": old.name, "delivery_fee": old.delivery_fee, "is_active": old.is_active} if old else None,
+                    after={"name": zone.name, "delivery_fee": zone.delivery_fee, "is_active": zone.is_active},
+                )
+                return json.dumps({"success": True, "data": self._zone_to_dict(zone)})
+
+            elif action == "delete_category":
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
+                try:
+                    self._product.delete_category(payload.get("category_id"))
+                except ValueError as e:
+                    return json.dumps({"success": False, "error": str(e)})
+                self._audit_event("category_deleted", "category", payload.get("category_id"))
+                return json.dumps({"success": True})
+
+            # ── Monthly / yearly reports (manager+) ───────────────────────────
+            elif action in ("get_report_monthly", "get_report_yearly"):
+                if not self._reports_ctrl:
+                    return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
+                try:
+                    year = int(payload.get("year"))
+                    if not 2000 <= year <= 2100:
+                        raise ValueError("السنة غير صحيحة")
+                    if action == "get_report_monthly":
+                        month = int(payload.get("month"))
+                        if not 1 <= month <= 12:
+                            raise ValueError("الشهر غير صحيح")
+                        data = {
+                            "summary": self._reports_ctrl.get_monthly_summary(year, month),
+                            "bestsellers": self._reports_ctrl.get_monthly_bestsellers(year, month, 10),
+                            "expenses": self._reports_ctrl.get_monthly_expenses(year, month),
+                        }
+                    else:
+                        data = {
+                            "summary": self._reports_ctrl.get_yearly_summary(year),
+                            "bestsellers": self._reports_ctrl.get_yearly_bestsellers(year, 10),
+                        }
+                except (ValueError, TypeError) as e:
+                    return json.dumps({"success": False, "error": str(e) or "بيانات غير صحيحة"})
+                return json.dumps({"success": True, "data": data})
 
             # ── Financial / Shift ─────────────────────────────────────────────
             elif action == "get_active_shift":
