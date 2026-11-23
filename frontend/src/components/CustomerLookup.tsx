@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
-import { X, Search, Plus, UserPlus, MapPin, Check } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { X, Search, Plus, UserPlus, MapPin, Check, Pencil } from "lucide-react";
 import { bridge } from "../bridge";
+import { INVALID_PHONE_MSG, looksLikePhone, normalizeEgyptianMobile } from "../phone";
 
 interface CustomerLookupProps {
   isOpen: boolean;
@@ -19,6 +20,16 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
   const [phone, setPhone] = useState("");
   const [customer, setCustomer] = useState<any>(null);
   const [searched, setSearched] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
+  const [matches, setMatches] = useState<any[]>([]);
+  const phoneInputRef = useRef<HTMLInputElement>(null);
+
+  // Manager-only customer editing
+  const [canEdit, setCanEdit] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editError, setEditError] = useState("");
 
   // Registration states
   const [isRegistering, setIsRegistering] = useState(false);
@@ -35,8 +46,17 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
       // CHANGED: reset the lookup every time the dialog opens, so a previous
       // order's phone/customer/forms don't linger when it's reopened.
       setPhone("");
+      setPhoneError("");
+      setMatches([]);
+      setIsEditing(false);
+      setEditError("");
       setCustomer(null);
       setSearched(false);
+      // Focus the phone field so the cashier can type immediately
+      setTimeout(() => phoneInputRef.current?.focus(), 50);
+      bridge.call("get_current_user")
+        .then((u: any) => setCanEdit(!!u && (u.role === "manager" || u.role === "admin")))
+        .catch(() => setCanEdit(false));
       setIsRegistering(false);
       setRegName("");
       setIsAddingAddress(false);
@@ -57,28 +77,92 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
   if (!isOpen) return null;
 
   const handleSearch = async () => {
-    if (!phone) return;
+    const text = phone.trim();
+    if (!text) return;
+    setPhoneError("");
+    setMatches([]);
+    setIsEditing(false);
+    // Letters in the box mean the cashier is searching by name
+    if (!looksLikePhone(text)) {
+      try {
+        const res = await bridge.call("search_customers", { query: text });
+        setCustomer(null);
+        setMatches(res || []);
+        setSearched(false);
+        if (!res || res.length === 0) setPhoneError("لا يوجد عميل بهذا الاسم. للبحث برقم الهاتف اكتب الأرقام فقط.");
+      } catch (e: any) {
+        setPhoneError(e?.message || "تعذر البحث");
+      }
+      return;
+    }
+    const normalized = normalizeEgyptianMobile(text);
+    if (!normalized) {
+      setCustomer(null);
+      setSearched(false);
+      setPhoneError(INVALID_PHONE_MSG);
+      return;
+    }
+    setPhone(normalized);
     try {
-      const res = await bridge.call("find_customer_by_phone", { phone });
+      const res = await bridge.call("find_customer_by_phone", { phone: normalized });
       setCustomer(res || null);
       setSearched(true);
       setIsRegistering(false);
       setIsAddingAddress(false);
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       setCustomer(null);
-      setSearched(true);
+      setSearched(false);
+      setPhoneError(e?.message || INVALID_PHONE_MSG);
+    }
+  };
+
+  const pickMatch = (c: any) => {
+    setMatches([]);
+    setPhone(c.phone);
+    setCustomer(c);
+    setSearched(true);
+    setIsRegistering(false);
+    setIsAddingAddress(false);
+  };
+
+  const startEdit = () => {
+    setEditName(customer?.name || "");
+    setEditPhone(customer?.phone || "");
+    setEditError("");
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customer) return;
+    if (!editName.trim()) { setEditError("اسم العميل مطلوب"); return; }
+    const normalized = normalizeEgyptianMobile(editPhone);
+    if (!normalized) { setEditError(INVALID_PHONE_MSG); return; }
+    try {
+      const res = await bridge.call("update_customer", {
+        customer_id: customer.id,
+        name: editName.trim(),
+        phone: normalized,
+      });
+      setCustomer(res);
+      setPhone(res.phone);
+      setIsEditing(false);
+    } catch (err: any) {
+      setEditError(err?.message || "فشل حفظ التعديل");
     }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!regName || !phone) return;
+    const normalizedPhone = normalizeEgyptianMobile(phone);
+    if (!normalizedPhone) { setPhoneError(INVALID_PHONE_MSG); return; }
     try {
       // create_customer only takes name + phone (no notes field in Customer model)
       const res = await bridge.call("create_customer", {
         name: regName,
-        phone: phone,
+        phone: normalizedPhone,
       });
       setCustomer(res);
       setIsRegistering(false);
@@ -120,7 +204,10 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md"
+      onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+    >
       <div className="w-full max-w-2xl mx-4 bg-brand-surface border border-brand-border rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
         
         {/* Header */}
@@ -141,14 +228,17 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
           <div className="flex gap-2">
             <div className="relative flex-1">
               <input
+                ref={phoneInputRef}
+                autoFocus
                 type="text"
+                inputMode="tel"
                 placeholder="أدخل رقم الموبايل..."
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => { setPhone(e.target.value); setPhoneError(""); }}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                className="w-full bg-brand-card border border-brand-border/60 rounded-xl py-3 px-4 text-white placeholder-gray-500 focus:outline-none focus:border-brand-red text-left font-mono text-lg"
+                className="w-full bg-brand-card border border-brand-border/60 rounded-xl py-3 pl-11 pr-4 text-white placeholder-gray-500 focus:outline-none focus:border-brand-red text-left font-mono text-lg"
               />
-              <Search className="absolute left-3 top-3.5 text-gray-500" size={20} />
+              <Search className="absolute left-3 top-3.5 text-gray-500 pointer-events-none" size={20} />
             </div>
             <button
               onClick={handleSearch}
@@ -157,6 +247,26 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
               بحث
             </button>
           </div>
+
+          {phoneError && (
+            <p className="text-red-400 text-sm -mt-3" role="alert">{phoneError}</p>
+          )}
+
+          {matches.length > 0 && (
+            <div className="grid grid-cols-1 gap-2">
+              {matches.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => pickMatch(m)}
+                  className="p-3 bg-brand-card hover:bg-brand-border/20 border border-brand-border/40 rounded-xl flex justify-between items-center text-right"
+                >
+                  <span className="text-white font-medium">{m.name}</span>
+                  <span className="text-gray-400 font-mono text-sm">{m.phone}</span>
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Search Results */}
           {searched && (
@@ -186,6 +296,15 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                           اختيار لاستلام المحل
                         </button>
                       )}
+                      {canEdit && !isEditing && (
+                        <button
+                          onClick={startEdit}
+                          className="py-2 px-3 bg-brand-border/30 hover:bg-brand-border/60 text-gray-300 rounded-lg font-semibold text-xs flex items-center gap-1 active:translate-y-0.5"
+                        >
+                          <Pencil size={14} />
+                          تعديل
+                        </button>
+                      )}
                       {!isAddingAddress && (
                       <button
                         onClick={() => setIsAddingAddress(true)}
@@ -197,6 +316,37 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                     )}
                     </div>
                   </div>
+
+                  {isEditing && (
+                    <form onSubmit={handleSaveEdit} className="bg-brand-card/80 p-4 rounded-xl border border-brand-border/65 space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-gray-400 text-xs block mb-1">اسم العميل</label>
+                          <input
+                            type="text"
+                            value={editName}
+                            onChange={(e) => { setEditName(e.target.value); setEditError(""); }}
+                            className="w-full bg-brand-surface border border-brand-border/50 rounded-lg p-2.5 text-white focus:outline-none focus:border-brand-red"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-gray-400 text-xs block mb-1">رقم الموبايل</label>
+                          <input
+                            type="text"
+                            inputMode="tel"
+                            value={editPhone}
+                            onChange={(e) => { setEditPhone(e.target.value); setEditError(""); }}
+                            className="w-full bg-brand-surface border border-brand-border/50 rounded-lg p-2.5 text-white text-left font-mono focus:outline-none focus:border-brand-red"
+                          />
+                        </div>
+                      </div>
+                      {editError && <p className="text-red-400 text-sm" role="alert">{editError}</p>}
+                      <div className="flex justify-end gap-2">
+                        <button type="button" onClick={() => setIsEditing(false)} className="py-1.5 px-4 text-gray-400 hover:text-white rounded-lg font-bold text-sm">إلغاء</button>
+                        <button type="submit" className="py-1.5 px-4 bg-brand-red text-brand-dark rounded-lg font-bold text-sm">حفظ التعديل</button>
+                      </div>
+                    </form>
+                  )}
 
                   {/* Add Address Form */}
                   {isAddingAddress && (
