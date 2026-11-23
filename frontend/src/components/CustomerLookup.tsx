@@ -23,6 +23,8 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
   const [phoneError, setPhoneError] = useState("");
   const [matches, setMatches] = useState<any[]>([]);
   const phoneInputRef = useRef<HTMLInputElement>(null);
+  const lastLookupRef = useRef("");
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
 
   // Manager-only customer editing
   const [canEdit, setCanEdit] = useState(false);
@@ -73,6 +75,31 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
         .catch(console.error);
     }
   }, [isOpen]);
+
+  // Repeat customers: a complete valid phone number is looked up on its own,
+  // no need to press the search button.
+  useEffect(() => {
+    if (!isOpen) { lastLookupRef.current = ""; return; }
+    const normalized = looksLikePhone(phone.trim()) ? normalizeEgyptianMobile(phone.trim()) : null;
+    if (!normalized || lastLookupRef.current === normalized) return;
+    const timer = setTimeout(() => {
+      lastLookupRef.current = normalized;
+      handleSearch();
+    }, 250);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phone, isOpen]);
+
+  // Last 3 orders of the customer on screen
+  useEffect(() => {
+    setRecentOrders([]);
+    if (!isOpen || !customer?.id) return;
+    let cancelled = false;
+    bridge.call("get_customer_history", { customer_id: customer.id, limit: 3 })
+      .then((rows: any[]) => { if (!cancelled) setRecentOrders(rows || []); })
+      .catch(() => { if (!cancelled) setRecentOrders([]); });
+    return () => { cancelled = true; };
+  }, [isOpen, customer?.id]);
 
   if (!isOpen) return null;
 
@@ -424,6 +451,25 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                       </div>
                     ) : (
                       <p className="text-gray-500 text-sm italic">لا توجد عناوين مسجلة للعميل. يرجى إضافة عنوان.</p>
+                    )}
+                  </div>
+
+                  {/* Last orders */}
+                  <div>
+                    <h5 className="text-sm font-semibold text-gray-400 mb-2">آخر الطلبات:</h5>
+                    {recentOrders.length > 0 ? (
+                      <div className="grid grid-cols-1 gap-2" data-testid="recent-orders">
+                        {recentOrders.map((o: any) => (
+                          <div key={o.id} className="p-3 bg-brand-card/60 border border-brand-border/30 rounded-xl flex justify-between items-center text-sm">
+                            <span className="text-white font-bold">{Number(o.total || 0).toFixed(2)} ج.م</span>
+                            <span className="text-gray-400 text-xs">{o.status === "cancelled" ? "ملغي" : o.is_paid ? "مدفوع" : "غير مدفوع"}</span>
+                            <span className="text-gray-400 font-mono text-xs">{String(o.created_at || "").slice(0, 16).replace("T", " ")}</span>
+                            <span className="text-brand-red font-mono">#{o.invoice_no}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-sm italic">لا توجد طلبات سابقة.</p>
                     )}
                   </div>
                 </div>
