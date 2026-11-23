@@ -147,19 +147,16 @@ class OrderController:
         if self._current_order is None:
             return
         # H03: a paid order's total must never change — even just on screen —
-        # once payment has been recorded.
+        # once payment has been recorded. Raise (rather than silently no-op)
+        # so the caller sees a clear error instead of a false "success".
         if self._current_order.is_paid:
-            return
+            raise ValueError("لا يمكن إضافة عناصر إلى طلب مدفوع")
 
         if self._products is None:
             raise ValueError("خدمة المنتجات غير مهيأة")
         product = self._products.get_product(product_id)
         if product is None or not product.is_active:
             raise ValueError("المنتج غير موجود أو غير متاح")
-
-        # H03: reject item additions on a paid active order
-        if self._current_order.is_paid:
-            raise ValueError("لا يمكن إضافة عناصر إلى طلب مدفوع")
 
         # Check if already in order
         for item in self._current_order.items:
@@ -300,9 +297,15 @@ class OrderController:
                             'online' (pre-paid). Defaults to 'cash' if omitted.
         """
         if self._current_order and self._current_order.is_paid:
-            # H03: delivery_fee feeds directly into total — must not change
-            # the displayed total of an order that is already paid.
-            return
+            # H03: delivery_fee feeds directly into total and payment_method
+            # drives reconciliation — neither may change once an order is
+            # paid. Raise so the caller sees a clear error. Other fields
+            # (name/phone/address/zone/customer_id) are not total-affecting
+            # and remain editable.
+            if delivery_fee or address_id is not None:
+                raise ValueError("لا يمكن تغيير رسوم التوصيل على طلب مدفوع")
+            if payment_method is not None:
+                raise ValueError("لا يمكن تغيير طريقة الدفع على طلب مدفوع")
         if self._current_order:
             resolved_zone = self._current_order.customer_zone
             resolved_fee = self._current_order.delivery_fee
