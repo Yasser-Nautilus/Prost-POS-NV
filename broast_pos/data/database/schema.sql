@@ -532,3 +532,13 @@ WHEN typeof(NEW.quantity) != 'integer' OR NEW.quantity <= 0
 BEGIN
     SELECT RAISE(ABORT,'quantity_must_be_positive_integer');
 END;
+
+-- Mixed payment / split bill: one row per part. Orders paid with a single
+-- method have no rows here (orders.payment_method stays authoritative).
+CREATE TABLE IF NOT EXISTS order_payments (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id  INTEGER NOT NULL REFERENCES orders(id),
+    method    TEXT    NOT NULL CHECK (method IN ('cash', 'visa', 'online')),
+    amount    REAL    NOT NULL CHECK (amount > 0)
+);
+CREATE INDEX IF NOT EXISTS idx_order_payments_order ON order_payments(order_id);
