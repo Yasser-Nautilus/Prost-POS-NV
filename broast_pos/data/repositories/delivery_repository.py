@@ -14,6 +14,7 @@ from broast_pos.core.models.delivery import (
     DriverAttendance,
     DriverStatus,
 )
+from broast_pos.core.clock import restaurant_now_str
 from broast_pos.data.repositories.base_repository import BaseRepository
 
 
@@ -49,8 +50,8 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
     def check_in(self, driver_id: int) -> DriverAttendance:
         """Create attendance record with check_in_at timestamp."""
         self._db.execute(
-            "INSERT INTO driver_attendance (driver_id) VALUES (?)",
-            (driver_id,),
+            "INSERT INTO driver_attendance (driver_id, check_in_at) VALUES (?, ?)",
+            (driver_id, restaurant_now_str()),
         )
         att_id = self._last_insert_id()
         self._db.commit()
@@ -60,11 +61,27 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
         """Update the latest open attendance record with check_out_at."""
         self._db.execute(
             """UPDATE driver_attendance
-               SET check_out_at = datetime('now', 'localtime')
+               SET check_out_at = ?
                WHERE driver_id = ? AND check_out_at IS NULL""",
-            (driver_id,),
+            (restaurant_now_str(), driver_id),
         )
         self._db.commit()
+
+    def check_out_all_drivers(self) -> int:
+        """Check out every driver still on duty. Returns how many were open."""
+        row = self._db.fetch_one(
+            "SELECT COUNT(*) AS c FROM driver_attendance WHERE check_out_at IS NULL"
+        )
+        count = int(row["c"]) if row else 0
+        if count:
+            self._db.execute(
+                """UPDATE driver_attendance
+                   SET check_out_at = ?
+                   WHERE check_out_at IS NULL""",
+                (restaurant_now_str(),),
+            )
+            self._db.commit()
+        return count
 
     def get_checked_in_drivers(self) -> list[DriverAttendance]:
         """All currently active drivers (checked in, not checked out)."""

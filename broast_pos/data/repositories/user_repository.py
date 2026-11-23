@@ -137,6 +137,7 @@ class UserRepository(BaseRepository[User]):
             cashier_slot=row["cashier_slot"],
             is_active=bool(row["is_active"]),
             created_at=row["created_at"],
+            phone=row["phone"] if "phone" in row.keys() else None,  # noqa: SIM118
         )
 
     def _insert(self, user: User) -> User:
@@ -144,12 +145,12 @@ class UserRepository(BaseRepository[User]):
         self._db.execute(
             """INSERT INTO users
                    (username, display_name, avatar_path, pin_hash, pin_salt,
-                    role, cashier_slot, is_active)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    role, cashier_slot, is_active, phone)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 user.username, user.display_name, user.avatar_path,
                 user.pin_hash, user.pin_salt, user.role.value, user.cashier_slot,
-                1 if user.is_active else 0,
+                1 if user.is_active else 0, user.phone,
             ),
         )
         user.id = self._last_insert_id()
@@ -161,12 +162,13 @@ class UserRepository(BaseRepository[User]):
         self._db.execute(
             """UPDATE users SET
                    username = ?, display_name = ?, avatar_path = ?,
-                   pin_hash = ?, pin_salt = ?, role = ?, cashier_slot = ?, is_active = ?
+                   pin_hash = ?, pin_salt = ?, role = ?, cashier_slot = ?, is_active = ?,
+                   phone = ?
                WHERE id = ?""",
             (
                 user.username, user.display_name, user.avatar_path,
                 user.pin_hash, user.pin_salt, user.role.value, user.cashier_slot,
-                1 if user.is_active else 0,
+                1 if user.is_active else 0, user.phone,
                 user.id,
             ),
         )
