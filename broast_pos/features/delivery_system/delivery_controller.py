@@ -303,6 +303,15 @@ class DeliveryController:
         except Exception:
             return []
 
+    def get_driver_stats(self, period: str = "day", on_date: str | None = None) -> list[dict[str, Any]]:
+        """Driver statistics for a day or a month. Raises ValueError on bad input."""
+        from datetime import date as _date
+        try:
+            on = _date.fromisoformat(on_date) if on_date else None
+        except (TypeError, ValueError) as exc:
+            raise ValueError("التاريخ غير صحيح") from exc
+        return self._delivery_svc.get_driver_stats(period, on)
+
     def get_daily_summary(self) -> list[dict[str, Any]]:
         """Get end-of-day summary for all drivers.
 
