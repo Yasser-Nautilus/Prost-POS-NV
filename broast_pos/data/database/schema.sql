@@ -486,3 +486,33 @@ CREATE TABLE IF NOT EXISTS parked_order_drafts (
     updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
 );
 CREATE INDEX IF NOT EXISTS idx_parked_draft_user ON parked_order_drafts(user_id,id);
+-- Guard entry into an occupied confirmed dine-in table at the database boundary.
+-- Existing duplicates remain intact and can still be amended, paid, cancelled,
+-- or moved away. No automatic merge, deletion, or historical rewrite.
+CREATE TRIGGER IF NOT EXISTS trg_orders_table_insert
+BEFORE INSERT ON orders
+WHEN NEW.order_type = 'dine_in'
+ AND NEW.status NOT IN ('completed','cancelled') AND NEW.table_no IS NOT NULL
+ AND EXISTS (
+    SELECT 1 FROM orders WHERE order_type='dine_in'
+    AND status NOT IN ('completed','cancelled') AND table_no=NEW.table_no
+ )
+BEGIN
+    SELECT RAISE(ABORT,'active_dine_in_table_occupied');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_orders_table_update
+BEFORE UPDATE OF table_no,order_type,status ON orders
+WHEN NEW.order_type = 'dine_in'
+ AND NEW.status NOT IN ('completed','cancelled') AND NEW.table_no IS NOT NULL
+ AND NOT (OLD.order_type='dine_in'
+          AND OLD.status NOT IN ('completed','cancelled')
+          AND OLD.table_no IS NEW.table_no)
+ AND EXISTS (
+    SELECT 1 FROM orders WHERE order_type='dine_in'
+    AND status NOT IN ('completed','cancelled') AND table_no=NEW.table_no
+    AND id != OLD.id
+ )
+BEGIN
+    SELECT RAISE(ABORT,'active_dine_in_table_occupied');
+END;

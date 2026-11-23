@@ -40,6 +40,11 @@ class OrderRepository(BaseRepository[Order]):
                 if entity.id is None:
                     return self._insert(entity)
                 return self._update(entity)
+        except sqlite3.IntegrityError as exc:
+            entity.id = original_id
+            if "active_dine_in_table_occupied" in str(exc):
+                raise ValueError("الطاولة مشغولة بطلب آخر؛ افتح الطلب الحالي لإضافة العناصر") from exc
+            raise
         except BaseException:
             # A failed insert must remain retryable, not point at a rolled-back ID.
             entity.id = original_id
@@ -70,16 +75,18 @@ class OrderRepository(BaseRepository[Order]):
 
     def get_by_table(self, table_number: int) -> Order | None:
         """Load the active dine-in order for a table."""
-        row = self._db.fetch_one(
+        rows = self._db.fetch_all(
             """SELECT * FROM orders
                WHERE table_no = ? AND order_type = 'dine_in'
                  AND status NOT IN ('completed', 'cancelled')
-               ORDER BY created_at DESC LIMIT 1""",
+               ORDER BY created_at DESC LIMIT 2""",
             (table_number,),
         )
-        if row is None:
+        if len(rows) > 1:
+            raise ValueError("توجد طلبات مفتوحة متعددة لهذه الطاولة؛ راجعها من قائمة الطلبات")
+        if not rows:
             return None
-        order = self._row_to_order(row)
+        order = self._row_to_order(rows[0])
         order.items = self._load_items(order.id)
         return order
 

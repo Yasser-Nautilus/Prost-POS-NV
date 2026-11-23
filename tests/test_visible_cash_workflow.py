@@ -192,3 +192,51 @@ def test_visible_open_shift_to_cash_payment(qapp, monkeypatch, existing_day, con
     finally:
         shell.close()
         DatabaseConnection.reset()
+
+
+def test_visible_occupied_table_opens_existing_order_for_append(qapp, monkeypatch):
+    monkeypatch.setenv("POS_DEV_MODE", "0")
+    DatabaseConnection.reset()
+    bridge, db = _build_test_bridge(qapp)
+    shell = WebShell(bridge)
+    shell.setWindowState(Qt.WindowState.WindowNoState)
+    shell.resize(1440, 1000)
+    shell.show()
+    browser = Browser(shell)
+    try:
+        browser.wait("document.querySelectorAll('button').length > 0")
+        browser.js("window.__alerts=[];window.alert=(s)=>window.__alerts.push(s)")
+        for digit in "1234":
+            browser.click(digit)
+        browser.click("تأكيد PIN")
+        browser.click("الوردية مغلقة")
+        browser.wait("!!document.querySelector('[aria-label=\"محطة الدرج\"]')")
+        browser.field("محطة الدرج", "COUNTER", select=True)
+        browser.field("النقد الموجود بالدرج عند الفتح", "0")
+        browser.click("فتح يوم العمل ودرج الكاشير")
+        browser.wait("document.body.innerText.includes('درجك مفتوح')")
+        browser.js("[...document.querySelectorAll('h3')].find(e=>e.textContent.includes('إدارة وردية الصندوق')).parentElement.querySelector('button').click()")
+        browser.click("صالة")
+        browser.wait("document.body.innerText.includes('اختيار رقم الطاولة')")
+        table_button = "[...document.querySelectorAll('button')].find(b=>b.querySelector('span')?.textContent==='طاولة'&&b.querySelectorAll('span')[1]?.textContent==='4')"
+        browser.js(f"{table_button}.click()")
+        browser.click("تأكيد الطاولة")
+        browser.wait("[...document.querySelectorAll('h4')].some(e=>e.textContent==='تشيكن فرايز حار')")
+        browser.js("[...document.querySelectorAll('h4')].find(e=>e.textContent==='تشيكن فرايز حار').parentElement.click()")
+        browser.click("تأكيد الطلب")
+        browser.wait("window.__alerts.some(s=>s.includes('بنجاح'))")
+        browser.click("صالة")
+        browser.wait("document.body.innerText.includes('اختيار رقم الطاولة')")
+        browser.wait(f"{table_button}.textContent.includes('#')")
+        browser.screenshot("07-occupied-table.png")
+        browser.js(f"{table_button}.click()")
+        browser.wait("document.body.innerText.includes('حفظ التعديلات')")
+        browser.js("[...document.querySelectorAll('h4')].find(e=>e.textContent==='تشيكن فرايز حار').parentElement.click()")
+        browser.click("حفظ التعديلات")
+        browser.wait("window.__alerts.some(s=>s.includes('تم حفظ تعديلات'))")
+        assert db.fetch_one("SELECT count(*) n FROM orders")["n"] == 1
+        assert db.fetch_one("SELECT sum(quantity) n FROM order_items")["n"] == 2
+        assert db.fetch_one("SELECT table_no,total FROM orders")["table_no"] == 4
+    finally:
+        shell.close()
+        DatabaseConnection.reset()

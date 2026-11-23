@@ -24,6 +24,7 @@ Migration history:
     v3 → v4: Add driver_settlements table + index.
     v5 → v6: Add users.pin_salt column (salted+peppered PIN hashing).
     v6 → v7: Durable user-owned parked drafts, separate from orders.
+    v7 → v8: Guard new duplicate active dine-in table occupancy.
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Version tracking (bumped when a new migration is added)
 # ---------------------------------------------------------------------------
-LATEST_VERSION = 7
+LATEST_VERSION = 8
 
 # ---------------------------------------------------------------------------
 # Path to the schema file (sibling of this module)
@@ -371,6 +372,12 @@ def _migrate_v6_to_v7(db: DatabaseConnection) -> None:
     db.commit()
 
 
+def _migrate_v7_to_v8(db: DatabaseConnection) -> None:
+    """Guard new occupancy without rewriting pre-existing duplicate orders."""
+    # Idempotent schema creates the triggers for fresh installs and upgrades.
+    _apply_schema(db)
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — maps from_version → migration function
 # NOTE: Must be defined AFTER all migration functions are declared.
@@ -382,4 +389,5 @@ _MIGRATIONS: dict = {
     4: _migrate_v4_to_v5,
     5: _migrate_v5_to_v6,
     6: _migrate_v6_to_v7,
+    7: _migrate_v7_to_v8,
 }
