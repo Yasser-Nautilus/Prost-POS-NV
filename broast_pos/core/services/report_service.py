@@ -100,6 +100,17 @@ class ReportService:
         pm = order.payment_method
         return pm.value if hasattr(pm, "value") else (str(pm) if pm else "unpaid")
 
+    def _payment_parts(self, order) -> list[dict]:
+        """Mixed-payment parts of an order ([] for single-method orders)."""
+        try:
+            rows = self._orders._db.fetch_all(
+                "SELECT method, amount FROM order_payments WHERE order_id = ?",
+                (order.id,),
+            )
+        except Exception:
+            return []
+        return [{"method": r["method"], "amount": r["amount"]} for r in rows]
+
     def generate_payment_breakdown(
         self, target_date: date | None = None,
     ) -> dict:
@@ -129,6 +140,15 @@ class ReportService:
             # payment_method yet. Decide how such orders are treated here.
             bucket = self._payment_bucket(order)
             if bucket is None:
+                continue
+            parts = self._payment_parts(order) if bucket != "unpaid" else []
+            if parts:
+                # Mixed payment: each method gets only the amount it took.
+                for part in parts:
+                    entry = method_map.setdefault(
+                        part["method"], {"method": part["method"], "count": 0, "revenue": 0.0})
+                    entry["count"] += 1
+                    entry["revenue"] += part["amount"]
                 continue
             if bucket not in method_map:
                 method_map[bucket] = {"method": bucket, "count": 0, "revenue": 0.0}

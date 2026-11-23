@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from broast_pos.core.clock import restaurant_today
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from broast_pos.core.models.audit import AuditEventType
 from broast_pos.core.models.delivery import (
@@ -636,6 +636,21 @@ class DeliveryService:
         """
         target = target_date or date.today()
         return self._delivery.get_daily_summary(target.isoformat())
+
+    def get_driver_stats(
+        self, period: str = "day", on: date | None = None,
+    ) -> list[dict]:
+        """Deliveries and average trip minutes per driver for a day or month."""
+        if period not in ("day", "month"):
+            raise ValueError("الفترة غير صحيحة")
+        d = on or date.today()
+        if period == "day":
+            start, end = d, d + timedelta(days=1)
+        else:
+            start = d.replace(day=1)
+            end = (start.replace(year=start.year + 1, month=1) if start.month == 12
+                   else start.replace(month=start.month + 1))
+        return self._delivery.get_driver_stats(start.isoformat(), end.isoformat())
 
     def get_driver_daily_summary(
         self, driver_id: int, target_date: date | None = None,

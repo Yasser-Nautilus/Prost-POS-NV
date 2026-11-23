@@ -545,6 +545,114 @@ class OrderService:
 
         return saved
 
+    def complete_order_split(
+        self,
+        order_id: int,
+        parts: list[dict],
+        cash_received: float | None = None,
+        actor_id: int | None = None,
+        actor_name: str = "نظام",
+        finalize: bool = True,
+    ) -> Order:
+        """Pay one order with several methods (mixed payment / split bill).
+
+        ``parts`` is a list of ``{"method": "cash"|"visa"|"online", "amount": EGP}``.
+        The amounts must add up to the order total exactly. ``cash_received``
+        is the cash handed over for the cash parts (defaults to exactly the
+        cash share); anything above the cash share is returned as change.
+        Only the cash share enters the cash drawer ledger.
+        """
+        order = self._orders.get_by_id(order_id)
+        if order is None:
+            raise ValueError("الطلب غير موجود")
+        if order.status == OrderStatus.COMPLETED:
+            raise ValueError("الطلب مكتمل بالفعل")
+        if order.status == OrderStatus.CANCELLED:
+            raise ValueError("لا يمكن دفع طلب ملغي")
+        if order.is_paid:
+            raise ValueError("الطلب مدفوع بالفعل")
+        if order.order_type == OrderType.DELIVERY:
+            raise ValueError("الدفع المختلط غير متاح لطلبات التوصيل")
+        if self._financial is not None and order.shift_id:
+            shift = None
+            if hasattr(self._financial, "get_shift_by_id"):
+                shift = self._financial.get_shift_by_id(order.shift_id)
+            else:
+                fin_repo = getattr(self._financial, "_financial", self._financial)
+                if hasattr(fin_repo, "get_by_id"):
+                    shift = fin_repo.get_by_id(order.shift_id)
+            if shift is not None and not shift.is_active:
+                raise ValueError("لا يمكن الدفع على وردية مغلقة")
+
+        if not parts or len(parts) > 10:
+            raise ValueError("يجب تحديد من 1 إلى 10 دفعات")
+        by_method: dict[PaymentMethod, int] = {}
+        for part in parts:
+            try:
+                method = PaymentMethod(part.get("method"))
+                amount_pt = round(float(part.get("amount")) * 100)
+            except (ValueError, TypeError) as exc:
+                raise ValueError("بيانات الدفع غير صحيحة") from exc
+            if amount_pt <= 0:
+                raise ValueError("كل دفعة يجب أن تكون أكبر من صفر")
+            if not self._payments.is_method_allowed(order.order_type, method):
+                raise ValueError("طريقة الدفع غير مسموح بها لهذا النوع من الطلبات")
+            by_method[method] = by_method.get(method, 0) + amount_pt
+        total_pt = round(order.total * 100)
+        if sum(by_method.values()) != total_pt:
+            raise ValueError("مجموع الدفعات لا يساوي إجمالي الطلب")
+
+        cash_pt = by_method.get(PaymentMethod.CASH, 0)
+        received_pt = cash_pt if cash_received is None else round(float(cash_received) * 100)
+        if received_pt < cash_pt:
+            raise ValueError("النقد المستلم أقل من حصة النقد")
+        if received_pt > cash_pt and cash_pt == 0:
+            raise ValueError("لا يوجد جزء نقدي لإرجاع باقي له")
+        change_pt = received_pt - cash_pt
+
+        # Order.payment_method keeps the dominant method (cash wins ties) so
+        # code that only reads that column still behaves sensibly.
+        dominant = max(by_method, key=lambda m: (by_method[m], m == PaymentMethod.CASH))
+        order.payment_method = dominant
+        order.amount_paid = round((total_pt - cash_pt + received_pt) / 100, 2)
+        order.change_given = round(change_pt / 100, 2)
+        order.is_paid = True
+        order.paid_at = datetime.datetime.now().isoformat()
+        old_status = order.status
+        if finalize:
+            order.status = OrderStatus.COMPLETED
+
+        with self._db.transaction():
+            saved = self._orders.save(order)
+            for method, amount_pt in by_method.items():
+                self._db.execute(
+                    "INSERT INTO order_payments (order_id, method, amount) VALUES (?, ?, ?)",
+                    (saved.id, method.value, round(amount_pt / 100, 2)),
+                )
+            if self._ledger is not None and cash_pt > 0:
+                self._create_sale_cash_entry(
+                    order=saved, actor_id=actor_id, shift_id=saved.shift_id,
+                    cashier_id=actor_id, amount_egp=cash_pt / 100,
+                )
+        if finalize:
+            try:
+                self._status_history.record_transition(
+                    order_id=order_id, old_status=old_status.value,
+                    new_status=OrderStatus.COMPLETED.value,
+                    changed_by_id=actor_id, changed_by_name=actor_name,
+                )
+            except Exception:
+                logger.warning("Status-history record failed on completion", exc_info=True)
+        return saved
+
+    def get_payment_parts(self, order_id: int) -> list[dict]:
+        """Parts of a mixed payment ([] for a single-method order)."""
+        rows = self._db.fetch_all(
+            "SELECT method, amount FROM order_payments WHERE order_id = ? ORDER BY id",
+            (order_id,),
+        )
+        return [{"method": r["method"], "amount": r["amount"]} for r in rows]
+
     # ------------------------------------------------------------------
     # Cancel order
     # ------------------------------------------------------------------
@@ -1012,6 +1120,7 @@ class OrderService:
         actor_id: int | None,
         shift_id: int,
         cashier_id: int | None,
+        amount_egp: float | None = None,
     ) -> None:
         """
         Append a SALE_CASH entry to the active cashier session's ledger.
@@ -1055,7 +1164,7 @@ class OrderService:
             # Legacy mode (no session repo wired) — skip ledger entry.
             return
 
-        amount_pt = round(order.total * 100)
+        amount_pt = round((order.total if amount_egp is None else amount_egp) * 100)
         self._ledger.append(CashLedgerEntry(
             id=None,
             day_id=shift_id,
