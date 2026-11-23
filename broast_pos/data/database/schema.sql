@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS shifts (
     is_active          INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
     summary_printed_at TEXT,
     -- v5 additions
-    business_date      TEXT,            -- DATE(opened_at, 'localtime') — business reporting date
+    business_date      TEXT,            -- Local opening date, no second timezone conversion
     opened_float_note  TEXT,
     closed_reason      TEXT             -- e.g. 'closed_without_print: printer down'
 );

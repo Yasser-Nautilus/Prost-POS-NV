@@ -57,7 +57,7 @@ class FinancialRepository(BaseRepository[Shift]):
     def open_shift(self, user_id: int) -> Shift:
         """Create shift record, reset invoice counter to 1."""
         self._db.execute(
-            "INSERT INTO shifts (opened_by, next_invoice_no, is_active) VALUES (?, 1, 1)",
+            "INSERT INTO shifts (opened_by, next_invoice_no, is_active, business_date) VALUES (?, 1, 1, date('now','localtime'))",
             (user_id,),
         )
         shift_id = self._last_insert_id()

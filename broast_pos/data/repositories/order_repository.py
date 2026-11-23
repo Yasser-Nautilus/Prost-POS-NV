@@ -321,7 +321,7 @@ class OrderRepository(BaseRepository[Order]):
         for reporting purposes, regardless of when they were created.
         """
         row = self._db.fetch_one(
-            "SELECT DATE(opened_at) AS business_date FROM shifts WHERE id = ?",
+            "SELECT COALESCE(business_date, date(substr(opened_at,1,10))) AS business_date FROM shifts WHERE id = ?",
             (shift_id,),
         )
         return row["business_date"] if row else None

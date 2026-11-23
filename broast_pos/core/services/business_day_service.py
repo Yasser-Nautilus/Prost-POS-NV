@@ -8,7 +8,7 @@ New responsibilities vs. the old FinancialService.close_shift():
   FR-DAY-1  Verify all cashier sessions are closed before day close.
   FR-DAY-2  Batch DRIVER_FEE_PAYOUT entries at day close (Q3 = end-of-day).
   FR-DAY-3  Generate Z-Report (final ledger snapshot) at close.
-  FR-DAY-4  Set shifts.business_date = DATE(opened_at, 'localtime') on open.
+  FR-DAY-4  Set shifts.business_date = DATE(opened_at) (already stored in local wall time) on open.
 
 X-Report:  Live ledger snapshot without closing (can be run any time).
 Z-Report:  Final snapshot triggered at close; includes all sessions + variances.

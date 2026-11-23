@@ -28,6 +28,7 @@ Migration history:
     v8 → v9: Soft-delete customer addresses without changing order history.
     v9 → v10: Reject new fractional order-item quantities.
     v10 → v11: Nullable audit actor for unauthenticated/system events.
+    v11 → v12: Backfill only missing business dates from local opening dates.
 """
 
 from __future__ import annotations
@@ -44,7 +45,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Version tracking (bumped when a new migration is added)
 # ---------------------------------------------------------------------------
-LATEST_VERSION = 11
+LATEST_VERSION = 12
 
 # ---------------------------------------------------------------------------
 # Path to the schema file (sibling of this module)
@@ -230,9 +231,10 @@ def _migrate_v4_to_v5(db: DatabaseConnection) -> None:
         if col_name not in existing_cols:
             db.execute(f"ALTER TABLE shifts ADD COLUMN {col_name} {col_type}")
 
+    # opened_at is local wall time already, never apply localtime twice.
     # Back-fill business_date for all existing rows
     db.execute(
-        "UPDATE shifts SET business_date = date(opened_at, 'localtime') WHERE business_date IS NULL"
+        "UPDATE shifts SET business_date = date(substr(opened_at,1,10)) WHERE business_date IS NULL"
     )
 
     # ── 2. cashier_sessions ───────────────────────────────────────────
@@ -410,6 +412,16 @@ def _migrate_v10_to_v11(db: DatabaseConnection) -> None:
         db.execute("ALTER TABLE audit_log_v11 RENAME TO audit_log")
 
 
+def _migrate_v11_to_v12(db: DatabaseConnection) -> None:
+    """Fill only missing dates from stored local wall-clock dates.
+
+    Non-NULL historical dates may be explicit choices or old backfills. They
+    cannot be distinguished safely, so do not automatically rewrite them.
+    """
+    with db.transaction():
+        db.execute("UPDATE shifts SET business_date=date(substr(opened_at,1,10)) WHERE business_date IS NULL")
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — maps from_version → migration function
 # NOTE: Must be defined AFTER all migration functions are declared.
@@ -425,4 +437,5 @@ _MIGRATIONS: dict = {
     8: _migrate_v8_to_v9,
     9: _migrate_v9_to_v10,
     10: _migrate_v10_to_v11,
+    11: _migrate_v11_to_v12,
 }
