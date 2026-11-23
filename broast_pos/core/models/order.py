@@ -199,5 +199,14 @@ class Order:
 
     def recalculate(self) -> None:
         """Recompute subtotal and total from items. Call after adding/removing items."""
+        from broast_pos.core.policies.discount import rescale_discount
+
+        old_subtotal = self.subtotal
         self.subtotal = self.compute_subtotal()
+        if self.discount_amount and self.subtotal != old_subtotal:
+            self.discount_amount = rescale_discount(
+                self.discount_amount, self.discount_type, old_subtotal, self.subtotal,
+            )
+            if self.discount_amount <= 0:
+                self.discount_type = None
         self.total = self.compute_total()
