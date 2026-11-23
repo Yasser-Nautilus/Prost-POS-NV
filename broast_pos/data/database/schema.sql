@@ -268,7 +268,7 @@ CREATE TABLE IF NOT EXISTS cash_transactions (
 CREATE TABLE IF NOT EXISTS audit_log (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     event_type   TEXT    NOT NULL,
-    user_id      INTEGER NOT NULL REFERENCES users(id),
+    user_id      INTEGER REFERENCES users(id), -- NULL for unauthenticated/system events
     user_name    TEXT    NOT NULL,
     order_id     INTEGER REFERENCES orders(id),  -- nullable (not all events are order-related)
     details      TEXT,                            -- JSON: cancel reason, discount info, etc.

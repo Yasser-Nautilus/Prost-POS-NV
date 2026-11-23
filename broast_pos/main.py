@@ -160,6 +160,7 @@ def main() -> int:
     # 3. Services
     # ------------------------------------------------------------------
     auth_service = AuthService(user_repo)
+    auth_service.set_audit(audit_repo)
     product_service = ProductService(product_repo)
     customer_service = CustomerService(customer_repo)
     audit_service = AuditService(audit_repo)

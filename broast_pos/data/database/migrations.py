@@ -26,6 +26,8 @@ Migration history:
     v6 → v7: Durable user-owned parked drafts, separate from orders.
     v7 → v8: Guard new duplicate active dine-in table occupancy.
     v8 → v9: Soft-delete customer addresses without changing order history.
+    v9 → v10: Reject new fractional order-item quantities.
+    v10 → v11: Nullable audit actor for unauthenticated/system events.
 """
 
 from __future__ import annotations
@@ -42,7 +44,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Version tracking (bumped when a new migration is added)
 # ---------------------------------------------------------------------------
-LATEST_VERSION = 10
+LATEST_VERSION = 11
 
 # ---------------------------------------------------------------------------
 # Path to the schema file (sibling of this module)
@@ -392,6 +394,22 @@ def _migrate_v9_to_v10(db: DatabaseConnection) -> None:
     _apply_schema(db)
 
 
+def _migrate_v10_to_v11(db: DatabaseConnection) -> None:
+    """Allow unknown audit actors, preserving IDs and every historical field."""
+    columns = db.fetch_all("PRAGMA table_info(audit_log)")
+    if not next(row for row in columns if row["name"] == "user_id")["notnull"]:
+        return
+    schema = _SCHEMA_PATH.read_text(encoding="utf-8")
+    ddl = schema[schema.index("CREATE TABLE IF NOT EXISTS audit_log ("):]
+    ddl = ddl[:ddl.index(");") + 2].replace("audit_log", "audit_log_v11", 1)
+    names = ",".join(row["name"] for row in columns)
+    with db.transaction():
+        db.execute(ddl)
+        db.execute(f"INSERT INTO audit_log_v11 ({names}) SELECT {names} FROM audit_log")
+        db.execute("DROP TABLE audit_log")
+        db.execute("ALTER TABLE audit_log_v11 RENAME TO audit_log")
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — maps from_version → migration function
 # NOTE: Must be defined AFTER all migration functions are declared.
@@ -406,4 +424,5 @@ _MIGRATIONS: dict = {
     7: _migrate_v7_to_v8,
     8: _migrate_v8_to_v9,
     9: _migrate_v9_to_v10,
+    10: _migrate_v10_to_v11,
 }

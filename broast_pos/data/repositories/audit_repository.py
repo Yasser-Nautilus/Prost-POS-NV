@@ -40,7 +40,7 @@ class AuditEntry:
         self,
         id: int | None = None,
         event_type: str = "",
-        user_id: int = 0,
+        user_id: int | None = None,
         user_name: str = "",
         order_id: int | None = None,
         details: dict[str, Any] | None = None,
@@ -105,7 +105,7 @@ class AuditRepository(BaseRepository[AuditEntry]):
     def log(
         self,
         event_type: str,
-        user_id: int,
+        user_id: int | None,
         user_name: str,
         order_id: int | None = None,
         details: dict[str, Any] | None = None,
@@ -128,16 +128,16 @@ class AuditRepository(BaseRepository[AuditEntry]):
         before_json = json.dumps(before_data, ensure_ascii=False) if before_data else None
         after_json = json.dumps(after_data, ensure_ascii=False) if after_data else None
 
-        self._db.execute(
-            """INSERT INTO audit_log
-                   (event_type, user_id, user_name, order_id, details,
-                    entity_type, entity_id, action, reason, before_data, after_data)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (event_type, user_id, user_name, order_id, details_json,
-             entity_type, entity_id, action, reason, before_json, after_json),
-        )
-        entry_id = self._last_insert_id()
-        self._db.commit()
+        with self._db.transaction():
+            self._db.execute(
+                """INSERT INTO audit_log
+                       (event_type, user_id, user_name, order_id, details,
+                        entity_type, entity_id, action, reason, before_data, after_data)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (event_type, user_id, user_name, order_id, details_json,
+                 entity_type, entity_id, action, reason, before_json, after_json),
+            )
+            entry_id = self._last_insert_id()
         return AuditEntry(
             id=entry_id,
             event_type=event_type,
@@ -173,7 +173,7 @@ class AuditRepository(BaseRepository[AuditEntry]):
         )
         return [self._row_to_entry(r) for r in rows]
 
-    def get_logs_by_user(self, user_id: int, limit: int = 50) -> list[AuditEntry]:
+    def get_logs_by_user(self, user_id: int | None, limit: int = 50) -> list[AuditEntry]:
         """Audit trail for a specific user (most recent first)."""
         rows = self._db.fetch_all(
             """SELECT * FROM audit_log

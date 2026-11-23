@@ -50,7 +50,7 @@ class AuditService:
     def log(
         self,
         event_type: str,
-        user_id: int,
+        user_id: int | None,
         user_name: str,
         order_id: int | None = None,
         entity_type: str | None = None,
@@ -141,7 +141,7 @@ class AuditService:
     def get_logs_for_order(self, order_id: int) -> list:
         return self._audit.get_logs_for_order(order_id)
 
-    def get_logs_by_user(self, user_id: int, limit: int = 50) -> list:
+    def get_logs_by_user(self, user_id: int | None, limit: int = 50) -> list:
         return self._audit.get_logs_by_user(user_id, limit)
 
     def get_logs_by_event_type(

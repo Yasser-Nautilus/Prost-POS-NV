@@ -22,6 +22,7 @@ import time
 from enum import Enum
 
 from broast_pos.config import config
+from broast_pos.core.models.audit import AuditEventType
 from broast_pos.core.models.user import User, UserRole
 from broast_pos.data.repositories.user_repository import UserRepository
 
@@ -121,11 +122,11 @@ class AuthService:
         # (never a hash of the guessed PIN; see login_by_pin/verify_pin).
         # Resets on process restart (acceptable for a local POS).
         self._throttle: dict[str, tuple[int, float]] = {}
-        # Optional audit repository for recording failed attempts
+        # Optional audit repository for authentication and user creation events
         self._audit = None  # injected via set_audit() after construction
 
     def set_audit(self, audit_repo) -> None:
-        """Inject audit repository for recording failed login attempts (B-08)."""
+        """Inject the strict persistence boundary for security audit events."""
         self._audit = audit_repo
 
     # ------------------------------------------------------------------
@@ -395,7 +396,26 @@ class AuthService:
             avatar_path=avatar_path,
             is_active=True,
         )
-        return self._users.save(user)
+        from contextlib import nullcontext
+        db = getattr(self._users, "_db", None)
+        try:
+            with db.transaction() if db is not None and self._audit is not None else nullcontext():
+                saved = self._users.save(user)
+                if self._audit is not None:
+                    actor = self._current_user
+                    self._audit.log(
+                        event_type=AuditEventType.USER_CREATED,
+                        user_id=actor.id if actor else None,
+                        user_name=(actor.display_name or actor.username) if actor else "System",
+                        entity_type="user", entity_id=saved.id,
+                        action="User created",
+                        details={"username": saved.username, "role": saved.role.value,
+                                 "cashier_slot": saved.cashier_slot},
+                    )
+                return saved
+        except BaseException:
+            user.id = None
+            raise
 
     def update_user(
         self,
@@ -661,14 +681,15 @@ class AuthService:
         if self._audit is not None:
             try:
                 self._audit.log(
-                    event_type="login_failed",
-                    user_id=user_id or 0,
+                    event_type=AuditEventType.LOGIN_FAILED,
+                    user_id=None,
                     user_name="مجهول",
-                    details={"reason": reason, "attempt": count_after, "key": key},
+                    details={"reason": reason, "attempt": count_after, "key": key, "attempted_user_id": user_id},
+                    action="Authentication rejected",
                 )
             except Exception:
                 # Checkup-Fix: audit write is best-effort, but log the failure.
-                logger.debug("Audit log of failed login could not be written", exc_info=True)
+                logger.error("Audit log of failed login could not be written", exc_info=True)
 
     def _reset_throttle(self, key: str) -> None:
         """Clear failure count after a successful authentication."""
