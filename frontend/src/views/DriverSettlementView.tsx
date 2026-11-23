@@ -48,7 +48,6 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
   const [error, setError] = useState<string | null>(null);
   const [tripsError, setTripsError] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<any | null>(null);
-  const [notes, setNotes] = useState("");
   const [expandedTrip, setExpandedTrip] = useState<number | null>(null);
   // End-of-day settlement (count of orders per delivery fee) + printable sheet
   const [dayBusy, setDayBusy] = useState(false);
@@ -121,7 +120,6 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
       const result = await bridge.call("settle_driver", {
         driver_id: selectedDriver.id,
         trip_id: selectedTripId,
-        notes: notes || undefined,
       });
       setSuccessData(result);
       setViewState("success");
@@ -182,7 +180,6 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
     setPreview(null);
     setError(null);
     setTripsError(null);
-    setNotes("");
     setSuccessData(null);
     setSelectedTripId(null);
     setViewState("select_driver");
@@ -192,7 +189,6 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
   const handleBackToTrips = async () => {
     setPreview(null);
     setError(null);
-    setNotes("");
     setSelectedTripId(null);
     setViewState("trip_list");
     // Refresh trips list to reflect newly settled trip
@@ -377,22 +373,6 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                   <span className="text-white font-bold">المبلغ المطلوب تسليمه</span>
                   <span className="text-2xl font-black text-white">{fmtEGP(preview.cash_collected)}</span>
                 </div>
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
-                  <FileText size={14} />
-                  ملاحظات (اختياري)
-                </label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="أي ملاحظات إضافية للتسوية..."
-                  className="w-full bg-brand-card border border-brand-border rounded-xl p-3 text-white text-sm placeholder-gray-500 resize-none focus:outline-none focus:border-brand-red/50 transition-all"
-                  rows={2}
-                  dir="rtl"
-                />
               </div>
 
               {error && (
