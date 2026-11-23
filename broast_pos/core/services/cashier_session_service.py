@@ -172,8 +172,7 @@ class CashierSessionService:
         if abs(variance_pt) > variance_threshold_pt:
             if not variance_reason:
                 raise ValueError(
-                    f"الفرق {variance_pt / 100:+.2f} ج.م يتجاوز الحد المسموح "
-                    f"({variance_threshold_pt / 100:.2f} ج.م). يجب إدخال سبب والحصول على موافقة المدير"
+                    "يلزم إدخال سبب والحصول على موافقة المدير لإتمام الجرد"
                 )
             if self._auth is not None:
                 self._auth.verify_manager_pin(manager_pin)
@@ -284,7 +283,7 @@ class CashierSessionService:
         if abs(variance_pt) > variance_threshold_pt:
             if not variance_reason:
                 raise ValueError(
-                    f"الفرق {variance_pt / 100:+.2f} ج.م يتجاوز الحد. يجب إدخال سبب وموافقة المدير"
+                    "يلزم إدخال سبب والحصول على موافقة المدير لإتمام الجرد"
                 )
             if self._auth is not None:
                 self._auth.verify_manager_pin(manager_pin)

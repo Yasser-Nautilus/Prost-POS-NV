@@ -226,7 +226,7 @@ class TestCloseSession:
         db = _fresh_db()
         s = self._open_with_float(db, float_pt=100000)
         svc = _make_svc(db)
-        with pytest.raises(ValueError, match="يتجاوز الحد"):
+        with pytest.raises(ValueError, match="موافقة المدير"):
             svc.close_session(
                 session_id=s.id,
                 counted_cash_pt=90000,   # -10000 pt = EGP 100 variance
@@ -345,7 +345,7 @@ class TestHandover:
         svc = _make_svc(db)
         s = svc.open_session(day_id=1, user_id=1, station=Station.ALL, opening_float_pt=100000)
         db.commit()
-        with pytest.raises(ValueError, match="يتجاوز الحد"):
+        with pytest.raises(ValueError, match="موافقة المدير"):
             svc.do_handover(
                 from_session_id=s.id,
                 to_user_id=2,
