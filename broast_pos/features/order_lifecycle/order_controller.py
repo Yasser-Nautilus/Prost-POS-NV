@@ -147,9 +147,10 @@ class OrderController:
         if self._current_order is None:
             return
         # H03: a paid order's total must never change — even just on screen —
-        # once payment has been recorded.
+        # once payment has been recorded. Raise (rather than silently no-op)
+        # so the caller sees a clear error instead of a false "success".
         if self._current_order.is_paid:
-            return
+            raise ValueError("لا يمكن إضافة عناصر إلى طلب مدفوع")
 
         if self._products is None:
             raise ValueError("خدمة المنتجات غير مهيأة")
@@ -180,9 +181,11 @@ class OrderController:
         """Change item quantity by delta (+/-)."""
         if self._current_order is None:
             return
-        # H03: a paid order's total must never change after payment.
+        # H03: reject item quantity changes on a paid active order — raise
+        # (rather than silently no-op) so the caller sees a clear error
+        # instead of the bridge reporting a false "success".
         if self._current_order.is_paid:
-            return
+            raise ValueError("لا يمكن تعديل كمية عناصر طلب مدفوع")
         if 0 <= index < len(self._current_order.items):
             self._current_order.items[index].quantity += delta
             if self._current_order.items[index].quantity <= 0:
@@ -201,9 +204,9 @@ class OrderController:
         if self._current_order is None:
             return False, "لا يوجد طلب حالي"
 
-        # H03: a paid order's total must never change after payment.
+        # H03: reject item removals on a paid active order
         if self._current_order.is_paid:
-            return False, "لا يمكن تعديل طلب مدفوع بالفعل"
+            return False, "لا يمكن حذف عنصر من طلب مدفوع"
 
         if 0 <= index < len(self._current_order.items):
             # If order is already saved, require manager PIN
@@ -294,9 +297,15 @@ class OrderController:
                             'online' (pre-paid). Defaults to 'cash' if omitted.
         """
         if self._current_order and self._current_order.is_paid:
-            # H03: delivery_fee feeds directly into total — must not change
-            # the displayed total of an order that is already paid.
-            return
+            # H03: delivery_fee feeds directly into total and payment_method
+            # drives reconciliation — neither may change once an order is
+            # paid. Raise so the caller sees a clear error. Other fields
+            # (name/phone/address/zone/customer_id) are not total-affecting
+            # and remain editable.
+            if delivery_fee or address_id is not None:
+                raise ValueError("لا يمكن تغيير رسوم التوصيل على طلب مدفوع")
+            if payment_method is not None:
+                raise ValueError("لا يمكن تغيير طريقة الدفع على طلب مدفوع")
         if self._current_order:
             resolved_zone = self._current_order.customer_zone
             resolved_fee = self._current_order.delivery_fee
@@ -674,6 +683,10 @@ class OrderController:
         """
         if self._current_order is None:
             return False, "لا يوجد طلب نشط"
+
+        # H03: reject discount on paid active order
+        if self._current_order.is_paid:
+            return False, "لا يمكن تطبيق خصم على طلب مدفوع بالفعل"
 
         if self._current_order.id is not None:
             try:

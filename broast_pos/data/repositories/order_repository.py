@@ -458,6 +458,25 @@ class OrderRepository(BaseRepository[Order]):
 
     def _update(self, order: Order) -> Order:
         """Update an existing order and replace its items."""
+        # H03: protect paid orders against unauthorised financial mutations
+        existing = self._db.fetch_one(
+            "SELECT is_paid, total, amount_paid, payment_method, delivery_fee, discount_amount, order_type FROM orders WHERE id = ?",
+            (order.id,),
+        )
+        if existing and existing["is_paid"]:
+            if abs((existing["total"] or 0.0) - (order.total or 0.0)) > 0.001:
+                raise ValueError("لا يمكن تعديل إجمالي طلب مدفوع")
+            if abs((existing["amount_paid"] or 0.0) - (order.amount_paid or 0.0)) > 0.001:
+                raise ValueError("لا يمكن تعديل المبلغ المدفوع لطلب مدفوع")
+            if abs((existing["delivery_fee"] or 0.0) - (order.delivery_fee or 0.0)) > 0.001:
+                raise ValueError("لا يمكن تعديل رسوم التوصيل لطلب مدفوع")
+            if abs((existing["discount_amount"] or 0.0) - (order.discount_amount or 0.0)) > 0.001:
+                raise ValueError("لا يمكن تعديل خصم طلب مدفوع")
+            if order.payment_method and existing["payment_method"] != order.payment_method.value:
+                raise ValueError("لا يمكن تعديل طريقة الدفع لطلب مدفوع")
+            if order.order_type and existing["order_type"] != order.order_type.value:
+                raise ValueError("لا يمكن تعديل نوع طلب مدفوع")
+
         self._db.execute(
             """UPDATE orders SET
                    order_type = ?, status = ?, table_no = ?,

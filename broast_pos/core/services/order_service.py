@@ -451,12 +451,23 @@ class OrderService:
             if shift is not None and not shift.is_active:
                 raise ValueError("لا يمكن الدفع على وردية مغلقة")
 
-        # H03: an already-paid active order (e.g. a takeaway paid with
-        # finalize=False) must not be payable again — a second payment
-        # attempt silently overwrote payment_method/amount_paid while
-        # leaving the order's recorded total free to change elsewhere.
+        # H03: guard against unsupported re-payment on a paid active order
+        # (e.g. a takeaway paid with finalize=False). Only an exact retry
+        # (same method + same amount) is idempotent — a network retry or
+        # double-click should not error the cashier. Any other re-payment
+        # attempt is rejected; no reconciliation workflow exists yet.
         if order.is_paid:
-            raise ValueError("الطلب مدفوع بالفعل")
+            same_method = (order.payment_method == payment_method)
+            same_amount = (abs((order.amount_paid or 0) - amount_received) < 0.001)
+            if same_method and same_amount:
+                return order  # exact retry — nothing to do
+            if not same_method:
+                raise ValueError(
+                    "لا يمكن تغيير طريقة الدفع لطلب مدفوع — لا توجد عملية تسوية"
+                )
+            raise ValueError(
+                "الطلب مدفوع بالفعل — لا يمكن إعادة المعالجة بمبلغ مختلف"
+            )
 
         payment = self._payments.calculate(
             total=order.total,
