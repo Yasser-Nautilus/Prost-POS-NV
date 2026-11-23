@@ -36,6 +36,8 @@ export interface BridgeResponse<T = any> {
   data?: T;
   error?: string;
   message?: string;
+  /** Machine-readable reason (e.g. "manager_pin_required") for a failed call. */
+  code?: string;
 }
 
 // ── v2 Session Types ──────────────────────────────────────────────────────
@@ -262,7 +264,7 @@ class POSBridgeClient {
             if (res.success) {
               resolve(res.data as T);
             } else {
-              reject(new Error(res.error || "خطأ غير معروف في الخادم"));
+              reject(Object.assign(new Error(res.error || "خطأ غير معروف في الخادم"), { code: res.code }));
             }
           } catch (e) {
             reject(new Error("فشل في معالجة رد الخادم: " + e));
@@ -409,7 +411,8 @@ class POSBridgeClient {
         const all = [...this.mockState.users, ...this.mockState.drivers];
         if (all.some((u: any) => u.username === payload.username)) throw new Error("اسم المستخدم موجود بالفعل");
         if (all.some((u: any) => u.pin === payload.pin)) throw new Error("رمز PIN مستخدم بالفعل");
-        const newUser = { id: Date.now(), username: payload.username, display_name: payload.display_name, role: payload.role, cashier_slot: payload.cashier_slot, is_active: true, pin: payload.pin };
+        if (payload.role === "cashier" && payload.cashier_slot == null && !String(payload.phone || "").trim()) throw new Error("رقم التليفون مطلوب للطيار");
+        const newUser = { id: Date.now(), username: payload.username, display_name: payload.display_name, role: payload.role, cashier_slot: payload.cashier_slot, phone: payload.phone || null, is_active: true, pin: payload.pin };
         if (payload.role === "cashier" && payload.cashier_slot == null) {
           this.mockState.drivers.push({ ...newUser, is_checked_in: false });
         } else {
@@ -426,6 +429,7 @@ class POSBridgeClient {
         if (payload.display_name) target.display_name = payload.display_name;
         if (payload.role) target.role = payload.role;
         if (payload.pin) target.pin = payload.pin;
+        if (payload.phone !== undefined) target.phone = payload.phone;
         if (payload.cashier_slot !== undefined && payload.cashier_slot !== -1) target.cashier_slot = payload.cashier_slot;
         return target as any;
       }
@@ -1146,6 +1150,10 @@ class POSBridgeClient {
           total_order_value: 890.0,
           settled_at: new Date().toISOString(),
         } as any;
+      }
+
+      case "print_driver_day_sheet": {
+        return { printed: true } as any;
       }
 
       case "get_driver_settlements": {

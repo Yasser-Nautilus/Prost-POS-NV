@@ -1,7 +1,7 @@
  import { useState, useEffect } from "react";
 import { 
   ShoppingBag, Truck, BarChart3, LogOut, User, Calendar, 
-  Loader2, Eye, Package, Users, Wallet, Shield
+  Loader2, Eye, Package, Users, Wallet, Shield, Clock, ChevronDown
 } from "lucide-react";
 import { LoginView } from "./views/LoginView";
 import { POSView } from "./views/POSView";
@@ -12,11 +12,12 @@ import { ProductsView } from "./views/ProductsView";
 import { UsersView } from "./views/UsersView";
 import { DriverSettlementView } from "./views/DriverSettlementView";
 import { AuditLogView } from "./views/AuditLogView";
+import { SessionsView } from "./views/SessionsView";
 import { ShiftDialog } from "./components/ShiftDialog";
 import { bridge } from "./bridge";
 import prostshP from "./assets/prostsh-p.png";
 
-type Tab = "pos" | "delivery" | "tracking" | "reports" | "products" | "users" | "settlement" | "audit";
+type Tab = "pos" | "delivery" | "tracking" | "reports" | "products" | "users" | "settlement" | "sessions" | "audit";
 
 // ── Confirm Dialog (replaces window.confirm) ────────────────────────────────
 
@@ -56,6 +57,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<Tab>("pos");
   const [isShiftOpen, setIsShiftOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [activeShift, setActiveShift] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   // H17: native-bridge connection state — "blocked" means no native shell
@@ -185,7 +187,9 @@ function App() {
     { id: "pos",        label: "شاشة البيع (POS)",    icon: ShoppingBag, visible: true },
     { id: "delivery",  label: "توصيل الطلبات",       icon: Truck,       visible: true },
     { id: "tracking",  label: "متابعة الطلبات",      icon: Eye,         visible: true },
-    { id: "settlement",label: "تسوية السائقين",      icon: Wallet,      visible: isManagerOrAbove },
+    // Cashier sees exactly four screens: sell, deliver, track, settle drivers.
+    { id: "settlement",label: "تسوية السائقين",      icon: Wallet,      visible: true },
+    { id: "sessions",  label: "ورديات الصندوق",      icon: Clock,       visible: isManagerOrAbove },
     { id: "reports",   label: "التقارير المالية",    icon: BarChart3,   visible: isManagerOrAbove },
     { id: "products",  label: "إدارة المنتجات",      icon: Package,     visible: isManagerOrAbove },
     { id: "audit",     label: "سجل التدقيق",         icon: Shield,      visible: isManagerOrAbove },
@@ -215,7 +219,7 @@ function App() {
           </div>
 
           {/* Navigation links */}
-          <nav className="hidden md:flex items-center gap-1.5">
+          <nav className="hidden md:flex items-center gap-1">
             {navItems
               .filter((n) => n.visible)
               .map((n) => {
@@ -224,14 +228,18 @@ function App() {
                   <button
                     key={n.id}
                     onClick={() => setActiveTab(n.id)}
-                    className={`flex items-center gap-2 py-2 px-4 rounded-xl text-sm font-bold transition-all ${
+                    title={n.label}
+                    aria-label={n.label}
+                    className={`flex items-center gap-2 py-2 ${activeTab === n.id ? "px-3" : "px-2.5 xl:px-3"} rounded-xl text-sm font-bold whitespace-nowrap transition-all ${
                       activeTab === n.id
                         ? "bg-brand-red/10 text-brand-red border border-brand-red/30"
                         : "text-gray-400 hover:text-white hover:bg-brand-card/40 border border-transparent"
                     }`}
                   >
                     <Icon size={16} />
-                    {n.label}
+                    {/* Crowded bar: only the active tab keeps its label on
+                        narrower windows; all labels show on wide screens. */}
+                    <span className={activeTab === n.id ? "" : "hidden 2xl:inline"}>{n.label}</span>
                   </button>
                 );
               })}
@@ -253,27 +261,41 @@ function App() {
             <span>{activeShift ? "الوردية مفتوحة" : "الوردية مغلقة"}</span>
           </button>
 
-          {/* User profile */}
-          <div className="flex items-center gap-2 bg-brand-card/80 py-1.5 px-3 rounded-xl border border-brand-border/40">
-            <div className="h-6 w-6 rounded-full bg-brand-red/20 text-brand-red flex items-center justify-center">
-              <User size={14} />
-            </div>
-            <div className="text-right">
-              <span className="text-xs font-bold text-white block leading-none">{currentUser.display_name}</span>
-              <span className="text-[9px] text-gray-400 block mt-0.5 leading-none">
-                {currentUser.role === "admin" ? "مدير النظام" : currentUser.role === "manager" ? "مدير المطعم" : "كاشير الصندوق"}
-              </span>
-            </div>
+          {/* User menu: name, role and logout live in one compact button */}
+          <div className="relative">
+            <button
+              onClick={() => setIsUserMenuOpen((v) => !v)}
+              aria-label="قائمة المستخدم"
+              aria-expanded={isUserMenuOpen}
+              title={currentUser.display_name}
+              className="flex items-center gap-1.5 bg-brand-card/80 py-1.5 px-2 rounded-xl border border-brand-border/40 hover:border-brand-red/40 active:scale-95 transition-all"
+            >
+              <div className="h-6 w-6 rounded-full bg-brand-red/20 text-brand-red flex items-center justify-center">
+                <User size={14} />
+              </div>
+              <ChevronDown size={12} className="text-gray-400" />
+            </button>
+            {isUserMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setIsUserMenuOpen(false)} />
+                <div className="absolute left-0 top-full mt-2 z-40 w-52 bg-brand-surface border border-brand-border/60 rounded-2xl shadow-2xl p-3 space-y-2" dir="rtl">
+                  <div className="text-right px-1">
+                    <span className="text-sm font-bold text-white block leading-tight">{currentUser.display_name}</span>
+                    <span className="text-[11px] text-gray-400 block mt-0.5">
+                      {currentUser.role === "admin" ? "مدير النظام" : currentUser.role === "manager" ? "مدير المطعم" : "كاشير الصندوق"}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => { setIsUserMenuOpen(false); handleLogout(); }}
+                    className="w-full flex items-center justify-center gap-2 py-2 bg-brand-card/80 hover:bg-red-950/20 text-gray-300 hover:text-red-400 border border-brand-border/40 hover:border-red-900/40 rounded-xl text-sm font-bold active:scale-95 transition-all"
+                  >
+                    <LogOut size={14} />
+                    تسجيل الخروج
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-
-          {/* Logout */}
-          <button
-            onClick={handleLogout}
-            className="p-2 bg-brand-card/80 hover:bg-red-950/20 text-gray-400 hover:text-red-400 border border-brand-border/40 hover:border-red-900/40 rounded-xl active:scale-95 transition-all"
-            title="تسجيل الخروج"
-          >
-            <LogOut size={16} />
-          </button>
         </div>
 
       </header>
@@ -303,7 +325,8 @@ function App() {
         )}
         {activeTab === "reports"    && isManagerOrAbove && <ReportsView key={activeShift?.id ?? "closed"} currentUser={currentUser} />}
         {activeTab === "products"   && isManagerOrAbove && <ProductsView currentUser={currentUser} />}
-        {activeTab === "settlement" && isManagerOrAbove && <DriverSettlementView currentUser={currentUser} />}
+        {activeTab === "settlement" && <DriverSettlementView currentUser={currentUser} />}
+        {activeTab === "sessions"   && isManagerOrAbove && <SessionsView currentUser={currentUser} />}
         {activeTab === "audit"      && isManagerOrAbove && <AuditLogView currentUser={currentUser} />}
         {activeTab === "users"      && isAdmin           && <UsersView currentUser={currentUser} />}
       </main>
