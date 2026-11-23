@@ -885,6 +885,12 @@ class POSBridgeClient {
       }
 
       case "cancel_order": {
+        // Demo mirrors the backend: a reason and a valid manager PIN are required.
+        if (!String(payload.reason || "").trim()) throw new Error("سبب الإلغاء مطلوب");
+        const approver = this.mockState.users.find(
+          (u: any) => u.pin === payload.manager_pin && (u.role === "manager" || u.role === "admin"),
+        );
+        if (!approver) throw new Error("PIN المدير غير صحيح");
         const orderId = payload.order_id;
         const activeOrder = this.mockState.activeOrders.find((o: any) => o.id === orderId);
         if (activeOrder) {
