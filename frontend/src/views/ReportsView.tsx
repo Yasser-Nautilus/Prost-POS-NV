@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { BarChart3, TrendingUp, DollarSign, RefreshCw, Printer, Eye, X, Loader2 } from "lucide-react";
 import { bridge } from "../bridge";
 import { PeriodReports } from "../components/PeriodReports";
+import { DriverStats } from "../components/DriverStats";
 
 interface ReportsViewProps {
   currentUser: any;
@@ -221,6 +222,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
       </div>
 
       <PeriodReports />
+      <DriverStats />
 
       {/* Main Reports Panel */}
       <div className="bg-brand-card p-6 rounded-3xl border border-brand-border/50 space-y-6">
