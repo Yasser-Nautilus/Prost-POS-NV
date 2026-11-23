@@ -19,7 +19,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from broast_pos.config.config import PRINTER_SIMULATE, PRINTER_SIMULATE_OUTPUT_DIR
+from broast_pos.config.config import (
+    PRINTER_SIMULATE,
+    PRINTER_SIMULATE_OUTPUT_DIR,
+    is_production,
+)
 from broast_pos.infrastructure.printing.escpos_printer import EscPosPrinter
 from broast_pos.infrastructure.printing.printer_config import (
     load_printer_config,
@@ -113,6 +117,9 @@ class PrinterManager:
         The file is JSON with a local-time timestamp in the filename so it
         is easy to find after a test run.
         """
+        if is_production():
+            logger.error("Simulated printing is forbidden in production")
+            return False
         try:
             out_dir = Path(PRINTER_SIMULATE_OUTPUT_DIR)
             out_dir.mkdir(parents=True, exist_ok=True)

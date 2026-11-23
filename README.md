@@ -119,3 +119,14 @@ The core POS functionality — orders, products, customers, delivery, settlement
 ## License
 
 Proprietary — not for redistribution.
+
+### Printer safety
+
+In production (`APP_ENV=prod`), configure physical USB, network or serial
+printers in `broast_pos/config/printers.json` and install `python-escpos`
+with its transport dependencies. Missing/invalid configuration, dummy printers,
+or a missing driver report print failure. They do not satisfy the shift-report
+printing prerequisite. `PROST_PRINTER_SIMULATE=1` is development/test only and
+is rejected in production. Development dummy/simulated success is not proof
+of a physical print. Confirm receipt and report output on the actual devices
+before using the system for service.

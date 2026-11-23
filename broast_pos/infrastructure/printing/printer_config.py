@@ -12,7 +12,7 @@ import logging
 from dataclasses import dataclass
 from pathlib import Path
 
-from broast_pos.config.config import PRINTER_CONFIG_PATH
+from broast_pos.config.config import PRINTER_CONFIG_PATH, is_production
 
 logger = logging.getLogger(__name__)
 
@@ -48,23 +48,30 @@ def load_printer_config() -> dict[str, PrinterEntry]:
 
     config_path = Path(PRINTER_CONFIG_PATH)
     if not config_path.exists():
-        logger.warning("printers.json not found at %s — using dummy printers", config_path)
-        _config_cache = _build_dummy_config()
+        logger.error("printers.json not found at %s", config_path)
+        _config_cache = {} if is_production() else _build_dummy_config()
         return _config_cache
 
     try:
         with config_path.open(encoding="utf-8") as f:
             raw: dict = json.load(f)
     except (json.JSONDecodeError, OSError) as exc:
-        logger.error("Failed to parse printers.json: %s — using dummy printers", exc)
-        _config_cache = _build_dummy_config()
+        logger.error("Failed to parse printers.json: %s", exc)
+        _config_cache = {} if is_production() else _build_dummy_config()
         return _config_cache
 
     entries: dict[str, PrinterEntry] = {}
+    if not isinstance(raw, dict):
+        logger.error("Printer configuration must be an object")
+        _config_cache = {}
+        return _config_cache
     for key, cfg in raw.items():
+        if not isinstance(cfg, dict):
+            logger.error("Invalid configuration for printer %s", key)
+            continue
         entries[key] = PrinterEntry(
             key=key,
-            conn_type=cfg.get("type", "dummy"),
+            conn_type=cfg.get("type", "invalid" if is_production() else "dummy"),
             vendor_id=cfg.get("vendor_id"),
             product_id=cfg.get("product_id"),
             host=cfg.get("host"),
