@@ -240,3 +240,66 @@ def test_visible_occupied_table_opens_existing_order_for_append(qapp, monkeypatc
     finally:
         shell.close()
         DatabaseConnection.reset()
+
+
+@pytest.fixture(scope="module")
+def history_page(tmp_path_factory):
+    import subprocess
+    output = tmp_path_factory.mktemp("history-ui")
+    subprocess.run(["npm", "exec", "vite", "build", "--", "--config", "vite.history-test.config.ts",
+                    "--outDir", str(output), "--emptyOutDir"], cwd=ROOT / "frontend", check=True,
+                   capture_output=True, text=True)
+    pages = list(output.rglob("index.html"))
+    assert len(pages) == 1
+    return pages[0]
+
+
+@pytest.mark.parametrize("lookup", ["phone", "id", "missing", "invalid"])
+def test_rendered_customer_history_real_lookup(qapp, monkeypatch, history_page, lookup):
+    from PyQt6.QtCore import QUrl
+    monkeypatch.setenv("POS_DEV_MODE", "0")
+    DatabaseConnection.reset()
+    bridge, db = _build_test_bridge(qapp)
+    def call(action, payload=None):
+        result = json.loads(bridge.dispatch(action, json.dumps(payload or {})))
+        assert result["success"], result
+        return result.get("data")
+    call("login", {"pin": "1234"})
+    customer = call("create_customer", {"name": "عميل الاختبار", "phone": "01012345678"})
+    zone = call("get_active_zones")[0]
+    address = call("add_customer_address", {"customer_id": customer["id"], "street_name": "شارع محفوظ", "zone_id": zone["id"]})
+    call("open_shift")
+    call("new_order", {"order_type": "delivery"})
+    call("add_item", {"product_id": 1})
+    call("set_customer_info", {"customer_id": customer["id"], "phone": customer["phone"],
+          "name": customer["name"], "address_id": address["id"], "address": address["street_name"]})
+    call("confirm_order")
+    # Address removal must not remove the historical address shown by this modal.
+    call("delete_customer_address", {"customer_id": customer["id"], "address_id": address["id"]})
+    shell = WebShell(bridge)
+    shell.setWindowState(Qt.WindowState.WindowNoState)
+    shell.resize(1440, 1000)
+    fragment = {"phone": "phone=01012345678", "id": f"customerId={customer['id']}",
+                "missing": "phone=01099999999", "invalid": "phone=123"}[lookup]
+    url = QUrl.fromLocalFile(str(history_page))
+    url.setFragment(fragment)
+    shell.web_view.load(url)
+    shell.show()
+    browser = Browser(shell)
+    try:
+        if lookup in ("phone", "id"):
+            browser.wait("document.body.innerText.includes('طلب #1')")
+            text = browser.js("document.body.innerText")
+            assert "عميل الاختبار" in text and "شارع محفوظ" in text
+            browser.screenshot("08-customer-history.png")
+            browser.click("الإحصائيات")
+            browser.wait("document.body.innerText.includes('إجمالي الطلبات')")
+            assert "إجراء غير معروف" not in browser.js("document.body.innerText")
+        elif lookup == "missing":
+            browser.wait("document.body.innerText.includes('لم يتم العثور على العميل')")
+        else:
+            browser.wait("document.body.innerText.includes('11 رقم')")
+        assert db.fetch_one("SELECT count(*) n FROM orders")["n"] == 1
+    finally:
+        shell.close()
+        DatabaseConnection.reset()

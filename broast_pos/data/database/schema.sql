@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS customer_addresses (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     customer_id   INTEGER NOT NULL REFERENCES customers(id),
     street_name   TEXT    NOT NULL,
+    is_active     INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
     zone_id       INTEGER NOT NULL REFERENCES zones(id),
     zone_name     TEXT    NOT NULL,        -- denormalized for display
     delivery_fee  REAL    NOT NULL         -- copied from zone at creation time

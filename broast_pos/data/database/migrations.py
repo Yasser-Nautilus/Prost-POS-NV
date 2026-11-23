@@ -25,6 +25,7 @@ Migration history:
     v5 → v6: Add users.pin_salt column (salted+peppered PIN hashing).
     v6 → v7: Durable user-owned parked drafts, separate from orders.
     v7 → v8: Guard new duplicate active dine-in table occupancy.
+    v8 → v9: Soft-delete customer addresses without changing order history.
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Version tracking (bumped when a new migration is added)
 # ---------------------------------------------------------------------------
-LATEST_VERSION = 8
+LATEST_VERSION = 9
 
 # ---------------------------------------------------------------------------
 # Path to the schema file (sibling of this module)
@@ -378,6 +379,14 @@ def _migrate_v7_to_v8(db: DatabaseConnection) -> None:
     _apply_schema(db)
 
 
+def _migrate_v8_to_v9(db: DatabaseConnection) -> None:
+    """Keep deleted addresses as history, hide them from future selection."""
+    columns = {row["name"] for row in db.fetch_all("PRAGMA table_info(customer_addresses)")}
+    if "is_active" not in columns:
+        db.execute("ALTER TABLE customer_addresses ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1))")
+    db.commit()
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — maps from_version → migration function
 # NOTE: Must be defined AFTER all migration functions are declared.
@@ -390,4 +399,5 @@ _MIGRATIONS: dict = {
     5: _migrate_v5_to_v6,
     6: _migrate_v6_to_v7,
     7: _migrate_v7_to_v8,
+    8: _migrate_v8_to_v9,
 }

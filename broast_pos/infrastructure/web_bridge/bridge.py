@@ -499,6 +499,12 @@ class POSBridge(QObject):
                     "zone_name": addr.zone_name, "delivery_fee": addr.delivery_fee,
                 }})
 
+            elif action == "delete_customer_address":
+                if payload.get("customer_id") is None:
+                    raise ValueError("يجب تحديد العميل")
+                self._customer.delete_address(payload.get("address_id"), payload["customer_id"])
+                return json.dumps({"success": True})
+
             elif action == "get_active_zones":
                 zones = self._customer.get_active_zones()
                 return json.dumps({"success": True, "data": [self._zone_to_dict(z) for z in zones]})

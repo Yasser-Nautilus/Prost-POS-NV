@@ -107,13 +107,13 @@ class CustomerService:
         """A single saved address by id — authoritative zone/fee source."""
         return self._customers.get_address_by_id(address_id)
 
-    def delete_address(self, address_id: int) -> None:
+    def delete_address(self, address_id: int, customer_id: int | None = None) -> None:
         """Soft-delete an address.
 
         Raises:
             ValueError: if address not found.
         """
-        self._customers.delete(address_id)
+        self._customers.delete_address(address_id, customer_id)
 
     # ------------------------------------------------------------------
     # Customer lookup by ID
