@@ -1138,7 +1138,7 @@ class POSBridge(QObject):
                         })
                 data = ctrl.close_session(
                     session_id=session_id,
-                    counted_cash_egp=float(payload.get("counted_cash_egp", 0)),
+                    counted_cash_egp=payload.get("counted_cash_egp"),
                     actor_id=actor.id,
                     variance_reason=payload.get("variance_reason"),
                     manager_pin=payload.get("manager_pin"),
@@ -1178,7 +1178,7 @@ class POSBridge(QObject):
                     from_session_id=from_session_id,
                     to_user_id=to_user_id,
                     station=outgoing_session.station.value,
-                    counted_cash_egp=float(payload.get("counted_cash_egp", 0)),
+                    counted_cash_egp=payload.get("counted_cash_egp"),
                     cash_drop_egp=float(payload.get("cash_drop_egp", 0)),
                     actor_id=actor.id,
                     variance_reason=payload.get("variance_reason"),

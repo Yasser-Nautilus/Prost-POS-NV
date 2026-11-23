@@ -31,6 +31,7 @@ from broast_pos.core.models.cashier_session import (
     LedgerEntryType,
     Station,
 )
+from broast_pos.core.policies.input_values import cash_piasters
 from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
 from broast_pos.data.repositories.cashier_session_repository import (
     CashierSessionRepository,
@@ -153,6 +154,7 @@ class CashierSessionService:
         Raises ValueError with Arabic message if session not found, already
         closed, or variance requires manager approval that wasn't provided.
         """
+        counted_cash_pt = cash_piasters(counted_cash_pt)
         session = self._sessions.get_by_id(session_id)
         if session is None:
             raise ValueError(f"الوردية رقم {session_id} غير موجودة")
@@ -250,6 +252,9 @@ class CashierSessionService:
         linked to the shift (day_id), not the session. Payment attribution
         (FR-SES-8) is handled at payment time by the OrderService.
         """
+        cash_drop_pt = cash_piasters(cash_drop_pt)
+        if to_user_counted_pt is not None:
+            to_user_counted_pt = cash_piasters(to_user_counted_pt)
         outgoing = self._sessions.get_by_id(from_session_id)
         if outgoing is None:
             raise ValueError(f"وردية التسليم رقم {from_session_id} غير موجودة")

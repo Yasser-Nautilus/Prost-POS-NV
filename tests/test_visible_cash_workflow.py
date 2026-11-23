@@ -174,7 +174,17 @@ def test_visible_open_shift_to_cash_payment(qapp, monkeypatch, existing_day, con
         assert db.fetch_one("SELECT count(*) n FROM orders")["n"] == 0
         browser.click("تأكيد ودفع الفاتورة")
         browser.wait("document.body.innerText.includes('تأكيد الدفع')")
-        # Explicit cash amount, no reliance on the unrelated empty/zero fallback.
+        # Empty and explicit zero must not silently pay the full amount.
+        browser.js("[...document.querySelectorAll('button')].find(b=>b.textContent.trim().startsWith('إنهاء وتأكيد الدفع')).click()")
+        browser.wait("window.__alerts.some(s=>s.includes('أدخل المبلغ النقدي'))")
+        browser.click("0")
+        browser.js("[...document.querySelectorAll('button')].find(b=>b.textContent.trim().startsWith('إنهاء وتأكيد الدفع')).click()")
+        browser.wait("window.__alerts.some(s=>s.includes('أقل من إجمالي'))")
+        assert db.fetch_one("SELECT is_paid FROM orders")["is_paid"] == 0
+        assert db.fetch_one("SELECT count(*) n FROM cash_ledger WHERE entry_type='SALE_CASH'")["n"] == 0
+        browser.screenshot("09-zero-not-paid.png")
+        browser.click("مسح")
+        # Explicit cash amount, no reliance on the empty/zero fallback.
         for digit in "100":
             browser.click(digit)
         browser.js("[...document.querySelectorAll('button')].find(b=>b.textContent.trim().startsWith('إنهاء وتأكيد الدفع')).click()")
@@ -300,6 +310,47 @@ def test_rendered_customer_history_real_lookup(qapp, monkeypatch, history_page, 
         else:
             browser.wait("document.body.innerText.includes('11 رقم')")
         assert db.fetch_one("SELECT count(*) n FROM orders")["n"] == 1
+    finally:
+        shell.close()
+        DatabaseConnection.reset()
+
+
+@pytest.mark.parametrize("pin", ["9876543210987654", "legacyPass9"])
+def test_visible_long_and_legacy_text_pin_login_and_override(qapp, monkeypatch, history_page, pin):
+    from PyQt6.QtCore import QUrl
+
+    from broast_pos.core.models.user import UserRole
+    monkeypatch.setenv("POS_DEV_MODE", "0")
+    DatabaseConnection.reset()
+    bridge, _ = _build_test_bridge(qapp)
+    bridge._auth.create_user("long_ui", "Long UI", UserRole.MANAGER, pin)
+    shell = WebShell(bridge)
+    shell.setWindowState(Qt.WindowState.WindowNoState)
+    shell.resize(1440, 1000)
+    shell.show()
+    browser = Browser(shell)
+    try:
+        browser.wait("!!document.querySelector('[aria-label=\"رمز PIN\"]')")
+        if pin.isdigit():
+            for digit in pin:
+                browser.click(digit)
+        else:
+            browser.field("رمز PIN", pin)
+        assert browser.js("document.querySelector('[aria-label=\"رمز PIN\"]').value.length") == len(pin)
+        browser.screenshot("10-long-pin.png")
+        browser.click("تأكيد PIN")
+        browser.wait("document.body.innerText.includes('Long UI')")
+        url = QUrl.fromLocalFile(str(history_page))
+        url.setFragment("manager=1")
+        shell.web_view.load(url)
+        browser.wait("!!document.querySelector('[aria-label=\"رمز PIN للمدير\"]')")
+        if pin.isdigit():
+            for digit in pin:
+                browser.click(digit)
+        else:
+            browser.field("رمز PIN للمدير", pin)
+        browser.click("تأكيد الرمز")
+        browser.wait("document.title==='manager-approved'")
     finally:
         shell.close()
         DatabaseConnection.reset()

@@ -34,7 +34,10 @@ def setup():
 def test_rejected_order_cannot_be_committed_by_customer_save(setup):
     _, db, call = setup
     call("new_order", {"order_type": "takeaway"})
-    call("add_item", {"product_id": 1, "quantity": -1})
+    call("add_item", {"product_id": 1, "quantity": -1}, ok=False)
+    # Malformed state injected below the controller still must roll back at save.
+    call("add_item", {"product_id": 1})
+    setup[0]._order_ctrl.current_order.items[0].quantity = -1
     counter = db.fetch_one("SELECT next_invoice_no FROM shifts")["next_invoice_no"]
     call("confirm_order", ok=False)
     assert not db.raw_connection.in_transaction

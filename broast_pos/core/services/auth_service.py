@@ -375,7 +375,7 @@ class AuthService:
         # B-08: enforce minimum PIN length
         if len(pin) < _PIN_MIN_LENGTH:
             raise ValueError(
-                f"رمز PIN يجب أن يكون {_PIN_MIN_LENGTH} أرقام على الأقل"
+                f"رمز PIN يجب أن يكون {_PIN_MIN_LENGTH} أحرف أو أرقام على الأقل"
             )
 
         if self._pin_in_use(pin):
@@ -458,7 +458,7 @@ class AuthService:
             # B-08: enforce minimum PIN length on update too
             if len(pin) < _PIN_MIN_LENGTH:
                 raise ValueError(
-                    f"رمز PIN يجب أن يكون {_PIN_MIN_LENGTH} أرقام على الأقل"
+                    f"رمز PIN يجب أن يكون {_PIN_MIN_LENGTH} أحرف أو أرقام على الأقل"
                 )
             if self._pin_in_use(pin, exclude_user_id=user_id):
                 raise ValueError("رمز PIN مستخدم بالفعل لمستخدم آخر")

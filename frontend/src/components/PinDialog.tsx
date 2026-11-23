@@ -61,7 +61,7 @@ export const PinDialog: React.FC<PinDialogProps> = ({
         <div className="p-6 flex flex-col items-center">
           <div className="w-full mb-6">
             <div className="flex justify-center gap-3 mb-2">
-              {[0, 1, 2, 3].map((idx) => (
+              {Array.from({ length: Math.max(4, Math.min(pin.length, 12)) }, (_, idx) => (
                 <div
                   key={idx}
                   className={`w-4 h-4 rounded-full border border-brand-red/60 transition-colors ${
@@ -73,7 +73,9 @@ export const PinDialog: React.FC<PinDialogProps> = ({
             
             <input
               type="password"
-              readOnly
+              aria-label="رمز PIN للمدير"
+              onChange={(e) => setPin(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
               value={pin}
               placeholder="••••"
               className="w-full text-center text-3xl tracking-widest bg-transparent border-none text-white focus:outline-none placeholder-gray-600"
@@ -88,8 +90,9 @@ export const PinDialog: React.FC<PinDialogProps> = ({
 
           <Numpad
             value={pin}
+            maxLength={Number.POSITIVE_INFINITY}
             onChange={(val) => {
-              if (val.length <= 4) setPin(val);
+              setPin(val);
             }}
             onConfirm={handleSubmit}
             confirmLabel={loading ? "جاري التحقق..." : "تأكيد الرمز"}

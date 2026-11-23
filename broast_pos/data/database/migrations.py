@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Version tracking (bumped when a new migration is added)
 # ---------------------------------------------------------------------------
-LATEST_VERSION = 9
+LATEST_VERSION = 10
 
 # ---------------------------------------------------------------------------
 # Path to the schema file (sibling of this module)
@@ -387,6 +387,11 @@ def _migrate_v8_to_v9(db: DatabaseConnection) -> None:
     db.commit()
 
 
+def _migrate_v9_to_v10(db: DatabaseConnection) -> None:
+    """Reject new fractional unit counts without rewriting old order lines."""
+    _apply_schema(db)
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — maps from_version → migration function
 # NOTE: Must be defined AFTER all migration functions are declared.
@@ -400,4 +405,5 @@ _MIGRATIONS: dict = {
     6: _migrate_v6_to_v7,
     7: _migrate_v7_to_v8,
     8: _migrate_v8_to_v9,
+    9: _migrate_v9_to_v10,
 }

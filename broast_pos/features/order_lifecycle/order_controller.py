@@ -24,6 +24,7 @@ from broast_pos.core.models.order import (
     PaymentMethod,
 )
 from broast_pos.core.policies.discount import compute_discount
+from broast_pos.core.policies.input_values import unit_count
 from broast_pos.core.services.auth_service import AuthService
 from broast_pos.core.services.customer_service import CustomerService
 from broast_pos.core.services.financial_service import FinancialService
@@ -160,6 +161,7 @@ class OrderController:
             ValueError: if product_service isn't wired, or the product
                         doesn't exist / isn't active.
         """
+        quantity = unit_count(quantity)
         if self._current_order is None:
             return
         # H03: a paid order's total must never change — even just on screen —
@@ -195,6 +197,7 @@ class OrderController:
 
     def change_quantity(self, index: int, delta: int) -> None:
         """Change item quantity by delta (+/-)."""
+        delta = unit_count(delta, positive=False)
         if self._current_order is None:
             return
         # H03: reject item quantity changes on a paid active order — raise

@@ -12,6 +12,7 @@ import logging
 from dataclasses import dataclass
 
 from broast_pos.core.models.order import OrderType, PaymentMethod
+from broast_pos.core.policies.input_values import cash_amount
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,12 @@ class PaymentCoordinator:
         Returns:
             PaymentResult with change calculation or error.
         """
+        try:
+            cash_amount(total)
+            cash_amount(amount_paid)
+        except ValueError as exc:
+            return PaymentResult(method=method, total=total, amount_paid=0,
+                                 change_given=0, is_valid=False, error=str(exc))
         # Validate method
         if not self.is_method_allowed(order_type, method):
             return PaymentResult(

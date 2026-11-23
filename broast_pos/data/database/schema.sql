@@ -517,3 +517,17 @@ WHEN NEW.order_type = 'dine_in'
 BEGIN
     SELECT RAISE(ABORT,'active_dine_in_table_occupied');
 END;
+
+-- SQLite INTEGER affinity alone still stores real fractions. Guard all writers.
+CREATE TRIGGER IF NOT EXISTS trg_order_items_unit_insert
+BEFORE INSERT ON order_items
+WHEN typeof(NEW.quantity) != 'integer' OR NEW.quantity <= 0
+BEGIN
+    SELECT RAISE(ABORT,'quantity_must_be_positive_integer');
+END;
+CREATE TRIGGER IF NOT EXISTS trg_order_items_unit_update
+BEFORE UPDATE OF quantity ON order_items
+WHEN typeof(NEW.quantity) != 'integer' OR NEW.quantity <= 0
+BEGIN
+    SELECT RAISE(ABORT,'quantity_must_be_positive_integer');
+END;

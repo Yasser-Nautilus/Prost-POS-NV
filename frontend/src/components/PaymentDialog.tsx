@@ -33,7 +33,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   // CHANGED: reset payment inputs every time the dialog opens, so the previous
   // payment's amount/method doesn't carry over to the next order (e.g. 250 paid
   // before showing up again as "amount paid" on a new 500 bill). The Enter-to-
-  // confirm shortcut keeps working — this only clears the fields.
+  // confirm shortcut keeps working, but cash must be entered explicitly.
   useEffect(() => {
     if (isOpen) {
       setMethod("cash");
@@ -47,7 +47,11 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   };
 
   const handlePayConfirm = () => {
-    const received = parseFloat(cashReceived) || total;
+    const received = method === "cash" ? Number(cashReceived) : total;
+    if (method === "cash" && (!cashReceived.trim() || !Number.isFinite(received) || received < 0)) {
+      alert("أدخل المبلغ النقدي المستلم");
+      return;
+    }
     if (method === "cash" && received < total) {
       alert("المبلغ المدفوع أقل من إجمالي الطلب");
       return;

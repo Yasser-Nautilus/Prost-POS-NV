@@ -23,6 +23,7 @@ from broast_pos.core.models.order import (
     PaymentMethod,
 )
 from broast_pos.core.policies.discount import compute_discount
+from broast_pos.core.policies.input_values import unit_count
 from broast_pos.core.services.audit_service import AuditService
 from broast_pos.data.repositories.audit_repository import AuditRepository
 from broast_pos.data.repositories.order_repository import OrderRepository
@@ -357,6 +358,9 @@ class OrderService:
             raise ValueError("لا يمكن تعديل طلب مدفوع بالفعل")
 
         # Removing items requires manager override
+        for item in removed_items:
+            unit_count(item.quantity)
+        self._check_items_available(added_items)
         if removed_items:
             if not manager_pin:
                 raise PermissionError("يجب إدخال PIN المدير لحذف عنصر")
@@ -804,7 +808,9 @@ class OrderService:
     # ------------------------------------------------------------------
 
     def _check_items_available(self, items: list[OrderItem]) -> None:
-        """Raise ValueError if any item refers to a missing or inactive product."""
+        """Validate unit counts even in legacy wiring without a catalogue."""
+        for item in items:
+            unit_count(item.quantity)
         if self._products is None:
             return
         for item in items:

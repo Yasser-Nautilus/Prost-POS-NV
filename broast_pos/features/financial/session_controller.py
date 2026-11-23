@@ -22,6 +22,7 @@ import logging
 from typing import Any
 
 from broast_pos.core.models.cashier_session import CashierSession, Station
+from broast_pos.core.policies.input_values import cash_amount
 from broast_pos.core.services.business_day_service import (
     BusinessDayService,
     SessionSnapshot,
@@ -72,7 +73,7 @@ class SessionController:
                 f"محطة غير صحيحة: {station!r}. القيم المسموح بها: ALL, COUNTER, DELIVERY"
             )
 
-        float_pt = round(opening_float_egp * 100)
+        float_pt = round(cash_amount(opening_float_egp) * 100)
         # H05: Only manager can open on behalf of another user
         if self._auth is not None and actor_id is not None:
             actor = self._auth.get_user_by_id(actor_id)
@@ -108,7 +109,7 @@ class SessionController:
                 if session is not None and session.user_id != actor_id:
                     raise ValueError("لا يمكن إغلاق درج كاشير آخر")
 
-        counted_pt = round(counted_cash_egp * 100)
+        counted_pt = round(cash_amount(counted_cash_egp) * 100)
         session = self._svc.close_session(
             session_id=session_id,
             counted_cash_pt=counted_pt,
@@ -157,8 +158,8 @@ class SessionController:
         if cash_drop_egp > counted_cash_egp:
             raise ValueError("مبلغ التحويل للخزينة لا يمكن أن يتجاوز المبلغ المعدود")
 
-        counted_pt = round(counted_cash_egp * 100)
-        drop_pt = round(cash_drop_egp * 100)
+        counted_pt = round(cash_amount(counted_cash_egp) * 100)
+        drop_pt = round(cash_amount(cash_drop_egp) * 100)
 
         closed, new_s = self._svc.do_handover(
             from_session_id=from_session_id,

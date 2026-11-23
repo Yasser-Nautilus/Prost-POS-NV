@@ -134,11 +134,15 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
         </div>
         
         <h3 className="text-xl font-bold text-white mb-1">تسجيل الدخول للنظام</h3>
-        <p className="text-gray-400 text-sm mb-6 text-center">أدخل رمز الـ PIN المكون من 4 أرقام</p>
+        <p className="text-gray-400 text-sm mb-6 text-center">أدخل رمز الـ PIN الخاص بك</p>
 
+        <input type="password" aria-label="رمز PIN" value={pin}
+          autoComplete="current-password" onChange={(e) => setPin(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleLoginSubmit(); }}
+          className="w-full text-center text-xl bg-transparent text-white mb-4" />
         {/* PIN Dot indicators */}
         <div className="flex justify-center gap-3 mb-6">
-          {[0, 1, 2, 3].map((idx) => (
+          {Array.from({ length: Math.max(4, Math.min(pin.length, 12)) }, (_, idx) => (
             <div
               key={idx}
               className={`w-4 h-4 rounded-full border border-brand-red/60 transition-colors ${
@@ -157,8 +161,9 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
         <Numpad
           value={pin}
+          maxLength={Number.POSITIVE_INFINITY}
           onChange={(val) => {
-            if (val.length <= 4) setPin(val);
+            setPin(val);
           }}
           onConfirm={handleLoginSubmit}
           confirmLabel={loading ? "جاري التحقق..." : "تأكيد PIN"}
