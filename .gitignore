@@ -45,6 +45,13 @@ desktop.ini
 *.swo
 
 # Secrets / Config (keep templates, ignore real configs)
+.env
+.env.*
+!.env.example
+*.secret
+*.key
+*.pem
+broast_pos/config/printers.json
 config/printers.json
 
 # Coverage
