@@ -165,47 +165,59 @@ class OrderService:
         # Validate business rules
         self._validate_order(order)
 
-        # Assign shift + invoice + cashier info
-        order.shift_id = shift.id
-        order.invoice_no = self._financial.get_next_invoice_number()
-        order.created_by_id = cashier_id
-        order.created_by_name = cashier_name
-        order.status = OrderStatus.NEW
+        # Counter and order are one unit. Restore the retryable draft on failure,
+        # including ids assigned before a later item or commit failure.
+        from copy import deepcopy
 
-        # Compute totals
-        order.subtotal = sum(item.total_price for item in order.items)
-        self._compute_total(order)
-
-        # B-02: Delivery orders MUST have a payment_method — default to CASH.
-        # This closes the bug where NULL payment_method caused settle_trip
-        # to always report cash_collected = 0.
-        if order.order_type == OrderType.DELIVERY:
-            if order.payment_method is None:
-                order.payment_method = PaymentMethod.CASH
-            if order.payment_method == PaymentMethod.ONLINE:
-                # Pre-paid online: mark as paid atomically inside this save.
-                # No secondary complete_order() call is required or allowed.
-                order.is_paid = True
-                order.amount_paid = order.total
-                order.paid_at = datetime.datetime.now().isoformat()
-
-        # Persist
-        saved = self._orders.save(order)
-
-        # Record initial status history
+        draft_state = deepcopy(order.__dict__)
         try:
-            self._status_history.record_transition(
-                order_id=saved.id,
-                old_status=None,
-                new_status=OrderStatus.NEW.value,
-                changed_by_id=cashier_id,
-                changed_by_name=cashier_name,
-            )
-        except Exception:
-            # Checkup-Fix: History failure must not block order creation, but log it.
-            logger.warning("Status-history record failed for new order %s", saved.id, exc_info=True)
+            with self._db.transaction():
+                # Assign shift + invoice + cashier info
+                order.shift_id = shift.id
+                order.invoice_no = self._financial.get_next_invoice_number()
+                order.created_by_id = cashier_id
+                order.created_by_name = cashier_name
+                order.status = OrderStatus.NEW
 
-        return saved
+                # Compute totals
+                order.subtotal = sum(item.total_price for item in order.items)
+                self._compute_total(order)
+
+                # B-02: Delivery orders MUST have a payment_method — default to CASH.
+                # This closes the bug where NULL payment_method caused settle_trip
+                # to always report cash_collected = 0.
+                if order.order_type == OrderType.DELIVERY:
+                    if order.payment_method is None:
+                        order.payment_method = PaymentMethod.CASH
+                    if order.payment_method == PaymentMethod.ONLINE:
+                        # Pre-paid online: mark as paid atomically inside this save.
+                        # No secondary complete_order() call is required or allowed.
+                        order.is_paid = True
+                        order.amount_paid = order.total
+                        order.paid_at = datetime.datetime.now().isoformat()
+
+                # Persist
+                saved = self._orders.save(order)
+
+                # Record initial status history
+                try:
+                    with self._db.transaction():
+                        self._status_history.record_transition(
+                            order_id=saved.id,
+                            old_status=None,
+                            new_status=OrderStatus.NEW.value,
+                            changed_by_id=cashier_id,
+                            changed_by_name=cashier_name,
+                        )
+                except Exception:
+                    # Checkup-Fix: History failure must not block order creation, but log it.
+                    logger.warning("Status-history record failed for new order %s", saved.id, exc_info=True)
+
+                return saved
+        except BaseException:
+            order.__dict__.clear()
+            order.__dict__.update(draft_state)
+            raise
 
     # ------------------------------------------------------------------
     # Centralized status transition (THE authoritative status change path)

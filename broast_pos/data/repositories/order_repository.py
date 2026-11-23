@@ -34,9 +34,16 @@ class OrderRepository(BaseRepository[Order]):
         return order
 
     def save(self, entity: Order) -> Order:
-        if entity.id is None:
-            return self._insert(entity)
-        return self._update(entity)
+        original_id = entity.id
+        try:
+            with self._db.transaction():
+                if entity.id is None:
+                    return self._insert(entity)
+                return self._update(entity)
+        except BaseException:
+            # A failed insert must remain retryable, not point at a rolled-back ID.
+            entity.id = original_id
+            raise
 
     def delete(self, entity_id: int) -> None:
         """Soft-delete: cancel the order (orders don't have is_active)."""

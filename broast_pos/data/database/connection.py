@@ -87,6 +87,8 @@ class DatabaseConnection:
                 "DatabaseConnection is a singleton — use get_instance()"
             )
 
+        self._operation_lock = threading.RLock()
+        self._savepoint_serial = 0
         self._db_path = db_path
         self._ensure_directory()
         self._conn = self._create_connection()
@@ -133,7 +135,8 @@ class DatabaseConnection:
         Suitable for INSERT / UPDATE / DELETE as well as DDL.  For writes
         that should be grouped, wrap with ``begin()`` … ``commit()``.
         """
-        return self._conn.execute(sql, params)
+        with self._operation_lock:
+            return self._conn.execute(sql, params)
 
     def fetch_one(
         self,
@@ -141,7 +144,8 @@ class DatabaseConnection:
         params: tuple[Any, ...] | dict[str, Any] = (),
     ) -> sqlite3.Row | None:
         """Execute *sql* and return the first row, or ``None``."""
-        return self._conn.execute(sql, params).fetchone()
+        with self._operation_lock:
+            return self._conn.execute(sql, params).fetchone()
 
     def fetch_all(
         self,
@@ -149,7 +153,8 @@ class DatabaseConnection:
         params: tuple[Any, ...] | dict[str, Any] = (),
     ) -> list[sqlite3.Row]:
         """Execute *sql* and return every matching row."""
-        return self._conn.execute(sql, params).fetchall()
+        with self._operation_lock:
+            return self._conn.execute(sql, params).fetchall()
 
     def executescript(self, script: str) -> None:
         """Run a multi-statement SQL script (e.g. schema creation).
@@ -157,7 +162,10 @@ class DatabaseConnection:
         ``executescript`` implicitly issues a ``COMMIT`` before running,
         so any open transaction is committed first.
         """
-        self._conn.executescript(script)
+        with self._operation_lock:
+            if self._tx_depth:
+                raise RuntimeError("executescript cannot run inside a managed transaction")
+            self._conn.executescript(script)
 
     # ------------------------------------------------------------------
     # Transaction helpers
@@ -165,46 +173,51 @@ class DatabaseConnection:
 
     @contextmanager
     def transaction(self) -> Generator[None, None, None]:
-        """Context manager for atomic multi-step operations.
+        """Atomic operation, with real SQLite savepoints for nested scopes.
 
-        Supports nesting via a depth counter — only the outermost
-        ``transaction()`` issues BEGIN/COMMIT/ROLLBACK.  Inner calls are
-        transparent save-points in spirit (SQLite doesn't expose named
-        save-points through the standard driver, so we track depth instead).
-
-        Usage::
-
-            with db.transaction():
-                repo_a.insert(...)   # may call commit() internally — safe
-                repo_b.update(...)   # wrapped in the same transaction
-                audit.log(...)       # all-or-nothing
-
-        Raises:
-            Any exception from the body will trigger a full rollback.
+        A failed inner scope rolls back its writes even if its caller catches
+        the error. Repository commit() calls cannot commit the outer scope.
+        Hold a reentrant lock for the entire scope: another thread must never
+        join this shared connection's transaction or commit its partial work.
         """
-        if self._tx_depth == 0 and not self._conn.in_transaction:
-            self._conn.execute("BEGIN IMMEDIATE")
-        self._tx_depth += 1
-        try:
-            yield
-            self._tx_depth -= 1
-            if self._tx_depth == 0:
-                self._conn.commit()
-        except Exception:
-            self._tx_depth -= 1
-            if self._tx_depth == 0:
+        with self._operation_lock:
+            outermost = self._tx_depth == 0
+            savepoint = None
+            if outermost:
+                if not self._conn.in_transaction:
+                    self._conn.execute("BEGIN IMMEDIATE")
+            else:
+                self._savepoint_serial += 1
+                savepoint = f"managed_{self._savepoint_serial}"
+                self._conn.execute(f"SAVEPOINT {savepoint}")
+            self._tx_depth += 1
+            try:
+                yield
+                if outermost:
+                    self._conn.commit()
+                else:
+                    self._conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+            except BaseException:
                 try:
-                    self._conn.rollback()
-                except Exception:  # Checkup-Fix: rollback failed – log, then re-raise original
-                    logger.debug("Rollback after transaction error failed", exc_info=True)
-            raise
+                    if outermost:
+                        self._conn.rollback()
+                    else:
+                        self._conn.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+                        self._conn.execute(f"RELEASE SAVEPOINT {savepoint}")
+                except Exception:
+                    logger.exception("Transaction rollback failed")
+                    raise
+                raise
+            finally:
+                self._tx_depth -= 1
 
     def begin(self) -> None:
         """Start an explicit transaction (DEFERRED by default in SQLite).
 
         Prefer ``transaction()`` context manager for new code.
         """
-        self._conn.execute("BEGIN")
+        with self._operation_lock:
+            self._conn.execute("BEGIN")
 
     def commit(self) -> None:
         """Commit the current transaction.
@@ -212,12 +225,16 @@ class DatabaseConnection:
         If called from inside a ``transaction()`` block this is a **no-op**
         so repository methods do not accidentally flush partial work.
         """
-        if self._tx_depth == 0:
-            self._conn.commit()
+        with self._operation_lock:
+            if self._tx_depth == 0:
+                self._conn.commit()
 
     def rollback(self) -> None:
-        """Roll back the current transaction."""
-        self._conn.rollback()
+        """Roll back a legacy transaction; managed scopes own their rollback."""
+        with self._operation_lock:
+            if self._tx_depth:
+                raise RuntimeError("Raise an exception to roll back a managed transaction")
+            self._conn.rollback()
 
     # ------------------------------------------------------------------
     # Convenience
