@@ -41,6 +41,11 @@ class AuditEventType:
     CUSTOMER_CREATED = "customer_created"
     CUSTOMER_UPDATED = "customer_updated"
 
+    # Catalogue / delivery settings
+    ZONE_CREATED = "zone_created"
+    ZONE_UPDATED = "zone_updated"
+    CATEGORY_DELETED = "category_deleted"
+
     # Shift events
     SHIFT_OPENED = "shift_opened"
     SHIFT_CLOSED = "shift_closed"
