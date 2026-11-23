@@ -203,11 +203,12 @@ class OrderRepository(BaseRepository[Order]):
         ]
 
     def get_daily_revenue(self, date_str: str) -> float:
-        """Total revenue for a date (non-cancelled orders)."""
+        """Total revenue for a date: paid, non-cancelled orders only."""
         row = self._db.fetch_one(
             """SELECT COALESCE(SUM(total), 0) AS revenue
                FROM orders
-               WHERE DATE(created_at) = ? AND status != 'cancelled'""",
+               WHERE DATE(created_at) = ? AND status != 'cancelled'
+                 AND is_paid = 1""",
             (date_str,),
         )
         return row["revenue"] if row else 0.0
@@ -215,7 +216,7 @@ class OrderRepository(BaseRepository[Order]):
     def get_product_sales_for_range(
         self, start_date: str, end_date: str, limit: int = 20,
     ) -> list:
-        """Qty sold per product for a date range, sorted by popularity.
+        """Qty sold per product for a date range (paid orders only), sorted by popularity.
 
         Args:
             start_date: YYYY-MM-DD inclusive start.
@@ -233,6 +234,7 @@ class OrderRepository(BaseRepository[Order]):
                JOIN orders o ON o.id = oi.order_id
                WHERE DATE(o.created_at) BETWEEN ? AND ?
                  AND o.status != 'cancelled'
+                 AND o.is_paid = 1
                GROUP BY oi.product_name
                ORDER BY quantity DESC
                LIMIT ?""",
