@@ -144,6 +144,7 @@ class ReportsController:
                 "cash": "كاش",
                 "visa": "فيزا",
                 "online": "اونلاين",
+                "unpaid": "غير مدفوع",
             }
 
             for entry in raw.get("payments", []):
@@ -273,6 +274,9 @@ class ReportsController:
             except Exception:
                 drivers = []
 
+            # Booked non-cancelled order value, not collected cash. Payment
+            # breakdown separates paid methods and unpaid receivables; drawer
+            # reconciliation remains the cash ledger's responsibility.
             # Revenue distinction: calculate from individual orders
             gross_revenue = sales["grand_total"]["revenue"]
             # Delivery fees are already included in gross_revenue via order.total.
@@ -340,8 +344,8 @@ class ReportsController:
         H16: prints ONE scope, the same one ``generate_daily_summary`` shows.
           * ``shift_id`` → shift report (header with the shift's period). The
             shift is marked "summary printed", which shift close requires.
-          * ``target_date`` (or neither) → calendar-day report. This prints no
-            shift period and never marks a shift as printed.
+          * ``target_date`` (or neither) → calendar-day report with the requested
+            calendar-day period. It never marks a shift as printed.
         Passing both is refused (returns False).
 
         Steps:
@@ -356,7 +360,7 @@ class ReportsController:
             target_date: Calendar day to print. Defaults to today.
 
         Returns:
-            True if print succeeded (or printer unavailable), False on error.
+            True if print succeeded, False on error or printer unavailable.
         """
         if self._printer is None:
             logger.warning("PrinterManager not configured — skipping print")
@@ -370,16 +374,27 @@ class ReportsController:
             # "sales_by_type" — adapt once, here, instead of in the template.
             sales = summary.get("sales_by_type") or {}
             report_payload = {
+                "date": sales.get("date"),
+                "scope": "shift" if shift_id is not None else "calendar_day",
+                "shift_id": shift_id,
                 "breakdown": sales.get("breakdown", []),
                 "grand_total": sales.get("grand_total", {"count": 0, "revenue": 0.0}),
             }
 
             # Build shift period for header (shift reports only) — the template
             # expects separate from/to date and time keys, not opened_at/closed_at.
-            shift_period = None
+            report_date = sales.get("date")
+            if not report_date:
+                raise ValueError("تاريخ التقرير غير متاح")
+            shift_period = {
+                "from_date": report_date, "from_time": "00:00",
+                "to_date": report_date, "to_time": "23:59:59",
+            }
             if shift_id is not None:
                 try:
                     shift = self._financial_svc._financial.get_by_id(shift_id)
+                    if shift is None:
+                        raise ValueError("الوردية غير موجودة")
                     if shift:
                         opened = shift.opened_at or ""
                         closed = shift.closed_at or datetime.now().isoformat()
@@ -392,8 +407,8 @@ class ReportsController:
                             "to_time": to_time,
                         }
                 except Exception:
-                    # Checkup-Fix: shift period is optional for the summary, but log failures.
                     logger.warning("Loading shift period for report failed", exc_info=True)
+                    return False
 
             printed = self._printer.print_shift_summary(
                 report_payload, cashier_slot=cashier_slot, shift_period=shift_period,

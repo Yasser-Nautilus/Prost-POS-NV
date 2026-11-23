@@ -167,6 +167,17 @@ class Order:
         )
 
     @property
+    def cash_due_on_delivery(self) -> float:
+        """Cash still owed by the customer, not money already paid at the till.
+
+        Settlement marks COD orders paid too, so historical trip summaries
+        must use their saved cash-handover snapshot after settlement.
+        """
+        if self.status == OrderStatus.CANCELLED or self.is_paid:
+            return 0.0
+        return self.total if self.payment_method == PaymentMethod.CASH else 0.0
+
+    @property
     def restaurant_revenue(self) -> float:
         """Total minus delivery_fee — the actual restaurant income.
 

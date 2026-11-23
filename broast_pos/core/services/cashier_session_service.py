@@ -31,6 +31,7 @@ from broast_pos.core.models.cashier_session import (
     LedgerEntryType,
     Station,
 )
+from broast_pos.core.policies.input_values import cash_piasters
 from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
 from broast_pos.data.repositories.cashier_session_repository import (
     CashierSessionRepository,
@@ -153,6 +154,7 @@ class CashierSessionService:
         Raises ValueError with Arabic message if session not found, already
         closed, or variance requires manager approval that wasn't provided.
         """
+        counted_cash_pt = cash_piasters(counted_cash_pt)
         session = self._sessions.get_by_id(session_id)
         if session is None:
             raise ValueError(f"الوردية رقم {session_id} غير موجودة")
@@ -172,8 +174,7 @@ class CashierSessionService:
         if abs(variance_pt) > variance_threshold_pt:
             if not variance_reason:
                 raise ValueError(
-                    f"الفرق {variance_pt / 100:+.2f} ج.م يتجاوز الحد المسموح "
-                    f"({variance_threshold_pt / 100:.2f} ج.م). يجب إدخال سبب والحصول على موافقة المدير"
+                    "يلزم إدخال سبب والحصول على موافقة المدير لإتمام الجرد"
                 )
             if self._auth is not None:
                 self._auth.verify_manager_pin(manager_pin)
@@ -251,6 +252,9 @@ class CashierSessionService:
         linked to the shift (day_id), not the session. Payment attribution
         (FR-SES-8) is handled at payment time by the OrderService.
         """
+        cash_drop_pt = cash_piasters(cash_drop_pt)
+        if to_user_counted_pt is not None:
+            to_user_counted_pt = cash_piasters(to_user_counted_pt)
         outgoing = self._sessions.get_by_id(from_session_id)
         if outgoing is None:
             raise ValueError(f"وردية التسليم رقم {from_session_id} غير موجودة")
@@ -284,7 +288,7 @@ class CashierSessionService:
         if abs(variance_pt) > variance_threshold_pt:
             if not variance_reason:
                 raise ValueError(
-                    f"الفرق {variance_pt / 100:+.2f} ج.م يتجاوز الحد. يجب إدخال سبب وموافقة المدير"
+                    "يلزم إدخال سبب والحصول على موافقة المدير لإتمام الجرد"
                 )
             if self._auth is not None:
                 self._auth.verify_manager_pin(manager_pin)

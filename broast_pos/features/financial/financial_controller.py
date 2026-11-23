@@ -64,7 +64,10 @@ class FinancialController:
     # Sales figures a cashier must never see — only the manager learns the
     # revenue / drawer totals, at shift change. The cashier only knows his
     # own expenses and the still-uncashed orders.
-    _CASHIER_HIDDEN_KEYS = ("total_sales", "cash_sales", "expected_cash")
+    _CASHIER_VISIBLE_KEYS = frozenset({
+        "total_expenses", "pending_delivery", "pending_dinein", "pending_kitchen",
+        "order_count",
+    })
 
     def get_shift_summary(self, shift_id: int) -> dict[str, Any]:
         """Get live financial summary of a shift.
@@ -94,8 +97,10 @@ class FinancialController:
 
             current_user = self._auth_svc.get_current_user()
             if current_user is not None and not current_user.is_manager_or_above():
-                for key in self._CASHIER_HIDDEN_KEYS:
-                    payload.pop(key, None)
+                # Allowlist prevents nested sales data (or future fields) from
+                # bypassing the same role policy as the top-level totals.
+                payload = {key: value for key, value in payload.items()
+                           if key in self._CASHIER_VISIBLE_KEYS}
 
             return payload
         except Exception as e:

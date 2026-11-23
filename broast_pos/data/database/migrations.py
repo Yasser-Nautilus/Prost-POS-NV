@@ -23,6 +23,12 @@ Migration history:
     v2 → v3: Extend audit_log with entity_type, entity_id, action, reason, before_data, after_data.
     v3 → v4: Add driver_settlements table + index.
     v5 → v6: Add users.pin_salt column (salted+peppered PIN hashing).
+    v6 → v7: Durable user-owned parked drafts, separate from orders.
+    v7 → v8: Guard new duplicate active dine-in table occupancy.
+    v8 → v9: Soft-delete customer addresses without changing order history.
+    v9 → v10: Reject new fractional order-item quantities.
+    v10 → v11: Nullable audit actor for unauthenticated/system events.
+    v11 → v12: Backfill only missing business dates from local opening dates.
 """
 
 from __future__ import annotations
@@ -39,7 +45,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Version tracking (bumped when a new migration is added)
 # ---------------------------------------------------------------------------
-LATEST_VERSION = 6
+LATEST_VERSION = 12
 
 # ---------------------------------------------------------------------------
 # Path to the schema file (sibling of this module)
@@ -225,9 +231,10 @@ def _migrate_v4_to_v5(db: DatabaseConnection) -> None:
         if col_name not in existing_cols:
             db.execute(f"ALTER TABLE shifts ADD COLUMN {col_name} {col_type}")
 
+    # opened_at is local wall time already, never apply localtime twice.
     # Back-fill business_date for all existing rows
     db.execute(
-        "UPDATE shifts SET business_date = date(opened_at, 'localtime') WHERE business_date IS NULL"
+        "UPDATE shifts SET business_date = date(substr(opened_at,1,10)) WHERE business_date IS NULL"
     )
 
     # ── 2. cashier_sessions ───────────────────────────────────────────
@@ -355,6 +362,66 @@ def _migrate_v5_to_v6(db: DatabaseConnection) -> None:
     db.commit()
 
 
+def _migrate_v6_to_v7(db: DatabaseConnection) -> None:
+    """Add recoverable private work without touching confirmed orders."""
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS parked_order_drafts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL REFERENCES users(id),
+            payload TEXT NOT NULL,
+            baseline TEXT,
+            updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+        )
+    """)
+    db.execute("CREATE INDEX IF NOT EXISTS idx_parked_draft_user ON parked_order_drafts(user_id,id)")
+    db.commit()
+
+
+def _migrate_v7_to_v8(db: DatabaseConnection) -> None:
+    """Guard new occupancy without rewriting pre-existing duplicate orders."""
+    # Idempotent schema creates the triggers for fresh installs and upgrades.
+    _apply_schema(db)
+
+
+def _migrate_v8_to_v9(db: DatabaseConnection) -> None:
+    """Keep deleted addresses as history, hide them from future selection."""
+    columns = {row["name"] for row in db.fetch_all("PRAGMA table_info(customer_addresses)")}
+    if "is_active" not in columns:
+        db.execute("ALTER TABLE customer_addresses ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0,1))")
+    db.commit()
+
+
+def _migrate_v9_to_v10(db: DatabaseConnection) -> None:
+    """Reject new fractional unit counts without rewriting old order lines."""
+    _apply_schema(db)
+
+
+def _migrate_v10_to_v11(db: DatabaseConnection) -> None:
+    """Allow unknown audit actors, preserving IDs and every historical field."""
+    columns = db.fetch_all("PRAGMA table_info(audit_log)")
+    if not next(row for row in columns if row["name"] == "user_id")["notnull"]:
+        return
+    schema = _SCHEMA_PATH.read_text(encoding="utf-8")
+    ddl = schema[schema.index("CREATE TABLE IF NOT EXISTS audit_log ("):]
+    ddl = ddl[:ddl.index(");") + 2].replace("audit_log", "audit_log_v11", 1)
+    names = ",".join(row["name"] for row in columns)
+    with db.transaction():
+        db.execute(ddl)
+        db.execute(f"INSERT INTO audit_log_v11 ({names}) SELECT {names} FROM audit_log")
+        db.execute("DROP TABLE audit_log")
+        db.execute("ALTER TABLE audit_log_v11 RENAME TO audit_log")
+
+
+def _migrate_v11_to_v12(db: DatabaseConnection) -> None:
+    """Fill only missing dates from stored local wall-clock dates.
+
+    Non-NULL historical dates may be explicit choices or old backfills. They
+    cannot be distinguished safely, so do not automatically rewrite them.
+    """
+    with db.transaction():
+        db.execute("UPDATE shifts SET business_date=date(substr(opened_at,1,10)) WHERE business_date IS NULL")
+
+
 # ---------------------------------------------------------------------------
 # Migration registry — maps from_version → migration function
 # NOTE: Must be defined AFTER all migration functions are declared.
@@ -365,4 +432,10 @@ _MIGRATIONS: dict = {
     3: _migrate_v3_to_v4,
     4: _migrate_v4_to_v5,
     5: _migrate_v5_to_v6,
+    6: _migrate_v6_to_v7,
+    7: _migrate_v7_to_v8,
+    8: _migrate_v8_to_v9,
+    9: _migrate_v9_to_v10,
+    10: _migrate_v10_to_v11,
+    11: _migrate_v11_to_v12,
 }

@@ -201,8 +201,9 @@ APP_VERSION: str = "1.0.0"
 ENVIRONMENT: str = get_environment()
 DEBUG: bool = is_debug()
 LANGUAGE: str = os.getenv("LANGUAGE", "ar")           # Arabic primary
-# Set PROST_PRINTER_SIMULATE=1 to run without hardware: prints succeed and
-# output is written to PRINTER_SIMULATE_OUTPUT_DIR as timestamped JSON files.
+# Development/test only: PROST_PRINTER_SIMULATE=1 records successful simulated
+# jobs as JSON. In production simulated jobs always fail and cannot satisfy
+# the report-print prerequisite. Physical printers require python-escpos.
 PRINTER_SIMULATE: bool = os.getenv("PROST_PRINTER_SIMULATE", "0").strip() in ("1", "true", "yes")
 
 # ============================================================================

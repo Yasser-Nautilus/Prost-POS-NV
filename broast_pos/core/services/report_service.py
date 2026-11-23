@@ -90,23 +90,24 @@ class ReportService:
         }
 
     def _payment_bucket(self, order) -> str | None:
-        """Return the payment-method key an order should be counted under
-        in the "by payment method" breakdown, or None to exclude it.
+        """Paid method or a separate unpaid-receivable bucket.
 
-        An order's payment_method is None while it is still open (e.g. a
-        confirmed dine-in table that has not been paid yet). Those produced
-        the stray "None" row in the dashboard.
+        Selecting CASH for a delivery is not evidence of payment. These
+        reports are scoped by order creation date/shift, not cash-flow dates.
         """
+        if not order.is_paid:
+            return "unpaid"
         pm = order.payment_method
-        method = pm.value if hasattr(pm, "value") else (str(pm) if pm else None)
-        # Open/unpaid orders (no payment_method yet) get their own bucket
-        # instead of leaking a raw "None" into the breakdown.
-        return method or "unpaid"
+        return pm.value if hasattr(pm, "value") else (str(pm) if pm else "unpaid")
 
     def generate_payment_breakdown(
         self, target_date: date | None = None,
     ) -> dict:
-        """Sales split by payment method (كاش / فيزا / اونلاين).
+        """Paid order value by method, with unpaid receivables kept separate.
+
+        ``total`` excludes the ``unpaid`` bucket; ``unpaid_total`` exposes it
+        separately. All values follow order creation date, not payment date
+        or the cash ledger's physical movement. Booked sales remain unchanged.
 
         Returns:
             {
@@ -139,7 +140,9 @@ class ReportService:
         return {
             "date": d,
             "payments": payments,
-            "total": round(sum(p["revenue"] for p in payments), 2),
+            "total": round(sum(p["revenue"] for p in payments if p["method"] != "unpaid"), 2),
+            "unpaid_total": round(sum(p["revenue"] for p in payments if p["method"] == "unpaid"), 2),
+            "basis": "order_created",
         }
 
     def generate_cancelled_orders(
@@ -243,9 +246,9 @@ class ReportService:
         }
 
     def generate_payment_breakdown_for_shift(self, shift_id: int) -> dict:
-        """Payment method breakdown for a specific shift (B-10 shift-based).
+        """Paid methods and unpaid receivables for one order shift.
 
-        Returns same structure as generate_payment_breakdown().
+        Returns the same paid-only total/unpaid_total structure as the day API.
         """
         business_date = self._orders.get_shift_business_date(shift_id) or ""
         orders = self._orders.get_completed_for_shift(shift_id)
@@ -265,7 +268,9 @@ class ReportService:
             "date": business_date,
             "shift_id": shift_id,
             "payments": payments,
-            "total": round(sum(p["revenue"] for p in payments), 2),
+            "total": round(sum(p["revenue"] for p in payments if p["method"] != "unpaid"), 2),
+            "unpaid_total": round(sum(p["revenue"] for p in payments if p["method"] == "unpaid"), 2),
+            "basis": "order_created",
         }
 
     def generate_cancellations_for_shift(self, shift_id: int) -> dict:

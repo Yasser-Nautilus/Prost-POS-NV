@@ -24,11 +24,13 @@ from broast_pos.core.models.order import (
     PaymentMethod,
 )
 from broast_pos.core.policies.discount import compute_discount
+from broast_pos.core.policies.input_values import unit_count
 from broast_pos.core.services.auth_service import AuthService
 from broast_pos.core.services.customer_service import CustomerService
 from broast_pos.core.services.financial_service import FinancialService
 from broast_pos.core.services.order_service import OrderService
 from broast_pos.core.services.product_service import ProductService
+from broast_pos.data.repositories.parked_draft_repository import ParkedDraftRepository
 from broast_pos.features.order_lifecycle.amendment_tracker import AmendmentTracker
 from broast_pos.infrastructure.printing.print_triggers import PrintTriggers
 
@@ -61,6 +63,8 @@ class OrderController:
         cashier_slot: int = 1,
         product_service: ProductService | None = None,
         customer_service: CustomerService | None = None,
+        draft_repository: ParkedDraftRepository | None = None,
+        draft_user_id: int | None = None,
     ) -> None:
         self._order_svc = order_service
         self._financial_svc = financial_service
@@ -75,6 +79,17 @@ class OrderController:
         # In-memory state
         self._current_order: Order | None = None
         self._parked_orders: list[Order] = []
+        self._drafts = draft_repository
+        self._draft_user_id = draft_user_id
+        self._parked_ids: list[int] = []
+        self._active_draft_id: int | None = None
+        self._loaded_baseline: str | None = None
+        if self._drafts is not None:
+            if draft_user_id is None:
+                raise ValueError("Durable parking requires an authenticated user")
+            rows = self._drafts.list_for_user(self._draft_user_id)
+            self._parked_ids = [row[0] for row in rows]
+            self._parked_orders = [row[1] for row in rows]
         self._occupied_tables: dict[int, str] = {}  # table_no → order_ref
         self._amendment_tracker = AmendmentTracker()
 
@@ -117,6 +132,8 @@ class OrderController:
             status=OrderStatus.NEW,
             cashier_slot=self._cashier_slot,
         )
+        self._active_draft_id = None
+        self._loaded_baseline = None
         self._current_order = order
         self._notify_order_changed()
         logger.info("New %s order created in memory", order_type)
@@ -144,6 +161,7 @@ class OrderController:
             ValueError: if product_service isn't wired, or the product
                         doesn't exist / isn't active.
         """
+        quantity = unit_count(quantity)
         if self._current_order is None:
             return
         # H03: a paid order's total must never change — even just on screen —
@@ -179,6 +197,7 @@ class OrderController:
 
     def change_quantity(self, index: int, delta: int) -> None:
         """Change item quantity by delta (+/-)."""
+        delta = unit_count(delta, positive=False)
         if self._current_order is None:
             return
         # H03: reject item quantity changes on a paid active order — raise
@@ -353,12 +372,17 @@ class OrderController:
         if self._current_order is None or not self._current_order.items:
             return False
 
+        if getattr(self, "_drafts", None) is not None:
+            with self._drafts.transaction():
+                draft_id = self._drafts.save(self._draft_user_id, self._current_order, self._active_draft_id, self._loaded_baseline)
+            self._parked_ids.append(draft_id)
         # Track table for in-memory occupancy
         if (self._current_order.order_type == OrderType.DINE_IN
                 and self._current_order.table_no):
             self._occupied_tables[self._current_order.table_no] = "parked"
 
         self._parked_orders.append(self._current_order)
+        self._active_draft_id = None
         self._current_order = None
         self._notify_parked_changed()
         self._notify_order_changed()
@@ -370,11 +394,23 @@ class OrderController:
         if index < 0 or index >= len(self._parked_orders):
             return False
 
-        # Park current if it has items
+        selected = self._parked_orders[index]
+        selected_id = self._parked_ids[index] if self._drafts is not None else None
+        baseline = self._drafts.baseline(self._draft_user_id, selected_id) if self._drafts else None
+        if selected.id is not None:
+            # Never overwrite an intervening payment, amendment or cancellation.
+            fresh = self._order_svc.get_order_by_id(selected.id)
+            if fresh is None or (baseline is not None and self._drafts.encode(fresh) != baseline):
+                raise ValueError("تم تغيير الطلب المحفوظ؛ افتحه من قائمة الطلبات لمراجعة حالته")
+            self._amendment_tracker.snapshot(fresh.items)
         if self._current_order and self._current_order.items:
-            self._parked_orders.append(self._current_order)
-
-        self._current_order = self._parked_orders.pop(index)
+            self.park_current()
+        self._parked_orders.pop(index)
+        if getattr(self, "_drafts", None) is not None:
+            self._parked_ids.pop(index)
+        self._active_draft_id = selected_id
+        self._loaded_baseline = baseline
+        self._current_order = selected
 
         # Remove from occupied tables tracking
         if (self._current_order.order_type == OrderType.DINE_IN
@@ -428,12 +464,24 @@ class OrderController:
             if not order.customer_phone:
                 return False, "يجب إدخال رقم الهاتف"
 
+        if order.id is not None:
+            return False, "الطلب محفوظ بالفعل؛ استخدم حفظ التعديل أو الدفع"
         self._recalc_totals()
 
         # Save via service (service handles invoice assignment internally)
+        from copy import deepcopy
+        draft_state = deepcopy(order.__dict__)
         try:
-            saved = self._order_svc.create_order(order, cashier_id, cashier_name)
+            if getattr(self, "_drafts", None) is not None:
+                with self._drafts.transaction():
+                    if self._active_draft_id is not None:
+                        self._drafts.delete(self._draft_user_id, self._active_draft_id)
+                    saved = self._order_svc.create_order(order, cashier_id, cashier_name)
+            else:
+                saved = self._order_svc.create_order(order, cashier_id, cashier_name)
         except Exception as exc:
+            order.__dict__.clear()
+            order.__dict__.update(draft_state)
             logger.error("Order save failed: %s", exc)
             return False, f"فشل في حفظ الطلب: {exc}"
 
@@ -450,7 +498,8 @@ class OrderController:
             self._occupied_tables[saved.table_no] = f"#{saved.invoice_no}"
             self._notify_table_changed()
 
-        # Clear current order
+        # Clear current order after the draft and confirmed order commit together.
+        self._active_draft_id = None
         self._current_order = None
         self._notify_order_changed()
 
@@ -539,6 +588,8 @@ class OrderController:
         """
         order = self._order_svc.get_order_by_id(order_id)
         if order:
+            self._active_draft_id = None
+            self._loaded_baseline = ParkedDraftRepository.encode(order)
             self._current_order = order
             self._amendment_tracker.snapshot(order.items)
             self._notify_order_changed()
@@ -551,6 +602,8 @@ class OrderController:
         """
         order = self._order_svc.get_order_by_table(table_number)
         if order:
+            self._active_draft_id = None
+            self._loaded_baseline = ParkedDraftRepository.encode(order)
             self._current_order = order
             self._amendment_tracker.snapshot(order.items)
             self._notify_order_changed()
@@ -605,13 +658,21 @@ class OrderController:
                     notes=notes,
                 ))
 
+        from contextlib import nullcontext
+        drafts = getattr(self, "_drafts", None)
         try:
-            saved = self._order_svc.amend_order(
-                self._current_order.id,
-                added_items,
-                removed_items,
-                manager_pin,
-            )
+            with drafts.transaction() if drafts else nullcontext():
+                if drafts and self._active_draft_id is not None:
+                    fresh = self._order_svc.get_order_by_id(self._current_order.id)
+                    if fresh is None or drafts.encode(fresh) != self._loaded_baseline:
+                        raise ValueError("تم تغيير الطلب المحفوظ؛ راجع حالته أولاً")
+                    drafts.delete(self._draft_user_id, self._active_draft_id)
+                saved = self._order_svc.amend_order(
+                    self._current_order.id,
+                    added_items,
+                    removed_items,
+                    manager_pin,
+                )
         except PermissionError as exc:
             return False, str(exc), True
         except Exception as exc:
@@ -619,6 +680,8 @@ class OrderController:
 
         # Reload from service so controller state matches what was persisted.
         self._current_order = saved
+        self._loaded_baseline = ParkedDraftRepository.encode(saved)
+        self._active_draft_id = None
 
         # Print amendment kitchen ticket (never blocks save — only informs)
         order_dict = self._order_to_dict(self._current_order)
@@ -753,8 +816,11 @@ class OrderController:
 
         Merges in-memory parked orders with DB-active orders.
         """
-        # Start with DB active dine-in orders
+        # Recovered private drafts preserve the same parked-table indicator.
         state = dict(self._occupied_tables)
+        for parked in self._parked_orders:
+            if parked.order_type == OrderType.DINE_IN and parked.table_no:
+                state[parked.table_no] = "parked"
 
         # Add from DB (active dine-in with tables)
         try:
@@ -856,6 +922,9 @@ class OrderController:
         }
 
     def _notify_order_changed(self) -> None:
+        if self._drafts is not None and self._active_draft_id is not None and self._current_order is not None:
+            with self._drafts.transaction():
+                self._drafts.save(self._draft_user_id, self._current_order, self._active_draft_id, self._loaded_baseline)
         if self._on_order_changed:
             self._on_order_changed()
 

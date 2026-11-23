@@ -119,3 +119,26 @@ The core POS functionality — orders, products, customers, delivery, settlement
 ## License
 
 Proprietary — not for redistribution.
+
+### Printer safety
+
+In production (`APP_ENV=prod`), configure physical USB, network or serial
+printers in `broast_pos/config/printers.json` and install `python-escpos`
+with its transport dependencies. Missing/invalid configuration, dummy printers,
+or a missing driver report print failure. They do not satisfy the shift-report
+printing prerequisite. `PROST_PRINTER_SIMULATE=1` is development/test only and
+is rejected in production. Development dummy/simulated success is not proof
+of a physical print. Confirm receipt and report output on the actual devices
+before using the system for service.
+
+### Backup and recovery
+
+Explicit local backup and restore-to-new-file commands and the safe recovery drill
+are documented in [docs/backup-recovery.md](docs/backup-recovery.md). No automatic
+backup schedule or live database replacement is enabled. Build dependency checks
+and advisory handling are in [docs/dependency-security.md](docs/dependency-security.md).
+
+The CI pipeline builds the frontend and separately runs the real React/Qt native
+bridge workflow tests in addition to the Python suite. Run them locally after the
+frontend build with `POS_RUN_RENDERED_TESTS=1 QT_QPA_PLATFORM=offscreen
+QTWEBENGINE_DISABLE_SANDBOX=1 pytest tests/test_visible_cash_workflow.py`.

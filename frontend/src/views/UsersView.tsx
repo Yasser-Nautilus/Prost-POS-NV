@@ -327,9 +327,9 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
                     type="password"
                     required={!editingUser}
                     value={formPin}
-                    onChange={(e) => setFormPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
-                    placeholder="4 أرقام"
-                    maxLength={4}
+                    onChange={(e) => setFormPin(e.target.value)}
+                    placeholder="4 أحرف أو أرقام على الأقل"
+                    minLength={4}
                     className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-brand-red font-mono text-center text-xl tracking-widest"
                   />
                 </div>

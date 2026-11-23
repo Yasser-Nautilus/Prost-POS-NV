@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 import threading
 
+from broast_pos.config.config import is_production
 from broast_pos.infrastructure.printing.printer_config import PrinterEntry
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,7 @@ try:
     ESCPOS_AVAILABLE = True
 except ImportError:
     ESCPOS_AVAILABLE = False
-    logger.warning("python-escpos not installed — printing will use dummy mode")
+    logger.warning("python-escpos not installed — physical printing unavailable")
 
 
 class EscPosPrinter:
@@ -54,10 +55,28 @@ class EscPosPrinter:
 
     def _connect_unsafe(self) -> bool:
         """Internal connect — caller must hold the lock."""
+        if self._entry.conn_type not in {"usb", "network", "serial", "dummy"}:
+            logger.error("[%s] Unknown printer type: %s", self._entry.key, self._entry.conn_type)
+            self._connected = False
+            return False
+        required = {"usb": (self._entry.vendor_id, self._entry.product_id),
+                    "network": (self._entry.host,), "serial": (self._entry.device,)}
+        if self._entry.conn_type in required and not all(required[self._entry.conn_type]):
+            logger.error("[%s] Incomplete physical printer configuration", self._entry.key)
+            self._connected = False
+            return False
+        if self._entry.conn_type == "dummy" and is_production():
+            logger.error("[%s] Dummy printers are forbidden in production", self._entry.key)
+            self._connected = False
+            return False
         if not ESCPOS_AVAILABLE:
+            if self._entry.conn_type != "dummy":
+                logger.error("[%s] python-escpos required for physical printing", self._entry.key)
+                self._connected = False
+                return False
             self._printer = _DummyPrinter()
             self._connected = True
-            logger.info("[%s] Using built-in dummy printer (escpos not installed)", self._entry.key)
+            logger.info("[%s] Explicit development dummy printer", self._entry.key)
             return True
 
         try:
@@ -73,9 +92,6 @@ class EscPosPrinter:
             elif self._entry.conn_type == "serial":
                 self._printer = Serial(self._entry.device or "/dev/ttyUSB0")
             elif self._entry.conn_type == "dummy":
-                self._printer = Dummy()
-            else:
-                logger.error("[%s] Unknown printer type: %s", self._entry.key, self._entry.conn_type)
                 self._printer = Dummy()
 
             self._connected = True
@@ -178,6 +194,9 @@ class EscPosPrinter:
 
         Must be called with ``self._lock`` held.
         """
+        if self._entry.conn_type == "dummy" and is_production():
+            self._connected = False
+            return False
         if self._printer is None or not self._connected:
             if not self._connect_unsafe():
                 return False

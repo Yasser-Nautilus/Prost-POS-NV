@@ -420,13 +420,20 @@ def print_daily_sales_report(
     """
     now = datetime.now()
     ok = printer.print_double_line(LINE_WIDTH)
-    ok &= printer.print_text(f"{now.strftime('%Y-%m-%d')}           {now.strftime('%A')}", align="center")
     ok &= printer.print_text("اجمالي مبيعات", align="center")
+    if report.get("date"):
+        ok &= printer.print_text(f"Report date: {report['date']}", align="center")
+    if report.get("shift_id") is not None:
+        ok &= printer.print_text(f"Shift: {report['shift_id']}", align="center")
     ok &= printer.print_text("في الفترة", align="center")
-
     if shift_period:
         ok &= printer.print_text(f"من {shift_period.get('from_time', '')} {shift_period.get('from_date', '')}", align="center")
-        ok &= printer.print_text(f"الى {shift_period.get('to_time', '')}  {shift_period.get('to_date', '')}", align="center")
+        ok &= printer.print_text(f"الى {shift_period.get('to_time', '')} {shift_period.get('to_date', '')}", align="center")
+    elif report.get("date"):
+        ok &= printer.print_text(f"Calendar day: {report['date']}", align="center")
+    else:
+        ok &= printer.print_text("Report period unavailable", align="center")
+    ok &= printer.print_text(f"Printed: {now.strftime('%Y-%m-%d %H:%M')}", align="center")
 
     ok &= printer.print_double_line(LINE_WIDTH)
     ok &= printer.print_text("نوع الاوردر | عدد الاوردرات | اجمالي المبلغ")

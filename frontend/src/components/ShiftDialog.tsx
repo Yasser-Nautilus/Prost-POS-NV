@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { X, Calendar, Plus, Power, Loader2, Printer, CheckCircle2, Circle, ArrowLeftRight, ArrowRight } from "lucide-react";
-import { bridge } from "../bridge";
+import { bridge, type CashierSession, type SessionStation } from "../bridge";
 import { PinDialog } from "./PinDialog";
 
 interface ShiftDialogProps {
@@ -21,6 +21,11 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
   const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [summaryPrinted, setSummaryPrinted] = useState(false);
+  const [cashSession, setCashSession] = useState<CashierSession | null>(null);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
+  const [station, setStation] = useState<SessionStation | "">("");
+  const [openingCash, setOpeningCash] = useState("");
+  const [openingError, setOpeningError] = useState("");
 
   // New Expense form — categories must match backend: supplies | delivery_fees | other
   const [expAmount, setExpAmount] = useState("");
@@ -39,11 +44,14 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
 
   const isManagerOrAbove = currentUser?.role === "manager" || currentUser?.role === "admin";
 
-  const fetchShiftData = async () => {
+  const fetchShiftData = useCallback(async () => {
     setLoading(true);
     try {
       const shift = await bridge.call("get_active_shift");
       setActiveShift(shift);
+      const sessions = shift ? await bridge.sessionGetActive(shift.id) : [];
+      setCashSession(sessions.find((s) => s.user_id === currentUser?.id) || null);
+      setSessionLoaded(true);
 
       if (shift) {
         // Bridge auto-resolves shift_id from active shift when not passed
@@ -61,14 +69,18 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser?.id]);
 
   useEffect(() => {
     if (isOpen) {
+      setSessionLoaded(false);
+      setOpeningError("");
+      setStation("");
+      setOpeningCash("");
       fetchShiftData();
       setSummaryPrinted(false); // Reset print status when dialog opens
     }
-  }, [isOpen]);
+  }, [isOpen, fetchShiftData]);
 
   if (!isOpen) return null;
 
@@ -92,19 +104,71 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
     }
   };
 
+  const openingAmount = Number(openingCash);
+  const validOpeningCash = /^\d+(?:\.\d{1,2})?$/.test(openingCash)
+    && Number.isFinite(openingAmount) && openingAmount >= 0;
+
   const handleOpenShift = async () => {
+    if (!station || !validOpeningCash || loading) return;
+    setLoading(true);
+    setOpeningError("");
+    let day = activeShift;
     try {
-      setLoading(true);
-      // Call open_shift with current user's id — bridge handles the rest
-      await bridge.call("open_shift", { user_id: currentUser?.id });
+      // Day and drawer are distinct. Ask for the physical station and actual
+      // float explicitly; never create a silent zero-float ALL session.
+      if (!day) {
+        day = await bridge.call("open_shift");
+        setActiveShift(day);
+      }
+      const session = await bridge.sessionOpen({
+        day_id: day.id,
+        station,
+        opening_float_egp: openingAmount,
+      });
+      setCashSession(session);
       onShiftStatusChange();
-      fetchShiftData();
+      await fetchShiftData();
     } catch (err: any) {
-      alert("فشل فتح الوردية: " + err.message);
+      setOpeningError(day
+        ? "يوم العمل مفتوح، لكن لم يتم فتح درجك. صحح البيانات أو تعارض المحطة ثم أعد المحاولة: " + err.message
+        : "فشل فتح يوم العمل: " + err.message);
+      // A session conflict must not be reported as success or open another day.
+      onShiftStatusChange();
+      await fetchShiftData();
     } finally {
       setLoading(false);
     }
   };
+
+  const openingControls = (
+    <div className="space-y-3 w-full" dir="rtl">
+      <label className="block text-sm text-gray-300">
+        محطة الدرج
+        <select aria-label="محطة الدرج" value={station}
+          onChange={(e) => setStation(e.target.value as SessionStation)}
+          className="mt-1 w-full bg-brand-card border border-brand-border rounded-lg p-2 text-white">
+          <option value="">اختر المحطة...</option>
+          <option value="ALL">الكل (كاونتر + توصيل)</option>
+          <option value="COUNTER">كاونتر (محلي + تيك أواي)</option>
+          <option value="DELIVERY">توصيل</option>
+        </select>
+      </label>
+      <label className="block text-sm text-gray-300">
+        النقد الموجود بالدرج عند الفتح (ج.م)
+        <input aria-label="النقد الموجود بالدرج عند الفتح" type="text" inputMode="decimal"
+          value={openingCash} onChange={(e) => setOpeningCash(e.target.value)} placeholder="0.00"
+          className="mt-1 w-full bg-brand-card border border-brand-border rounded-lg p-2 text-white" />
+      </label>
+      <p className="text-xs text-gray-400">أدخل المبلغ الفعلي، حتى إن كان صفراً. لا تفتح درجاً يستخدمه كاشير آخر.</p>
+      {openingError && <p role="alert" className="text-sm text-red-400">{openingError}</p>}
+      <button onClick={handleOpenShift}
+        disabled={loading || !sessionLoaded || !station || !validOpeningCash}
+        className="w-full py-3 px-4 bg-brand-red text-brand-dark font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2">
+        {loading ? <Loader2 size={18} className="animate-spin" /> : <Power size={18} />}
+        {activeShift ? "فتح درج الكاشير" : "فتح يوم العمل ودرج الكاشير"}
+      </button>
+    </div>
+  );
 
   // For manager/admin: close directly; for cashier: require manager PIN
   const handleCloseShiftClick = () => {
@@ -194,7 +258,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
   return (
     <>
       <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-md">
-        <div className="w-full max-w-4xl mx-4 bg-brand-surface border border-brand-border rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+        <div className="w-full max-w-4xl mx-4 bg-brand-surface border border-brand-border rounded-3xl max-h-[90vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in duration-200">
 
           {/* Header */}
           <div className="flex justify-between items-center px-6 py-4 border-b border-brand-border/60 bg-brand-card">
@@ -303,6 +367,17 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                       نشطة حالياً
                     </div>
                   </div>
+
+                  {sessionLoaded && (cashSession ? (
+                    <div role="status" className="p-3 rounded-xl border border-brand-teal/40 text-brand-teal text-sm">
+                      درجك مفتوح — {cashSession.station} #{cashSession.id}
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-xl border border-yellow-600/40 space-y-3">
+                      <p className="text-yellow-400 text-sm">يوم العمل مفتوح، لكن يجب فتح درجك قبل قبول الدفع النقدي.</p>
+                      {openingControls}
+                    </div>
+                  ))}
 
                   {/* Shift Stats Summary Grid */}
                   {summary && (
@@ -428,15 +503,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                   <p className="text-gray-400 text-sm max-w-sm mb-6">
                     الوردية مغلقة. يرجى فتح وردية جديدة حتى تتمكن من بدء المعاملات وطباعة الفواتير.
                   </p>
-                  {/* Any logged-in user can open a shift per progress.md */}
-                  <button
-                    onClick={handleOpenShift}
-                    disabled={loading}
-                    className="py-3 px-6 bg-brand-red text-brand-dark hover:bg-opacity-90 font-bold rounded-xl active:translate-y-0.5 btn-hover-active disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {loading ? <Loader2 size={18} className="animate-spin" /> : <Power size={18} />}
-                    فتح وردية صندوق جديدة
-                  </button>
+                  {openingControls}
                 </div>
               )}
             </div>

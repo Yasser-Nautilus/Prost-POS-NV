@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS customer_addresses (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     customer_id   INTEGER NOT NULL REFERENCES customers(id),
     street_name   TEXT    NOT NULL,
+    is_active     INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
     zone_id       INTEGER NOT NULL REFERENCES zones(id),
     zone_name     TEXT    NOT NULL,        -- denormalized for display
     delivery_fee  REAL    NOT NULL         -- copied from zone at creation time
@@ -112,7 +113,7 @@ CREATE TABLE IF NOT EXISTS shifts (
     is_active          INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
     summary_printed_at TEXT,
     -- v5 additions
-    business_date      TEXT,            -- DATE(opened_at, 'localtime') — business reporting date
+    business_date      TEXT,            -- Local opening date, no second timezone conversion
     opened_float_note  TEXT,
     closed_reason      TEXT             -- e.g. 'closed_without_print: printer down'
 );
@@ -267,7 +268,7 @@ CREATE TABLE IF NOT EXISTS cash_transactions (
 CREATE TABLE IF NOT EXISTS audit_log (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     event_type   TEXT    NOT NULL,
-    user_id      INTEGER NOT NULL REFERENCES users(id),
+    user_id      INTEGER REFERENCES users(id), -- NULL for unauthenticated/system events
     user_name    TEXT    NOT NULL,
     order_id     INTEGER REFERENCES orders(id),  -- nullable (not all events are order-related)
     details      TEXT,                            -- JSON: cancel reason, discount info, etc.
@@ -476,3 +477,57 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_remit
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_driver_payout
     ON cash_ledger(trip_id) WHERE entry_type = 'DRIVER_FEE_PAYOUT';
+
+-- Private cashier drafts, separate from confirmed orders and accounting.
+CREATE TABLE IF NOT EXISTS parked_order_drafts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    payload TEXT NOT NULL,
+    baseline TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_parked_draft_user ON parked_order_drafts(user_id,id);
+-- Guard entry into an occupied confirmed dine-in table at the database boundary.
+-- Existing duplicates remain intact and can still be amended, paid, cancelled,
+-- or moved away. No automatic merge, deletion, or historical rewrite.
+CREATE TRIGGER IF NOT EXISTS trg_orders_table_insert
+BEFORE INSERT ON orders
+WHEN NEW.order_type = 'dine_in'
+ AND NEW.status NOT IN ('completed','cancelled') AND NEW.table_no IS NOT NULL
+ AND EXISTS (
+    SELECT 1 FROM orders WHERE order_type='dine_in'
+    AND status NOT IN ('completed','cancelled') AND table_no=NEW.table_no
+ )
+BEGIN
+    SELECT RAISE(ABORT,'active_dine_in_table_occupied');
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_orders_table_update
+BEFORE UPDATE OF table_no,order_type,status ON orders
+WHEN NEW.order_type = 'dine_in'
+ AND NEW.status NOT IN ('completed','cancelled') AND NEW.table_no IS NOT NULL
+ AND NOT (OLD.order_type='dine_in'
+          AND OLD.status NOT IN ('completed','cancelled')
+          AND OLD.table_no IS NEW.table_no)
+ AND EXISTS (
+    SELECT 1 FROM orders WHERE order_type='dine_in'
+    AND status NOT IN ('completed','cancelled') AND table_no=NEW.table_no
+    AND id != OLD.id
+ )
+BEGIN
+    SELECT RAISE(ABORT,'active_dine_in_table_occupied');
+END;
+
+-- SQLite INTEGER affinity alone still stores real fractions. Guard all writers.
+CREATE TRIGGER IF NOT EXISTS trg_order_items_unit_insert
+BEFORE INSERT ON order_items
+WHEN typeof(NEW.quantity) != 'integer' OR NEW.quantity <= 0
+BEGIN
+    SELECT RAISE(ABORT,'quantity_must_be_positive_integer');
+END;
+CREATE TRIGGER IF NOT EXISTS trg_order_items_unit_update
+BEFORE UPDATE OF quantity ON order_items
+WHEN typeof(NEW.quantity) != 'integer' OR NEW.quantity <= 0
+BEGIN
+    SELECT RAISE(ABORT,'quantity_must_be_positive_integer');
+END;

@@ -273,7 +273,11 @@ class TestPrintScope:
 
         payload = printer.print_shift_summary.call_args.args[0]
         assert payload["grand_total"] == {"count": 3, "revenue": 300.0}
-        assert printer.print_shift_summary.call_args.kwargs["shift_period"] is None
+        assert printer.print_shift_summary.call_args.kwargs["shift_period"] == {
+            "from_date": "2026-03-11", "from_time": "00:00",
+            "to_date": "2026-03-11", "to_time": "23:59:59",
+        }
+        assert payload["date"] == "2026-03-11"
         financial_svc.mark_summary_printed.assert_not_called()
 
     def test_print_with_shift_and_date_prints_nothing(self, env):

@@ -355,13 +355,15 @@ class FinancialService:
     def _record_expense_to_ledger(self, expense: CashTransaction) -> None:
         """Create a negative EXPENSE entry in the cash ledger.
 
-        Matches the expense to the active cashier session for the current
-        shift. If no ledger repo is configured or no session is open, the
-        expense is still recorded in cash_transactions but won't appear
-        in the session's ledger balance.
+        Matches the expense to the current day's active drawer using the
+        existing ALL → COUNTER → other routing. With session accounting
+        configured, missing wiring or an open drawer is an error: the outer
+        transaction must roll back expense, ledger and audit together.
         """
+        if self._ledger is None and self._sessions is None:
+            return  # Explicit legacy mode — no session-based accounting.
         if self._ledger is None or self._sessions is None:
-            return  # Legacy mode — no session-based ledger
+            raise ValueError("إعدادات دفتر النقد وجلسات الكاشير غير مكتملة")
 
         from broast_pos.core.models.cashier_session import (
             CashLedgerEntry,
@@ -388,7 +390,7 @@ class FinancialService:
             session = open_sessions[0]
 
         if session is None:
-            return  # No open session — skip ledger entry (not an error)
+            raise ValueError("يجب فتح درج كاشير قبل تسجيل المصروف")
 
         amount_pt = round(expense.amount * 100)
         self._ledger.append(CashLedgerEntry(

@@ -77,7 +77,7 @@ class CustomerRepository(BaseRepository[Customer]):
     def get_addresses(self, customer_id: int) -> list[CustomerAddress]:
         """All saved addresses for a customer."""
         rows = self._db.fetch_all(
-            "SELECT * FROM customer_addresses WHERE customer_id = ?",
+            "SELECT * FROM customer_addresses WHERE customer_id = ? AND is_active=1 ORDER BY id",
             (customer_id,),
         )
         return [self._row_to_address(r) for r in rows]
@@ -86,10 +86,21 @@ class CustomerRepository(BaseRepository[Customer]):
         """A single saved address — the authoritative source for its zone
         fee (H19: never trust a client-supplied delivery fee)."""
         row = self._db.fetch_one(
-            "SELECT * FROM customer_addresses WHERE id = ?",
+            "SELECT * FROM customer_addresses WHERE id = ? AND is_active=1",
             (address_id,),
         )
         return self._row_to_address(row) if row else None
+
+    def delete_address(self, address_id: int, customer_id: int | None = None) -> None:
+        """Remove an address from future selection, preserving history and snapshots."""
+        with self._db.transaction():
+            cursor = self._db.execute(
+                """UPDATE customer_addresses SET is_active=0
+                   WHERE id=? AND is_active=1 AND (? IS NULL OR customer_id=?)""",
+                (address_id, customer_id, customer_id),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("عنوان العميل غير موجود")
 
     def save_address(self, address: CustomerAddress) -> CustomerAddress:
         """Create a new address (street_name + zone_id + copied fee)."""
@@ -105,15 +116,18 @@ class CustomerRepository(BaseRepository[Customer]):
             )
             address.id = self._last_insert_id()
         else:
-            self._db.execute(
-                """UPDATE customer_addresses SET
-                       street_name = ?, zone_id = ?, zone_name = ?, delivery_fee = ?
-                   WHERE id = ?""",
-                (
-                    address.street_name, address.zone_id,
-                    address.zone_name, address.delivery_fee, address.id,
-                ),
-            )
+            with self._db.transaction():
+                cursor = self._db.execute(
+                    """UPDATE customer_addresses SET
+                           street_name = ?, zone_id = ?, zone_name = ?, delivery_fee = ?
+                       WHERE id = ? AND customer_id = ? AND is_active=1""",
+                    (
+                        address.street_name, address.zone_id,
+                        address.zone_name, address.delivery_fee, address.id, address.customer_id,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    raise ValueError("عنوان العميل غير موجود")
         self._db.commit()
         return address
 

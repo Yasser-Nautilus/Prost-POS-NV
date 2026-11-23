@@ -54,6 +54,7 @@ def _order(
         subtotal=total,
         total=total,
         payment_method=payment,
+        is_paid=payment is not None,
         shift_id=shift_id,
         created_at=created_at,
     )
@@ -238,6 +239,8 @@ class TestOutputStructure:
         assert "None" not in methods
         assert methods.get("cash") == pytest.approx(100.0)
         assert methods.get("unpaid") == pytest.approx(710.0)
+        assert result["total"] == 100.0
+        assert result["unpaid_total"] == 710.0
 
     def test_cancellations_structure(self):
         cancelled = _order(5, status=OrderStatus.CANCELLED, total=75.0)

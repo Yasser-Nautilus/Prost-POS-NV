@@ -23,6 +23,7 @@ from broast_pos.core.models.order import (
     PaymentMethod,
 )
 from broast_pos.core.policies.discount import compute_discount
+from broast_pos.core.policies.input_values import unit_count
 from broast_pos.core.services.audit_service import AuditService
 from broast_pos.data.repositories.audit_repository import AuditRepository
 from broast_pos.data.repositories.order_repository import OrderRepository
@@ -165,47 +166,59 @@ class OrderService:
         # Validate business rules
         self._validate_order(order)
 
-        # Assign shift + invoice + cashier info
-        order.shift_id = shift.id
-        order.invoice_no = self._financial.get_next_invoice_number()
-        order.created_by_id = cashier_id
-        order.created_by_name = cashier_name
-        order.status = OrderStatus.NEW
+        # Counter and order are one unit. Restore the retryable draft on failure,
+        # including ids assigned before a later item or commit failure.
+        from copy import deepcopy
 
-        # Compute totals
-        order.subtotal = sum(item.total_price for item in order.items)
-        self._compute_total(order)
-
-        # B-02: Delivery orders MUST have a payment_method — default to CASH.
-        # This closes the bug where NULL payment_method caused settle_trip
-        # to always report cash_collected = 0.
-        if order.order_type == OrderType.DELIVERY:
-            if order.payment_method is None:
-                order.payment_method = PaymentMethod.CASH
-            if order.payment_method == PaymentMethod.ONLINE:
-                # Pre-paid online: mark as paid atomically inside this save.
-                # No secondary complete_order() call is required or allowed.
-                order.is_paid = True
-                order.amount_paid = order.total
-                order.paid_at = datetime.datetime.now().isoformat()
-
-        # Persist
-        saved = self._orders.save(order)
-
-        # Record initial status history
+        draft_state = deepcopy(order.__dict__)
         try:
-            self._status_history.record_transition(
-                order_id=saved.id,
-                old_status=None,
-                new_status=OrderStatus.NEW.value,
-                changed_by_id=cashier_id,
-                changed_by_name=cashier_name,
-            )
-        except Exception:
-            # Checkup-Fix: History failure must not block order creation, but log it.
-            logger.warning("Status-history record failed for new order %s", saved.id, exc_info=True)
+            with self._db.transaction():
+                # Assign shift + invoice + cashier info
+                order.shift_id = shift.id
+                order.invoice_no = self._financial.get_next_invoice_number()
+                order.created_by_id = cashier_id
+                order.created_by_name = cashier_name
+                order.status = OrderStatus.NEW
 
-        return saved
+                # Compute totals
+                order.subtotal = sum(item.total_price for item in order.items)
+                self._compute_total(order)
+
+                # B-02: Delivery orders MUST have a payment_method — default to CASH.
+                # This closes the bug where NULL payment_method caused settle_trip
+                # to always report cash_collected = 0.
+                if order.order_type == OrderType.DELIVERY:
+                    if order.payment_method is None:
+                        order.payment_method = PaymentMethod.CASH
+                    if order.payment_method == PaymentMethod.ONLINE:
+                        # Pre-paid online: mark as paid atomically inside this save.
+                        # No secondary complete_order() call is required or allowed.
+                        order.is_paid = True
+                        order.amount_paid = order.total
+                        order.paid_at = datetime.datetime.now().isoformat()
+
+                # Persist
+                saved = self._orders.save(order)
+
+                # Record initial status history
+                try:
+                    with self._db.transaction():
+                        self._status_history.record_transition(
+                            order_id=saved.id,
+                            old_status=None,
+                            new_status=OrderStatus.NEW.value,
+                            changed_by_id=cashier_id,
+                            changed_by_name=cashier_name,
+                        )
+                except Exception:
+                    # Checkup-Fix: History failure must not block order creation, but log it.
+                    logger.warning("Status-history record failed for new order %s", saved.id, exc_info=True)
+
+                return saved
+        except BaseException:
+            order.__dict__.clear()
+            order.__dict__.update(draft_state)
+            raise
 
     # ------------------------------------------------------------------
     # Centralized status transition (THE authoritative status change path)
@@ -345,6 +358,9 @@ class OrderService:
             raise ValueError("لا يمكن تعديل طلب مدفوع بالفعل")
 
         # Removing items requires manager override
+        for item in removed_items:
+            unit_count(item.quantity)
+        self._check_items_available(added_items)
         if removed_items:
             if not manager_pin:
                 raise PermissionError("يجب إدخال PIN المدير لحذف عنصر")
@@ -792,7 +808,9 @@ class OrderService:
     # ------------------------------------------------------------------
 
     def _check_items_available(self, items: list[OrderItem]) -> None:
-        """Raise ValueError if any item refers to a missing or inactive product."""
+        """Validate unit counts even in legacy wiring without a catalogue."""
+        for item in items:
+            unit_count(item.quantity)
         if self._products is None:
             return
         for item in items:

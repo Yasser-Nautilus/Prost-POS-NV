@@ -77,7 +77,7 @@ export function CustomerHistoryModal({
 
         // Lookup by phone if only phone provided
         if (!cid && phone) {
-          const cust = await bridge.call("find_customer", { phone });
+          const cust = await bridge.call("find_customer_by_phone", { phone });
           if (!cust) throw new Error("لم يتم العثور على العميل");
           setCustomer(cust);
           cid = cust.id;

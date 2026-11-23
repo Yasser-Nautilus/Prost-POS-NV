@@ -8,6 +8,7 @@ from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 from broast_pos.core.models.customer import Customer, Zone
 from broast_pos.core.models.order import Order
 from broast_pos.core.models.user import User, UserRole
+from broast_pos.data.repositories.parked_draft_repository import ParkedDraftRepository
 from broast_pos.features.delivery_system.delivery_controller import DeliveryController
 from broast_pos.features.financial.financial_controller import FinancialController
 from broast_pos.features.financial.session_controller import SessionController
@@ -80,6 +81,8 @@ class POSBridge(QObject):
             cashier_slot=user.cashier_slot or 1,
             product_service=self._product,
             customer_service=self._customer,
+            draft_repository=ParkedDraftRepository(self._order_svc._db),
+            draft_user_id=user.id,
         )
         self._order_ctrl.on_order_changed(self._on_order_changed_cb)
         self._order_ctrl.on_parked_changed(self._on_parked_changed_cb)
@@ -496,6 +499,12 @@ class POSBridge(QObject):
                     "zone_name": addr.zone_name, "delivery_fee": addr.delivery_fee,
                 }})
 
+            elif action == "delete_customer_address":
+                if payload.get("customer_id") is None:
+                    raise ValueError("يجب تحديد العميل")
+                self._customer.delete_address(payload.get("address_id"), payload["customer_id"])
+                return json.dumps({"success": True})
+
             elif action == "get_active_zones":
                 zones = self._customer.get_active_zones()
                 return json.dumps({"success": True, "data": [self._zone_to_dict(z) for z in zones]})
@@ -556,7 +565,7 @@ class POSBridge(QObject):
                     amount=payload.get("amount"),
                     description=payload.get("description", ""),
                     category=payload.get("category", "other"),
-                    user_id=payload.get("user_id") or self._current_user.id
+                    user_id=self._current_user.id
                 )
                 return json.dumps({"success": True, "data": exp})
 
@@ -1129,7 +1138,7 @@ class POSBridge(QObject):
                         })
                 data = ctrl.close_session(
                     session_id=session_id,
-                    counted_cash_egp=float(payload.get("counted_cash_egp", 0)),
+                    counted_cash_egp=payload.get("counted_cash_egp"),
                     actor_id=actor.id,
                     variance_reason=payload.get("variance_reason"),
                     manager_pin=payload.get("manager_pin"),
@@ -1169,7 +1178,7 @@ class POSBridge(QObject):
                     from_session_id=from_session_id,
                     to_user_id=to_user_id,
                     station=outgoing_session.station.value,
-                    counted_cash_egp=float(payload.get("counted_cash_egp", 0)),
+                    counted_cash_egp=payload.get("counted_cash_egp"),
                     cash_drop_egp=float(payload.get("cash_drop_egp", 0)),
                     actor_id=actor.id,
                     variance_reason=payload.get("variance_reason"),

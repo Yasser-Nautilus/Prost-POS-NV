@@ -46,6 +46,8 @@ class AuditEventType:
     SHIFT_CLOSED = "shift_closed"
     SHIFT_TRANSFERRED = "shift_transferred"
 
+    LOGIN_FAILED = "login_failed"
+
     # User management events
     USER_CREATED = "user_created"
     USER_UPDATED = "user_updated"

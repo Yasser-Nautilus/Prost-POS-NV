@@ -252,8 +252,7 @@ class DriverSettlementService:
                         order = self._orders.get_by_id(oid)
                         if not order or order.status == OrderStatus.CANCELLED:
                             continue
-                        if order.payment_method == PaymentMethod.CASH:
-                            trip_cash += order.total
+                        trip_cash += order.cash_due_on_delivery
                         trip_fees += order.delivery_fee or 0.0
 
                     db.execute(
@@ -366,9 +365,9 @@ class DriverSettlementService:
     ) -> dict:
         """Calculate financial summary from actual order data.
 
-        This is the authoritative financial calculation — NEVER trust
-        snapshots from delivery_trips.cash_collected for a new settlement
-        (those are set after settlement, not before).
+        Unsettled trips use current unpaid cash orders, never client totals.
+        Already-settled trips retain their saved handover amount: their COD
+        orders have since been marked paid and must not disappear from history.
         """
         total_order_value = 0.0
         cash_collected = 0.0
@@ -399,8 +398,7 @@ class DriverSettlementService:
                 order_count += 1
 
                 if is_cash:
-                    trip_cash += order_total
-                    cash_collected += order_total
+                    trip_cash += order.cash_due_on_delivery
                 elif is_online:
                     trip_online += order_total
                     online_paid += order_total
@@ -418,6 +416,12 @@ class DriverSettlementService:
                     "payment_method": order.payment_method.value if order.payment_method else "cash",
                     "status": order.status.value,
                 })
+
+            # Completion sets COD orders is_paid=True. A settled trip is an
+            # immutable handover snapshot, not another collection request.
+            if trip.is_settled and trip.cash_collected is not None:
+                trip_cash = trip.cash_collected
+            cash_collected += trip_cash
 
             per_trip_details.append({
                 "trip_id": trip.id,
