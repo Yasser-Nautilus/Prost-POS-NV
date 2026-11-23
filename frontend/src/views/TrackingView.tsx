@@ -611,7 +611,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ onResumeOrder, onHan
       <ManagerApprovalDialog
         isOpen={showCancelDialog}
         title="إلغاء الطلب"
-        subtitle={pendingCancelOrderId ? `الطلب رقم ${pendingCancelOrderId}` : undefined}
+        subtitle={pendingCancelOrderId ? `الطلب رقم ${(orders.find((o: any) => o.id === pendingCancelOrderId)?.invoice_no) || pendingCancelOrderId}` : undefined}
         reasonLabel="سبب الإلغاء (مطلوب)"
         confirmLabel="تأكيد الإلغاء"
         onClose={() => setShowCancelDialog(false)}
