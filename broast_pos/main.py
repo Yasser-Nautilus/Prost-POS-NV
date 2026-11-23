@@ -209,6 +209,8 @@ def main() -> int:
         ledger_repo=cash_ledger_repo,
         cashier_session_repo=cashier_session_repo,
     )
+    # Driver settlement books the driver's delivery fees as an expense
+    settlement_service._expense_recorder = financial_service
     report_service = ReportService(
         order_repo=order_repo,
         financial_repo=financial_repo,
