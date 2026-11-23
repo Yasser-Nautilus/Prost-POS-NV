@@ -144,6 +144,7 @@ class ReportsController:
                 "cash": "كاش",
                 "visa": "فيزا",
                 "online": "اونلاين",
+                "unpaid": "غير مدفوع",
             }
 
             for entry in raw.get("payments", []):
@@ -273,6 +274,9 @@ class ReportsController:
             except Exception:
                 drivers = []
 
+            # Booked non-cancelled order value, not collected cash. Payment
+            # breakdown separates paid methods and unpaid receivables; drawer
+            # reconciliation remains the cash ledger's responsibility.
             # Revenue distinction: calculate from individual orders
             gross_revenue = sales["grand_total"]["revenue"]
             # Delivery fees are already included in gross_revenue via order.total.

@@ -156,7 +156,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
           </h3>
           <div className="flex flex-wrap gap-5 text-xs text-gray-400">
             <span>
-              إجمالي المبيعات{" "}
+              قيمة الطلبات المسجلة{" "}
               <b className="text-white font-mono">{(dailySales?.gross_revenue || 0).toFixed(2)} ج.م</b>
             </span>
             <span>
@@ -187,7 +187,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ currentUser: _currentU
           </div>
 
           <div className="space-y-2">
-            <h4 className="text-sm font-bold text-white">حسب طريقة الدفع</h4>
+            <h4 className="text-sm font-bold text-white">المدفوعات والمبالغ غير المدفوعة</h4>
+            <p className="text-xs text-gray-400">حسب تاريخ إنشاء الطلب، وليست حركة النقد بالدرج. غير المدفوع منفصل عن المدفوعات.</p>
             {(dailySales?.payment_breakdown?.payments || []).map((row: any) => (
               <div key={row.method} className="flex justify-between gap-3 text-sm py-1.5 border-b border-brand-border/20">
                 <span className="text-gray-300">

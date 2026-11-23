@@ -286,17 +286,21 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
     def get_all_drivers_daily_summary(self, date_str: str) -> list[dict]:
         """Per-driver summary: trip count, order count, fees earned."""
         rows = self._db.fetch_all(
-            """SELECT
-                   dt.driver_id,
-                   dt.driver_name,
-                   COUNT(DISTINCT dt.id) AS trip_count,
-                   COUNT(dto.order_id) AS order_count,
-                   COALESCE(SUM(dt.total_delivery_fees), 0) AS fees_earned
-               FROM delivery_trips dt
-               LEFT JOIN delivery_trip_orders dto ON dto.trip_id = dt.id
-               WHERE DATE(dt.created_at) = ?
-               GROUP BY dt.driver_id, dt.driver_name
-               ORDER BY dt.driver_name""",
+            """SELECT t.driver_id, t.driver_name,
+                      COUNT(*) AS trip_count,
+                      COALESCE(SUM(t.order_count), 0) AS order_count,
+                      COALESCE(SUM(t.fees), 0) AS fees_earned
+               FROM (
+                   SELECT dt.id, dt.driver_id, dt.driver_name,
+                          COUNT(dto.order_id) AS order_count,
+                          COALESCE(dt.total_delivery_fees, 0) AS fees
+                   FROM delivery_trips dt
+                   LEFT JOIN delivery_trip_orders dto ON dto.trip_id = dt.id
+                   WHERE DATE(dt.created_at) = ?
+                   GROUP BY dt.id
+               ) t
+               GROUP BY t.driver_id, t.driver_name
+               ORDER BY t.driver_name""",
             (date_str,),
         )
         return [

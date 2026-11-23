@@ -168,6 +168,10 @@ def test_visible_open_shift_to_cash_payment(qapp, monkeypatch, existing_day, con
         assert db.fetch_one("SELECT is_paid FROM orders")["is_paid"] == 1
         assert db.fetch_one("SELECT count(*) c FROM cashier_sessions")["c"] == 1
         browser.screenshot("03-paid.png")
+        if not cashier:
+            browser.click("التقارير المالية")
+            browser.wait("document.body.innerText.includes('المدفوعات والمبالغ غير المدفوعة')")
+            browser.screenshot("05-reports.png")
     finally:
         shell.close()
         DatabaseConnection.reset()
