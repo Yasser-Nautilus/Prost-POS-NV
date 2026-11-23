@@ -525,6 +525,31 @@ class POSBridgeClient {
         return newAddr as any;
       }
 
+      case "get_all_zones":
+        return this.mockState.zones as any;
+
+      case "create_zone": {
+        const z = { id: this.mockState.zones.length + 1, name: payload.name, delivery_fee: payload.delivery_fee, is_active: true };
+        this.mockState.zones.push(z as any);
+        return z as any;
+      }
+
+      case "update_zone": {
+        const z: any = this.mockState.zones.find((x: any) => x.id === payload.zone_id);
+        if (!z) throw new Error("المنطقة غير موجودة");
+        if (payload.name != null) z.name = payload.name;
+        if (payload.delivery_fee != null) z.delivery_fee = payload.delivery_fee;
+        if (payload.is_active != null) z.is_active = payload.is_active;
+        return z as any;
+      }
+
+      case "delete_category": {
+        const has = (this.mockState.products || []).some((p: any) => p.category_id === payload.category_id);
+        if (has) throw new Error("لا يمكن حذف الفئة — يوجد منتجات مرتبطة بها");
+        this.mockState.categories = this.mockState.categories.filter((c: any) => c.id !== payload.category_id);
+        return null as any;
+      }
+
       case "get_active_zones":
         return this.mockState.zones as any;
 
@@ -923,6 +948,31 @@ class POSBridgeClient {
         };
         this.mockState.activeShift = shift;
         return shift as any;
+      }
+
+      case "get_report_monthly":
+        return {
+          summary: { year: payload.year, month: payload.month, total_sales: 12500, total_expenses: 1800, daily: [{ date: `${payload.year}-${String(payload.month).padStart(2, "0")}-01`, sales: 4200, expenses: 600 }, { date: `${payload.year}-${String(payload.month).padStart(2, "0")}-02`, sales: 8300, expenses: 1200 }] },
+          bestsellers: [{ product_name: "وجبة بروستد", quantity: 120, revenue: 9600 }],
+          expenses: { year: payload.year, month: payload.month, categories: { supplies: 1000, delivery_fees: 500, other: 300 }, total: 1800 },
+        } as any;
+
+      case "get_report_yearly":
+        return {
+          summary: { year: payload.year, total_sales: 150000, total_expenses: 21000, months: [{ month: 1, sales: 12500, expenses: 1800 }, { month: 2, sales: 11000, expenses: 1500 }] },
+          bestsellers: [{ product_name: "وجبة بروستد", quantity: 1400, revenue: 112000 }],
+        } as any;
+
+      case "search_customers": {
+        const q = String(payload.query || "").trim();
+        return this.mockState.customers.filter((c: any) => c.name.includes(q) || c.phone.includes(q)) as any;
+      }
+
+      case "update_customer": {
+        const c = this.mockState.customers.find((x: any) => x.id === payload.customer_id);
+        if (!c) throw new Error("العميل غير موجود");
+        c.name = payload.name; c.phone = payload.phone;
+        return c as any;
       }
 
       case "get_report_daily_sales":
