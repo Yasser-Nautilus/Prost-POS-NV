@@ -10,10 +10,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from broast_pos.core.phone import INVALID_PHONE_MSG, normalize_egyptian_mobile
 from broast_pos.core.models.customer import Customer, CustomerAddress, Zone
+from broast_pos.core.phone import INVALID_PHONE_MSG, normalize_egyptian_mobile
 from broast_pos.data.repositories.customer_repository import CustomerRepository
-
 
 
 class CustomerService:

@@ -11,10 +11,10 @@ every transition is recorded in order_status_history.
 
 from __future__ import annotations
 
-from broast_pos.core.clock import restaurant_today
 import logging
 from datetime import date, datetime
 
+from broast_pos.core.clock import restaurant_today
 from broast_pos.core.models.audit import AuditEventType
 from broast_pos.core.models.delivery import (
     DeliveryTrip,
@@ -106,8 +106,13 @@ class DeliveryService:
 
         Sets check_out_at on the open attendance record.
         Raises:
-            ValueError: if driver has unsettled trips.
+            ValueError: if driver is out on a trip that has not returned yet,
+                or has unsettled trips.
         """
+        if self.is_driver_out(driver_id):
+            raise ValueError(
+                "لا يمكن تسجيل خروج السائق — هو في رحلة توصيل ولم يرجع بعد"
+            )
         unsettled = self.get_unsettled_trips(driver_id)
         if unsettled:
             raise ValueError(

@@ -22,7 +22,7 @@ from broast_pos.core.models.order import (
     OrderType,
     PaymentMethod,
 )
-from broast_pos.core.policies.discount import compute_discount
+from broast_pos.core.policies.discount import compute_discount, rescale_discount
 from broast_pos.core.policies.input_values import unit_count
 from broast_pos.core.services.audit_service import AuditService
 from broast_pos.data.repositories.audit_repository import AuditRepository
@@ -420,8 +420,16 @@ class OrderService:
         self._check_items_available(added_items)
         order.items.extend(added_items)
 
-        # Recalculate totals
+        # Recalculate totals. An existing discount is re-validated against the
+        # new subtotal so removing items can never push the total below zero.
+        old_subtotal = order.subtotal
         order.subtotal = sum(item.total_price for item in order.items)
+        if order.discount_amount:
+            order.discount_amount = rescale_discount(
+                order.discount_amount, order.discount_type, old_subtotal, order.subtotal,
+            )
+            if order.discount_amount <= 0:
+                order.discount_type = None
         self._compute_total(order)
 
         # Persist
