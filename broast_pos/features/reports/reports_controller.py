@@ -35,19 +35,44 @@ class ReportsController:
         self._printer = printer_manager
 
     # ------------------------------------------------------------------
+    # H16: report scope — one shift OR one calendar day, never both
+    # ------------------------------------------------------------------
+
+    def validate_scope(
+        self, target_date: date | None = None, shift_id: int | None = None,
+    ) -> None:
+        """Reject an ambiguous or unknown report scope.
+
+        A report covers either one shift (``shift_id``) or one calendar day
+        (``target_date``, default today). Passing both would mix shift totals
+        with another period's sales, so it is refused.
+
+        Raises:
+            ValueError: both given, or the shift does not exist.
+        """
+        if shift_id is None:
+            return
+        if target_date is not None:
+            raise ValueError("حدد وردية أو تاريخاً — وليس الاثنين معاً")
+        if self._report_svc._orders.get_shift_business_date(shift_id) is None:
+            raise ValueError("الوردية غير موجودة")
+
+    # ------------------------------------------------------------------
     # Task 1: Aggregate Orders by Type
     # ------------------------------------------------------------------
 
     def get_sales_by_type(
-        self, target_date: date | None = None,
+        self, target_date: date | None = None, shift_id: int | None = None,
     ) -> dict[str, Any]:
         """Group completed orders by type with count and revenue.
 
-        Queries all non-cancelled orders for the given date.
+        Queries all non-cancelled orders of the scope: one shift (``shift_id``)
+        or one calendar day (``target_date``, default today).
         Groups by order_type: صالة, تيك اواي, دليفري, استلام محل.
 
         Args:
-            target_date: Date to query. Defaults to today.
+            target_date: Day to query. Defaults to today. Not with shift_id.
+            shift_id: Query this shift instead of a calendar day.
 
         Returns:
             {
@@ -61,7 +86,11 @@ class ReportsController:
             }
         """
         try:
-            raw = self._report_svc.generate_daily_sales(target_date)
+            raw = (
+                self._report_svc.generate_daily_sales_for_shift(shift_id)
+                if shift_id is not None
+                else self._report_svc.generate_daily_sales(target_date)
+            )
 
             # Add Arabic labels for display
             type_labels = {
@@ -80,17 +109,19 @@ class ReportsController:
             logger.error("Failed to aggregate orders by type: %s", exc)
             return {
                 "date": (target_date or date.today()).isoformat(),
+                "shift_id": shift_id,
                 "breakdown": [],
                 "grand_total": {"count": 0, "revenue": 0.0},
             }
 
     def get_payment_breakdown(
-        self, target_date: date | None = None,
+        self, target_date: date | None = None, shift_id: int | None = None,
     ) -> dict[str, Any]:
         """Sales split by payment method (كاش / فيزا / اونلاين).
 
         Args:
-            target_date: Date to query. Defaults to today.
+            target_date: Day to query. Defaults to today. Not with shift_id.
+            shift_id: Query this shift instead of a calendar day.
 
         Returns:
             {
@@ -103,7 +134,11 @@ class ReportsController:
             }
         """
         try:
-            raw = self._report_svc.generate_payment_breakdown(target_date)
+            raw = (
+                self._report_svc.generate_payment_breakdown_for_shift(shift_id)
+                if shift_id is not None
+                else self._report_svc.generate_payment_breakdown(target_date)
+            )
 
             method_labels = {
                 "cash": "كاش",
@@ -120,33 +155,43 @@ class ReportsController:
             logger.error("Failed to get payment breakdown: %s", exc)
             return {
                 "date": (target_date or date.today()).isoformat(),
+                "shift_id": shift_id,
                 "payments": [],
                 "total": 0.0,
             }
 
     def get_bestsellers(
-        self, target_date: date | None = None,
+        self, target_date: date | None = None, shift_id: int | None = None,
     ) -> list[dict[str, Any]]:
-        """Top products by quantity sold for the day.
+        """Top products by quantity sold for one shift or one calendar day.
 
         Returns:
             [{"product_name": "...", "quantity": 45, "revenue": 1350.0}, ...]
         """
         try:
+            if shift_id is not None:
+                return self._report_svc.generate_product_sales_for_shift(shift_id)
             return self._report_svc.generate_product_sales(target_date)
         except Exception as exc:
             logger.error("Failed to get bestsellers: %s", exc)
             return []
 
     def get_cancelled_orders(
-        self, target_date: date | None = None,
+        self, target_date: date | None = None, shift_id: int | None = None,
     ) -> dict[str, Any]:
-        """Cancelled orders with reasons."""
+        """Cancelled orders with reasons, for one shift or one calendar day."""
         try:
+            if shift_id is not None:
+                return self._report_svc.generate_cancellations_for_shift(shift_id)
             return self._report_svc.generate_cancelled_orders(target_date)
         except Exception as exc:
             logger.error("Failed to get cancelled orders: %s", exc)
-            return {"date": (target_date or date.today()).isoformat(), "count": 0, "orders": []}
+            return {
+                "date": (target_date or date.today()).isoformat(),
+                "shift_id": shift_id,
+                "count": 0,
+                "orders": [],
+            }
 
     # ------------------------------------------------------------------
     # Task 2: Daily Summary Generation
@@ -157,7 +202,18 @@ class ReportsController:
         target_date: date | None = None,
         shift_id: int | None = None,
     ) -> dict[str, Any]:
-        """Full daily summary with revenue distinction and driver data.
+        """Full summary of ONE scope: a shift, or a calendar day (H16).
+
+        - ``shift_id`` given  → shift report. Every section (sales by type,
+          payments, cancellations, bestsellers, drivers, delivery fees) and the
+          cash totals come from that shift. ``date`` is the shift's business
+          date (the day it was opened), so a shift spanning midnight is one
+          report.
+        - otherwise           → day report for ``target_date`` (default today).
+          Everything is filtered by calendar date; ``shift_summary`` is None.
+
+        Combining both is refused: shift cash totals next to another period's
+        sales were exactly the mix this method used to produce.
 
         Combines:
           - Order type breakdown (صالة, تيك اواي, دليفري, استلام محل)
@@ -166,14 +222,16 @@ class ReportsController:
           - Cancelled orders summary
           - Product bestsellers
           - Driver summary
-          - Shift financial summary (if shift_id provided)
+          - Shift financial summary (shift reports only)
 
         Args:
-            target_date: Date to generate summary for. Defaults to today.
-            shift_id: Active shift ID (for shift-specific totals).
+            target_date: Calendar day for a day report. Defaults to today.
+            shift_id: Shift to report on (shift report). Not with target_date.
 
         Returns:
             {
+                "scope": "shift" | "day",
+                "shift_id": 7 | None,
                 "date": "2024-01-15",
                 "generated_at": "2024-01-15T23:30:00",
                 "sales_by_type": {...},
@@ -186,33 +244,45 @@ class ReportsController:
                 "driver_summary": [...],
                 "shift_summary": {...} | None,
             }
+
+        Raises:
+            ValueError: shift and date both given, unknown shift, or the
+                report could not be generated.
         """
+        self.validate_scope(target_date, shift_id)
+        is_shift = shift_id is not None
         d = target_date or date.today()
 
         try:
-            sales = self.get_sales_by_type(d)
-            payments = self.get_payment_breakdown(d)
-            cancelled = self.get_cancelled_orders(d)
-            bestsellers = self.get_bestsellers(d)
+            sales = self.get_sales_by_type(d, shift_id) if is_shift else self.get_sales_by_type(d)
+            payments = (
+                self.get_payment_breakdown(d, shift_id) if is_shift else self.get_payment_breakdown(d)
+            )
+            cancelled = (
+                self.get_cancelled_orders(d, shift_id) if is_shift else self.get_cancelled_orders(d)
+            )
+            bestsellers = self.get_bestsellers(d, shift_id) if is_shift else self.get_bestsellers(d)
 
             # Driver summary
             try:
-                drivers = self._report_svc.generate_driver_summary(d)
+                drivers = (
+                    self._report_svc.generate_driver_summary_for_shift(shift_id)
+                    if is_shift
+                    else self._report_svc.generate_driver_summary(d)
+                )
             except Exception:
                 drivers = []
 
             # Revenue distinction: calculate from individual orders
             gross_revenue = sales["grand_total"]["revenue"]
-            total_delivery_fees = sum(
-                entry.get("revenue", 0)
-                for entry in sales.get("breakdown", [])
-                if entry.get("type") == "delivery"
-            )
             # Delivery fees are already included in gross_revenue via order.total.
             # We need to calculate actual delivery_fee amounts from orders.
             try:
-                d_str = d.isoformat()
-                orders = self._report_svc._orders.get_completed_for_date(d_str)
+                orders = (
+                    self._report_svc._orders.get_completed_for_shift(shift_id)
+                    if is_shift
+                    else self._report_svc._orders.get_completed_for_date(d.isoformat())
+                )
                 total_delivery_fees = round(
                     sum(o.delivery_fee for o in orders), 2,
                 )
@@ -221,16 +291,24 @@ class ReportsController:
 
             restaurant_revenue = round(gross_revenue - total_delivery_fees, 2)
 
-            # Shift-specific data
+            # Shift-specific data (shift reports only)
             shift_data = None
-            if shift_id is not None:
+            if is_shift:
                 try:
                     shift_data = self._report_svc.generate_shift_close(shift_id)
                 except Exception as exc:
                     logger.warning("Could not load shift summary: %s", exc)
 
+            report_date = (
+                self._report_svc._orders.get_shift_business_date(shift_id) or ""
+                if is_shift
+                else d.isoformat()
+            )
+
             return {
-                "date": d.isoformat(),
+                "scope": "shift" if is_shift else "day",
+                "shift_id": shift_id,
+                "date": report_date,
                 "generated_at": datetime.now().isoformat(),
                 "sales_by_type": sales,
                 "payment_breakdown": payments,
@@ -253,22 +331,29 @@ class ReportsController:
 
     def print_daily_summary(
         self,
-        shift_id: int,
+        shift_id: int | None = None,
         cashier_slot: int = 1,
         target_date: date | None = None,
     ) -> bool:
-        """Print the daily summary report — silent, non-blocking.
+        """Print a summary report — silent, non-blocking.
+
+        H16: prints ONE scope, the same one ``generate_daily_summary`` shows.
+          * ``shift_id`` → shift report (header with the shift's period). The
+            shift is marked "summary printed", which shift close requires.
+          * ``target_date`` (or neither) → calendar-day report. This prints no
+            shift period and never marks a shift as printed.
+        Passing both is refused (returns False).
 
         Steps:
           1. Generate summary data
-          2. Get shift period (opened_at, closed_at)
+          2. Get shift period (opened_at, closed_at) — shift reports only
           3. Send to printer_manager.print_shift_summary()
-          4. Mark summary as printed (prerequisite for shift close)
+          4. Mark summary as printed — shift reports only
 
         Args:
-            shift_id: Active shift ID.
+            shift_id: Shift to print.
             cashier_slot: 1 or 2 — determines which receipt printer.
-            target_date: Defaults to today.
+            target_date: Calendar day to print. Defaults to today.
 
         Returns:
             True if print succeeded (or printer unavailable), False on error.
@@ -280,24 +365,41 @@ class ReportsController:
         try:
             summary = self.generate_daily_summary(target_date, shift_id)
 
-            # Build shift period for header
+            # H16: the template expects top-level "breakdown"/"grand_total",
+            # but generate_daily_summary nests the sales breakdown under
+            # "sales_by_type" — adapt once, here, instead of in the template.
+            sales = summary.get("sales_by_type") or {}
+            report_payload = {
+                "breakdown": sales.get("breakdown", []),
+                "grand_total": sales.get("grand_total", {"count": 0, "revenue": 0.0}),
+            }
+
+            # Build shift period for header (shift reports only) — the template
+            # expects separate from/to date and time keys, not opened_at/closed_at.
             shift_period = None
-            try:
-                shift = self._financial_svc._financial.get_by_id(shift_id)
-                if shift:
-                    shift_period = {
-                        "opened_at": shift.opened_at or "",
-                        "closed_at": shift.closed_at or datetime.now().isoformat(),
-                    }
-            except Exception:
-                # Checkup-Fix: shift period is optional for the summary, but log failures.
-                logger.warning("Loading shift period for report failed", exc_info=True)
+            if shift_id is not None:
+                try:
+                    shift = self._financial_svc._financial.get_by_id(shift_id)
+                    if shift:
+                        opened = shift.opened_at or ""
+                        closed = shift.closed_at or datetime.now().isoformat()
+                        from_date, from_time = self._split_date_time(opened)
+                        to_date, to_time = self._split_date_time(closed)
+                        shift_period = {
+                            "from_date": from_date,
+                            "from_time": from_time,
+                            "to_date": to_date,
+                            "to_time": to_time,
+                        }
+                except Exception:
+                    # Checkup-Fix: shift period is optional for the summary, but log failures.
+                    logger.warning("Loading shift period for report failed", exc_info=True)
 
             printed = self._printer.print_shift_summary(
-                summary, cashier_slot=cashier_slot, shift_period=shift_period,
+                report_payload, cashier_slot=cashier_slot, shift_period=shift_period,
             )
 
-            if printed:
+            if printed and shift_id is not None:
                 # Mark as printed — prerequisite for shift close
                 try:
                     self._financial_svc.mark_summary_printed(shift_id)
@@ -309,6 +411,17 @@ class ReportsController:
         except Exception as exc:
             logger.error("Daily summary print failed: %s", exc)
             return False
+
+    @staticmethod
+    def _split_date_time(timestamp: str) -> tuple[str, str]:
+        """H16: split a stored "YYYY-MM-DD HH:MM:SS" timestamp into
+        separate date/time strings for the print template's header."""
+        try:
+            dt = timestamp if isinstance(timestamp, datetime) else datetime.fromisoformat(timestamp)
+            return dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M")
+        except (ValueError, TypeError):
+            ts = str(timestamp)
+            return (ts[:10] if len(ts) >= 10 else ""), ""
 
     # ------------------------------------------------------------------
     # Task 4: Consistency Checks
@@ -469,5 +582,4 @@ class ReportsController:
         except Exception as exc:
             logger.error("Failed to get active shift ID: %s", exc)
             return None
-
 

@@ -1,5 +1,35 @@
 // TypeScript wrapper for the QWebChannel bridge.
-// Automatically falls back to high-fidelity mock data when running outside QWebEngineView.
+//
+// H17: the mock backend is a development/demo convenience, never a
+// production fallback. It only activates when VITE_ALLOW_MOCK_BRIDGE=true
+// is set explicitly at build time. Without that flag, a missing/failed
+// native bridge blocks every call with a visible connection error instead
+// of silently answering with fake data — a missing bridge must never look
+// like a successful production transaction.
+
+const MOCK_BRIDGE_ALLOWED: boolean =
+  (import.meta as any).env?.VITE_ALLOW_MOCK_BRIDGE === "true";
+
+export type BridgeConnectionMode = "native" | "mock" | "blocked";
+
+const NATIVE_BRIDGE_UNAVAILABLE_ERROR =
+  "تعذر الاتصال بنظام التشغيل الأساسي. أعد تشغيل البرنامج، وإذا استمرت المشكلة اتصل بالدعم الفني.";
+
+/** Keys whose values must never reach the console, even in demo-mode logs. */
+const SENSITIVE_PAYLOAD_KEYS = new Set([
+  "pin", "manager_pin", "new_pin", "customer_phone", "phone",
+]);
+
+function redactForLogging(payload: any): any {
+  if (!payload || typeof payload !== "object") return payload;
+  const redacted: any = Array.isArray(payload) ? [...payload] : { ...payload };
+  for (const key of Object.keys(redacted)) {
+    if (SENSITIVE_PAYLOAD_KEYS.has(key)) {
+      redacted[key] = "[REDACTED]";
+    }
+  }
+  return redacted;
+}
 
 export interface BridgeResponse<T = any> {
   success: boolean;
@@ -86,6 +116,8 @@ type SignalCallback = (data: any) => void;
 class POSBridgeClient {
   private backend: any = null;
   private channelReady: Promise<any>;
+  /** H17: how this client is actually talking to the backend right now. */
+  public mode: BridgeConnectionMode = "native";
   private signalListeners: { [key: string]: Set<SignalCallback> } = {
     orderChanged: new Set(),
     parkedChanged: new Set(),
@@ -156,14 +188,26 @@ class POSBridgeClient {
     this.channelReady = this._initChannel();
   }
 
+  /** H17: decide mock vs. blocked when the native bridge isn't available. */
+  private _onNativeUnavailable(reason: string, resolve: (v: boolean) => void): void {
+    if (MOCK_BRIDGE_ALLOWED) {
+      console.warn(`[Bridge] ${reason} Using MOCK backend (VITE_ALLOW_MOCK_BRIDGE=true).`);
+      this.mode = "mock";
+    } else {
+      console.error(`[Bridge] ${reason} Mock backend is disabled — blocking all calls.`);
+      this.mode = "blocked";
+    }
+    resolve(false);
+  }
+
   private _initChannel(): Promise<boolean> {
     return new Promise((resolve) => {
       const w = window as any;
 
-      // If no Qt WebChannel transport is present → browser / mock mode
+      // If no Qt WebChannel transport is present → not running inside the
+      // native shell at all.
       if (!w.qt || !w.qt.webChannelTransport) {
-        console.warn("[Bridge] No qt.webChannelTransport found. Using MOCK backend.");
-        resolve(false);
+        this._onNativeUnavailable("No qt.webChannelTransport found.", resolve);
         return;
       }
 
@@ -176,6 +220,7 @@ class POSBridgeClient {
         if (w.QWebChannel) {
           new w.QWebChannel(w.qt.webChannelTransport, (channel: any) => {
             this.backend = channel.objects.backend;
+            this.mode = "native";
             console.log("[Bridge] QWebChannel connected to Python backend ✓");
 
             // Wire signals
@@ -193,8 +238,7 @@ class POSBridgeClient {
         } else if (attempts < maxAttempts) {
           setTimeout(tryInit, 100);
         } else {
-          console.error("[Bridge] QWebChannel class never appeared. Falling back to MOCK.");
-          resolve(false);
+          this._onNativeUnavailable("QWebChannel class never appeared.", resolve);
         }
       };
 
@@ -202,6 +246,11 @@ class POSBridgeClient {
     });
   }
 
+  /** H17: current connection mode, once the native-bridge probe has settled. */
+  public async getConnectionMode(): Promise<BridgeConnectionMode> {
+    await this.channelReady;
+    return this.mode;
+  }
 
   public async call<T = any>(action: string, payload: any = {}): Promise<T> {
     const isNative = await this.channelReady;
@@ -220,10 +269,17 @@ class POSBridgeClient {
           }
         });
       });
-    } else {
-      // Mock Implementation
-      return this.dispatchMock<T>(action, payload);
     }
+
+    if (this.mode === "blocked") {
+      // H17: never fall through to the mock backend here — a missing
+      // native bridge in production must fail loudly, not pretend to
+      // succeed (e.g. a payment "completing" with no money actually moved).
+      return Promise.reject(new Error(NATIVE_BRIDGE_UNAVAILABLE_ERROR));
+    }
+
+    // Mock Implementation — only reachable with VITE_ALLOW_MOCK_BRIDGE=true.
+    return this.dispatchMock<T>(action, payload);
   }
 
   public subscribe(signal: string, callback: SignalCallback) {
@@ -315,7 +371,7 @@ class POSBridgeClient {
 
   // High-fidelity Mock Dispatcher
   private async dispatchMock<T = any>(action: string, payload: any): Promise<T> {
-    console.log(`[MOCK] Dispatching action "${action}":`, payload);
+    console.log(`[MOCK] Dispatching action "${action}":`, redactForLogging(payload));
     await new Promise((resolve) => setTimeout(resolve, 150)); // Artificial network latency
 
     switch (action) {

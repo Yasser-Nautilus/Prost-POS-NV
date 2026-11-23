@@ -58,6 +58,9 @@ function App() {
   const [isShiftOpen, setIsShiftOpen] = useState(false);
   const [activeShift, setActiveShift] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  // H17: native-bridge connection state — "blocked" means no native shell
+  // and demo mode isn't enabled, so no transaction may be allowed to run.
+  const [bridgeMode, setBridgeMode] = useState<"native" | "mock" | "blocked">("native");
   // CHANGED: pickup order handed to POS for payment on handover ("تسليم").
   const [handoverOrder, setHandoverOrder] = useState<any | null>(null);
   // White-label branding loaded from backend config
@@ -77,6 +80,15 @@ function App() {
 
   const checkAuth = async () => {
     try {
+      // H17: resolve the native-bridge connection state before doing
+      // anything else — a blocked bridge must never silently answer calls.
+      const mode = await bridge.getConnectionMode();
+      setBridgeMode(mode);
+      if (mode === "blocked") {
+        setLoading(false);
+        return;
+      }
+
       // Load config (white-label branding) on startup
       try {
         const cfg = await bridge.call("get_config");
@@ -133,8 +145,35 @@ function App() {
     );
   }
 
+  if (bridgeMode === "blocked") {
+    // H17: no native shell and demo mode is off — block everything rather
+    // than let the cashier believe a payment went through with no system
+    // actually behind it.
+    return (
+      <div className="min-h-screen bg-brand-dark flex flex-col items-center justify-center text-white space-y-4 px-6 text-center" dir="rtl">
+        <Shield className="text-red-500" size={48} />
+        <h1 className="text-xl font-bold">تعذر الاتصال بنظام التشغيل الأساسي</h1>
+        <p className="text-gray-400 max-w-md">
+          لا يمكن معالجة أي عملية بيع أو دفع بدون هذا الاتصال. أعد تشغيل البرنامج،
+          وإذا استمرت المشكلة اتصل بالدعم الفني.
+        </p>
+      </div>
+    );
+  }
+
+  const demoModeBanner = bridgeMode === "mock" && (
+    <div className="h-7 bg-amber-500 text-black text-xs font-bold flex items-center justify-center shrink-0 z-30">
+      ⚠️ وضع تجريبي (Demo) — لا يوجد اتصال حقيقي بالنظام، البيانات غير حقيقية
+    </div>
+  );
+
   if (!currentUser) {
-    return <LoginView onLoginSuccess={handleLoginSuccess} />;
+    return (
+      <>
+        {demoModeBanner}
+        <LoginView onLoginSuccess={handleLoginSuccess} />
+      </>
+    );
   }
 
   const isManagerOrAbove =
@@ -160,10 +199,11 @@ function App() {
 
   return (
     <div className="h-screen bg-brand-dark flex flex-col overflow-hidden text-white font-cairo">
-      
+      {demoModeBanner}
+
       {/* Top Premium Navbar Header */}
       <header className="h-16 bg-brand-surface border-b border-brand-border/60 flex items-center justify-between px-6 z-20">
-        
+
         {/* Right side: Logo & Navigation */}
         <div className="flex items-center gap-6">
           {/* Logo */}

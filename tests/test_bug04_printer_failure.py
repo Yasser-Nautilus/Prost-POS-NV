@@ -55,7 +55,7 @@ def _ctrl(current_order, *, kitchen_ok=True, receipt_ok=True, amendment_ok=True)
         table_no=getattr(current_order, "table_no", None),
     )
     order_svc.complete_order.return_value = current_order
-    order_svc.amend_order.return_value = None
+    order_svc.amend_order.return_value = current_order
     ctrl._order_svc = order_svc
 
     financial = MagicMock()

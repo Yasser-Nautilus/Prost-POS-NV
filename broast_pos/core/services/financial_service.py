@@ -8,6 +8,7 @@ Expenses are immutable. Shift close requires manager PIN + all drivers settled.
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -23,6 +24,8 @@ from broast_pos.data.repositories.financial_repository import FinancialRepositor
 if TYPE_CHECKING:
     from broast_pos.core.services.auth_service import AuthService
     from broast_pos.core.services.delivery_service import DeliveryService
+
+logger = logging.getLogger(__name__)
 
 
 class FinancialService:
@@ -208,6 +211,18 @@ class FinancialService:
                 "يوجد طلبات مفتوحة — يجب تأكيد أو إلغاء جميع الطلبات قبل إغلاق الوردية"
             )
 
+        # Guard 5 (H08): all cashier sessions must be closed before shift close
+        open_sess = self._get_open_sessions_for_shift(shift_id)
+        if open_sess:
+            names = ", ".join(
+                f"{s.station.value if hasattr(s.station, 'value') else s.station}#{s.id}"
+                for s in open_sess
+            )
+            raise ValueError(
+                f"لا يمكن إغلاق الوردية بينما توجد وردية كاشير مفتوحة: {names}. "
+                "أغلق جميع الورديات أولاً."
+            )
+
         # Close it — shift save and audit must be atomic: a failed audit write
         # must roll back the shift close so the DB never shows a closed shift
         # without a corresponding audit record.
@@ -257,6 +272,11 @@ class FinancialService:
         Raises:
             ValueError: if amount is invalid or category is unknown.
         """
+        # H09: reject expenses against a closed business day
+        shift = self._financial.get_by_id(shift_id)
+        if shift is None or not shift.is_active:
+            raise ValueError("لا يمكن تسجيل مصروف في وردية مغلقة")
+
         if amount <= 0:
             raise ValueError("المبلغ يجب أن يكون أكبر من صفر")
 
@@ -390,3 +410,29 @@ class FinancialService:
         if manager is None:
             raise PermissionError("PIN غير صحيح أو ليس لديك صلاحية")
         return manager
+
+    def _get_open_sessions_for_shift(self, shift_id: int):
+        """Fetch any currently open cashier sessions for shift_id."""
+        sessions_repo = getattr(self, "_sessions", None)
+        if sessions_repo is not None:
+            return sessions_repo.get_open_sessions_for_day(shift_id)
+        fin_repo = getattr(self, "_financial", None)
+        db = getattr(fin_repo, "_db", None) if fin_repo is not None else None
+        if db is not None:
+            import sqlite3
+            try:
+                rows = db.fetch_all(
+                    "SELECT id, station FROM cashier_sessions WHERE day_id = ? AND is_open = 1",
+                    (shift_id,),
+                )
+                if rows:
+                    from broast_pos.core.models.cashier_session import Station
+
+                    class _StubSession:
+                        def __init__(self, id, station):
+                            self.id = id
+                            self.station = Station(station)
+                    return [_StubSession(r["id"], r["station"]) for r in rows]
+            except (sqlite3.OperationalError, sqlite3.DatabaseError) as exc:
+                logger.debug("Querying open sessions failed: %s", exc)
+        return []
