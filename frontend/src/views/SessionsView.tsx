@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   Wallet, Plus, Power, RefreshCw, BarChart3, Lock,
   User, Clock, AlertTriangle, CheckCircle2, FileText, Loader2, X,
@@ -958,13 +958,17 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ currentUser }) => {
 
   const isManagerOrAbove = currentUser?.role === "manager" || currentUser?.role === "admin";
 
+  const loadedOnce = useRef(false);
   const refresh = useCallback(async () => {
-    setLoading(true);
+    // Only show the full-page loader on the first load; later refreshes must not
+    // unmount open dialogs (that blanked the Z-report after closing the day).
+    if (!loadedOnce.current) setLoading(true);
     try {
       const active = await bridge.sessionGetActive();
       const all = await bridge.sessionGetAll();
       setSessions(active);
       setAllSessions(all);
+      loadedOnce.current = true;
     } catch (e) {
       console.error("Failed to load sessions:", e);
     } finally {
