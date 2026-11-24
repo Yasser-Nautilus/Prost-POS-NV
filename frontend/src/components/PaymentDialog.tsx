@@ -7,8 +7,8 @@ interface PaymentDialogProps {
   onClose: () => void;
   total: number;
   orderType?: string;
-  onConfirm: (method: string, amountPaid: number, change: number) => void;
-  onConfirmSplit?: (parts: { method: string; amount: number }[], cashReceived: number) => void;
+  onConfirm: (method: string, amountPaid: number, change: number) => void | Promise<void>;
+  onConfirmSplit?: (parts: { method: string; amount: number }[], cashReceived: number) => void | Promise<void>;
 }
 
 type SplitRow = { method: string; amount: string };
@@ -23,6 +23,15 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   onConfirm,
   onConfirmSplit
 }) => {
+  const submitting = React.useRef(false);
+  const [busy, setBusy] = useState(false);
+  const submit = async (action: () => void | Promise<void>) => {
+    if (submitting.current) return;
+    submitting.current = true;
+    setBusy(true);
+    try { await action(); }
+    finally { submitting.current = false; setBusy(false); }
+  };
   const [splitMode, setSplitMode] = useState(false);
   const [rows, setRows] = useState<SplitRow[]>([]);
   const [people, setPeople] = useState("2");
@@ -95,7 +104,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       alert("النقد المستلم أقل من حصة النقد");
       return;
     }
-    onConfirmSplit(rows.map((r) => ({ method: r.method, amount: toPt(r.amount) / 100 })), givenPt / 100);
+    void submit(() => onConfirmSplit!(rows.map((r) => ({ method: r.method, amount: toPt(r.amount) / 100 })), givenPt / 100));
   };
 
   const handleQuickCash = (amt: number) => {
@@ -113,7 +122,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       return;
     }
     const finalChange = method === "cash" ? (received - total) : 0;
-    onConfirm(method, received, finalChange);
+    void submit(() => onConfirm(method, received, finalChange));
   };
 
   // CHANGED: press Enter to confirm the payment
@@ -302,7 +311,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
           <div className="w-full">
             <button
               type="button"
-              disabled={splitMode && remainingPt !== 0}
+              disabled={busy || (splitMode && remainingPt !== 0)}
               onClick={splitMode ? handleSplitConfirm : handlePayConfirm}
               className="w-full h-16 disabled:opacity-40 disabled:cursor-not-allowed rounded-2xl bg-brand-teal text-white hover:bg-opacity-90 font-bold text-xl flex items-center justify-center gap-2 active:translate-y-0.5 shadow-lg btn-hover-active"
             >
