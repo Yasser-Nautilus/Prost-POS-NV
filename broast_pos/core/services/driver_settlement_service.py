@@ -63,6 +63,32 @@ class DriverSettlementService:
         # delivery fees as an expense when the end-of-day settlement is made.
         self._expense_recorder = None
 
+    def _scope(self, settlement_date=None, *, payment=False):
+        if self._expense_recorder is not None and (payment or settlement_date is None):
+            shift = self._expense_recorder.get_active_shift()
+            if shift is None:
+                raise ValueError("افتح يوم العمل أولاً لعرض وتسوية رحلات السائق")
+            row = self._delivery._db.fetch_one(
+                "SELECT COALESCE(business_date,substr(opened_at,1,10)) AS date FROM shifts WHERE id=?", (shift.id,),
+            )
+            if settlement_date is not None and settlement_date != row["date"]:
+                raise ValueError("لا يمكن دفع رسوم يوم سابق من يوم العمل الحالي")
+            return row["date"], shift.id
+        return settlement_date or date.today().isoformat(), None
+
+    def _scoped_trips(self, driver_id, target_date, day_id):
+        if day_id is not None:
+            trips = self._delivery.get_driver_trips_for_day(driver_id, day_id)
+            for trip in trips:
+                self._validate_trip_day(trip, day_id)
+            return trips
+        return self._delivery.get_driver_trips_for_date(driver_id, target_date)
+
+    def _validate_trip_day(self, trip, day_id):
+        orders = [self._orders.get_by_id(oid) for oid in trip.order_ids]
+        if not orders or any(order is None or order.shift_id != day_id for order in orders):
+            raise ValueError("الرحلة لا تنتمي ليوم العمل الحالي، تحتاج مراجعة المدير")
+
     # ------------------------------------------------------------------
     # Preview — read-only calculation, no DB writes
     # ------------------------------------------------------------------
@@ -72,11 +98,12 @@ class DriverSettlementService:
         driver_id: int,
         settlement_date: str | None = None,
         trip_id: int | None = None,
+        expected_day_id: int | None = None,
     ) -> dict:
         """Calculate what a settlement would look like, without committing.
 
         Returns a summary dict the frontend can display for manager review.
-        If settlement_date is None, uses today.
+        If settlement_date is None, uses the active business day.
         If trip_id is provided, only that specific trip is previewed.
 
         Returns:
@@ -84,14 +111,16 @@ class DriverSettlementService:
         Raises:
             ValueError: if driver not found or no eligible trips exist.
         """
-        target_date = settlement_date or date.today().isoformat()
+        target_date, day_id = self._scope(settlement_date)
+        if expected_day_id is not None and day_id != expected_day_id:
+            raise ValueError("تغير يوم العمل، افتح شاشة التسوية من جديد")
 
         driver = self._users.get_by_id(driver_id)
         if driver is None:
             raise ValueError(f"السائق #{driver_id} غير موجود")
 
         all_day_trips = [
-            t for t in self._delivery.get_driver_trips_for_date(driver_id, target_date)
+            t for t in self._scoped_trips(driver_id, target_date, day_id)
             if t.returned_at is not None
         ]
 
@@ -118,15 +147,30 @@ class DriverSettlementService:
             settlement_date=target_date,
             eligible_trips=eligible_trips,
         )
-        summary["day_settlement"] = self._day_payment_state(driver_id, target_date, eligible_trips)
+        summary["day_id"] = day_id
+        summary["day_settlement"] = self._day_payment_state(driver_id, target_date, all_day_trips, day_id)
         return summary
 
-    def _day_payment_state(self, driver_id, target_date, trips):
+    def _day_payment_state(self, driver_id, target_date, trips, day_id=None):
         db = self._delivery._db
-        row = db.fetch_one(
-            "SELECT paid_amount, expense_id FROM driver_day_closures WHERE driver_id=? AND settlement_date=?",
-            (driver_id, target_date),
-        )
+        if day_id is None:
+            row = db.fetch_one(
+                "SELECT paid_amount, expense_id FROM driver_day_closures WHERE driver_id=? AND settlement_date=?",
+                (driver_id, target_date),
+            )
+        else:
+            row = db.fetch_one(
+                "SELECT paid_amount, expense_id FROM driver_business_day_closures WHERE driver_id=? AND day_id=?",
+                (driver_id, day_id),
+            )
+            if not row:
+                # Preserve #103 markers and recognize them only in the day that
+                # owns their actual expense, never by date alone.
+                row = db.fetch_one(
+                    "SELECT d.paid_amount,d.expense_id FROM driver_day_closures d "
+                    "JOIN cash_transactions c ON c.id=d.expense_id "
+                    "WHERE d.driver_id=? AND c.shift_id=?", (driver_id, day_id),
+                )
         if row:
             return {"completed": True, "paid_amount": row["paid_amount"], "expense_id": row["expense_id"]}
         # Old single-trip rows are not proof of fee payment. Reconcile only
@@ -144,8 +188,8 @@ class DriverSettlementService:
         expenses = db.fetch_all(
             "SELECT c.id,c.amount FROM cash_transactions c JOIN shifts s ON s.id=c.shift_id "
             "WHERE c.category='delivery_fees' AND c.type='expense' AND c.description=? "
-            "AND COALESCE(s.business_date,substr(s.opened_at,1,10))=?",
-            (driver.display_name or driver.username, target_date),
+            + ("AND c.shift_id=?" if day_id is not None else "AND COALESCE(s.business_date,substr(s.opened_at,1,10))=?"),
+            (driver.display_name or driver.username, day_id if day_id is not None else target_date),
         )
         if paid_total > 0 or expenses:
             if abs(paid_total-fees) < .005 and len(expenses) == 1 and abs(expenses[0]["amount"]-fees) < .005:
@@ -165,6 +209,7 @@ class DriverSettlementService:
         settlement_date: str | None = None,
         notes: str | None = None,
         trip_id: int | None = None,
+        expected_day_id: int | None = None,
     ) -> DriverSettlement:
         """Settle one specific trip (if trip_id given) or all unsettled trips for a driver.
 
@@ -186,7 +231,7 @@ class DriverSettlementService:
             driver_id: The driver being settled.
             settled_by_id: Manager/cashier performing the settlement.
             settled_by_name: Manager/cashier display name (for the record).
-            settlement_date: YYYY-MM-DD; defaults to today.
+            settlement_date: historical date filter; payments require the active day.
             notes: Optional notes from the manager.
             trip_id: If provided, settle only this specific trip.
 
@@ -196,7 +241,9 @@ class DriverSettlementService:
         Raises:
             ValueError: if driver not found, trip not found, or already settled.
         """
-        target_date = settlement_date or date.today().isoformat()
+        target_date, day_id = self._scope(settlement_date, payment=True)
+        if expected_day_id is not None and day_id != expected_day_id:
+            raise ValueError("تغير يوم العمل، افتح شاشة التسوية من جديد")
 
         # ── Step 1: Validate driver ───────────────────────────────────────
         driver = self._users.get_by_id(driver_id)
@@ -207,7 +254,7 @@ class DriverSettlementService:
 
         # ── Step 2: Load the target trip(s) ──────────────────────────────
         all_day_trips = [
-            t for t in self._delivery.get_driver_trips_for_date(driver_id, target_date)
+            t for t in self._scoped_trips(driver_id, target_date, day_id)
             if t.returned_at is not None
         ]
 
@@ -227,7 +274,7 @@ class DriverSettlementService:
             day_trips = all_day_trips
 
         # H3: Block settlement if driver has any trip currently in transit
-        all_driver_trips = self._delivery.get_driver_trips_for_date(driver_id, target_date)
+        all_driver_trips = self._scoped_trips(driver_id, target_date, day_id)
         in_transit = [t for t in all_driver_trips if t.dispatched_at is not None and t.returned_at is None]
         if in_transit:
             raise ValueError(
@@ -242,7 +289,7 @@ class DriverSettlementService:
 
         # Guard (full-day only): don't create a second day record for already-closed day.
         if trip_id is None:
-            state = self._day_payment_state(driver_id, target_date, day_trips)
+            state = self._day_payment_state(driver_id, target_date, day_trips, day_id)
             if state["completed"]:
                 raise ValueError(f"تمت تسوية السائق {driver_name} ليوم {target_date} بالفعل")
             if state.get("needs_review"):
@@ -276,6 +323,8 @@ class DriverSettlementService:
         db = self._delivery._db
         try:
             with db.transaction():
+                if day_id is not None and self._scope(payment=True)[1] != day_id:
+                    raise ValueError("تغير يوم العمل، افتح شاشة التسوية من جديد")
                 # 6. Create settlement record
                 self._settlements.create_settlement(settlement)
 
@@ -350,11 +399,16 @@ class DriverSettlementService:
                         total_fees=summary["total_delivery_fees"],
                         actor_id=settled_by_id,
                     )
-                    db.execute(
-                        "INSERT INTO driver_day_closures (driver_id,settlement_date,settlement_id,expense_id,paid_amount) "
-                        "VALUES (?,?,?,?,?)",
-                        (driver_id, target_date, settlement.id, expense_id, summary["total_delivery_fees"]),
-                    )
+                    if day_id is None:
+                        db.execute(
+                            "INSERT INTO driver_day_closures (driver_id,settlement_date,settlement_id,expense_id,paid_amount) VALUES (?,?,?,?,?)",
+                            (driver_id, target_date, settlement.id, expense_id, summary["total_delivery_fees"]),
+                        )
+                    else:
+                        db.execute(
+                            "INSERT INTO driver_business_day_closures (driver_id,day_id,settlement_id,expense_id,paid_amount) VALUES (?,?,?,?,?)",
+                            (driver_id, day_id, settlement.id, expense_id, summary["total_delivery_fees"]),
+                        )
 
                 # 8. Audit event (inside transaction — all-or-nothing)
                 db.execute(
@@ -522,6 +576,9 @@ class DriverSettlementService:
         settlement never double-books a trip already settled per-trip.
         C3: Fails loudly if session or actor_id is invalid.
         """
+        if self._expense_recorder is not None:
+            _, active_day_id = self._scope(payment=True)
+            self._validate_trip_day(trip, active_day_id)
         if self._ledger is None or trip_cash <= 0:
             return
         if not actor_id:
