@@ -1059,7 +1059,8 @@ class POSBridge(QObject):
                                    "data": {"print_failed": not print_ok}})
             return json.dumps({"success": False, "message": msg, "error": msg})
         elif action == "get_order_history":
-            return json.dumps({"success": True, "data": [self._order_to_dict(o) for o in ctrl.get_order_history()]})
+            return json.dumps({"success": True, "data": [self._order_to_dict(o) for o in ctrl.get_order_history(
+                date.fromisoformat(payload["date"]).isoformat() if payload.get("date") else None)]})
         elif action == "get_table_state":
             return json.dumps({"success": True, "data": ctrl.get_table_state()})
         elif action == "load_order":
@@ -1113,7 +1114,10 @@ class POSBridge(QObject):
                 return json.dumps({"success": True, "message": msg})
             return json.dumps({"success": False, "message": msg, "error": msg})
         elif action == "reprint_receipt":
-            return json.dumps({"success": ctrl.reprint_receipt(payload.get("order_id"))})
+            printed = ctrl.reprint_receipt(payload.get("order_id"))
+            if not printed:
+                return json.dumps({"success": False, "error": "تعذر تأكيد طباعة النسخة. افحص الطابعة والورق قبل المحاولة مرة أخرى"})
+            return json.dumps({"success": True, "data": {"printed": True}})
         return json.dumps({"success": False, "error": f"إجراء طلب غير معروف: {action}"})
 
     # ── Delivery sub-router ───────────────────────────────────────────────────
