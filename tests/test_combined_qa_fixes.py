@@ -43,6 +43,7 @@ def test_trip_then_day_fee_paid_once(qapp, legacy_row, per_trip):
     if legacy_row:
         # Old valid daily payouts must remain recognizable, without rewriting history.
         db.execute("DELETE FROM driver_day_closures")
+        db.execute("DELETE FROM driver_business_day_closures")
         db.commit()
     state = c.call("get_driver_settlement_preview", {"driver_id": driver})["data"]["day_settlement"]
     assert state["completed"] and state["paid_amount"] == 15
