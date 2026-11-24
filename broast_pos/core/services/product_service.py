@@ -8,8 +8,13 @@ Search must be instant (<100ms at 300+ orders/day).
 
 from __future__ import annotations
 
+import math
+
 from broast_pos.core.models.product import Category, Product
 from broast_pos.data.repositories.product_repository import ProductRepository
+
+MAX_PRODUCT_PRICE = 50_000.0
+PRICE_VALIDATION_MESSAGE = "سعر المنتج يجب أن يكون رقماً من 0 إلى 50,000 ج.م"
 
 
 class ProductService:
@@ -118,6 +123,18 @@ class ProductService:
             return []
         return self._products.search_products(query)
 
+    @staticmethod
+    def validate_price(price) -> float:
+        if isinstance(price, bool):
+            raise ValueError(PRICE_VALIDATION_MESSAGE)
+        try:
+            value = float(price)
+        except (ValueError, TypeError, OverflowError):
+            raise ValueError(PRICE_VALIDATION_MESSAGE) from None
+        if not math.isfinite(value) or not 0 <= value <= MAX_PRODUCT_PRICE:
+            raise ValueError(PRICE_VALIDATION_MESSAGE)
+        return value
+
     def create_product(
         self,
         name: str,
@@ -133,8 +150,7 @@ class ProductService:
         name = name.strip()
         if not name:
             raise ValueError("اسم المنتج مطلوب")
-        if price < 0:
-            raise ValueError("السعر يجب أن يكون أكبر من أو يساوي صفر")
+        price = self.validate_price(price)
 
         product = Product(
             name=name,
@@ -173,9 +189,7 @@ class ProductService:
             product.name = name
 
         if price is not None:
-            if price < 0:
-                raise ValueError("السعر يجب أن يكون أكبر من أو يساوي صفر")
-            product.price = price
+            product.price = self.validate_price(price)
 
         if category_id is not None:
             product.category_id = category_id
