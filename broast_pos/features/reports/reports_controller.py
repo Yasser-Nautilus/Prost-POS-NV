@@ -107,12 +107,7 @@ class ReportsController:
 
         except Exception as exc:
             logger.error("Failed to aggregate orders by type: %s", exc)
-            return {
-                "date": (target_date or date.today()).isoformat(),
-                "shift_id": shift_id,
-                "breakdown": [],
-                "grand_total": {"count": 0, "revenue": 0.0},
-            }
+            raise ValueError(f"تعذر تحميل المبيعات حسب النوع: {exc}") from exc
 
     def get_payment_breakdown(
         self, target_date: date | None = None, shift_id: int | None = None,
@@ -154,12 +149,7 @@ class ReportsController:
 
         except Exception as exc:
             logger.error("Failed to get payment breakdown: %s", exc)
-            return {
-                "date": (target_date or date.today()).isoformat(),
-                "shift_id": shift_id,
-                "payments": [],
-                "total": 0.0,
-            }
+            raise ValueError(f"تعذر تحميل المبيعات حسب طريقة الدفع: {exc}") from exc
 
     def get_bestsellers(
         self, target_date: date | None = None, shift_id: int | None = None,
@@ -175,7 +165,7 @@ class ReportsController:
             return self._report_svc.generate_product_sales(target_date)
         except Exception as exc:
             logger.error("Failed to get bestsellers: %s", exc)
-            return []
+            raise ValueError(f"تعذر تحميل الأكثر مبيعاً: {exc}") from exc
 
     def get_cancelled_orders(
         self, target_date: date | None = None, shift_id: int | None = None,
@@ -187,12 +177,7 @@ class ReportsController:
             return self._report_svc.generate_cancelled_orders(target_date)
         except Exception as exc:
             logger.error("Failed to get cancelled orders: %s", exc)
-            return {
-                "date": (target_date or date.today()).isoformat(),
-                "shift_id": shift_id,
-                "count": 0,
-                "orders": [],
-            }
+            raise ValueError(f"تعذر تحميل الطلبات الملغاة: {exc}") from exc
 
     # ------------------------------------------------------------------
     # Task 2: Daily Summary Generation
@@ -265,14 +250,11 @@ class ReportsController:
             bestsellers = self.get_bestsellers(d, shift_id) if is_shift else self.get_bestsellers(d)
 
             # Driver summary
-            try:
-                drivers = (
-                    self._report_svc.generate_driver_summary_for_shift(shift_id)
-                    if is_shift
-                    else self._report_svc.generate_driver_summary(d)
-                )
-            except Exception:
-                drivers = []
+            drivers = (
+                self._report_svc.generate_driver_summary_for_shift(shift_id)
+                if is_shift
+                else self._report_svc.generate_driver_summary(d)
+            )
 
             # Booked non-cancelled order value, not collected cash. Payment
             # breakdown separates paid methods and unpaid receivables; drawer
@@ -281,27 +263,19 @@ class ReportsController:
             gross_revenue = sales["grand_total"]["revenue"]
             # Delivery fees are already included in gross_revenue via order.total.
             # We need to calculate actual delivery_fee amounts from orders.
-            try:
-                orders = (
-                    self._report_svc._orders.get_completed_for_shift(shift_id)
-                    if is_shift
-                    else self._report_svc._orders.get_completed_for_date(d.isoformat())
-                )
-                total_delivery_fees = round(
-                    sum(o.delivery_fee for o in orders), 2,
-                )
-            except Exception:
-                total_delivery_fees = 0.0
+            orders = (
+                self._report_svc._orders.get_completed_for_shift(shift_id)
+                if is_shift
+                else self._report_svc._orders.get_completed_for_date(d.isoformat())
+            )
+            total_delivery_fees = round(sum(o.delivery_fee for o in orders), 2)
 
             restaurant_revenue = round(gross_revenue - total_delivery_fees, 2)
 
             # Shift-specific data (shift reports only)
             shift_data = None
             if is_shift:
-                try:
-                    shift_data = self._report_svc.generate_shift_close(shift_id)
-                except Exception as exc:
-                    logger.warning("Could not load shift summary: %s", exc)
+                shift_data = self._report_svc.generate_shift_close(shift_id)
 
             report_date = (
                 self._report_svc._orders.get_shift_business_date(shift_id) or ""
@@ -531,13 +505,7 @@ class ReportsController:
             return self._report_svc.generate_monthly_summary(year, month)
         except Exception as exc:
             logger.error("Failed to get monthly summary: %s", exc)
-            return {
-                "year": year,
-                "month": month,
-                "total_sales": 0.0,
-                "total_expenses": 0.0,
-                "daily": [],
-            }
+            raise ValueError(f"تعذر تحميل الملخص الشهري: {exc}") from exc
 
     def get_monthly_bestsellers(
         self, year: int, month: int, limit: int = 20,
@@ -547,7 +515,7 @@ class ReportsController:
             return self._report_svc.generate_monthly_bestsellers(year, month, limit)
         except Exception as exc:
             logger.error("Failed to get monthly bestsellers: %s", exc)
-            return []
+            raise ValueError(f"تعذر تحميل الأكثر مبيعاً للشهر: {exc}") from exc
 
     def get_monthly_expenses(self, year: int, month: int) -> dict[str, Any]:
         """Expense breakdown by category for a month."""
@@ -555,12 +523,7 @@ class ReportsController:
             return self._report_svc.generate_monthly_expenses(year, month)
         except Exception as exc:
             logger.error("Failed to get monthly expenses: %s", exc)
-            return {
-                "year": year,
-                "month": month,
-                "categories": {},
-                "total": 0.0,
-            }
+            raise ValueError(f"تعذر تحميل مصروفات الشهر: {exc}") from exc
 
     # ------------------------------------------------------------------
     # Yearly reports wrappers
@@ -572,12 +535,7 @@ class ReportsController:
             return self._report_svc.generate_yearly_summary(year)
         except Exception as exc:
             logger.error("Failed to get yearly summary: %s", exc)
-            return {
-                "year": year,
-                "total_sales": 0.0,
-                "total_expenses": 0.0,
-                "months": [],
-            }
+            raise ValueError(f"تعذر تحميل الملخص السنوي: {exc}") from exc
 
     def get_yearly_bestsellers(
         self, year: int, limit: int = 20,
@@ -587,7 +545,7 @@ class ReportsController:
             return self._report_svc.generate_yearly_bestsellers(year, limit)
         except Exception as exc:
             logger.error("Failed to get yearly bestsellers: %s", exc)
-            return []
+            raise ValueError(f"تعذر تحميل الأكثر مبيعاً للسنة: {exc}") from exc
 
     def get_active_shift_id(self) -> int | None:
         """Get current active shift ID."""
@@ -596,5 +554,5 @@ class ReportsController:
             return shift.id if shift else None
         except Exception as exc:
             logger.error("Failed to get active shift ID: %s", exc)
-            return None
+            raise ValueError(f"تعذر تحديد الوردية الحالية: {exc}") from exc
 

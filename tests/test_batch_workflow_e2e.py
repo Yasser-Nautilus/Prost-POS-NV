@@ -1,11 +1,13 @@
+# ruff: noqa: F811
 """Backend end-to-end tests (real bridge + in-memory DB) for items 8, 9, 11, 15."""
 from __future__ import annotations
 
-import json
-
-import pytest
-
-from test_e2e_user_flows import _build_test_bridge, POSUserClient, qapp, reset_db_singleton  # noqa: F401
+from test_e2e_user_flows import (  # noqa: F401
+    POSUserClient,
+    _build_test_bridge,
+    qapp,
+    reset_db_singleton,
+)
 
 
 def _setup(qapp):

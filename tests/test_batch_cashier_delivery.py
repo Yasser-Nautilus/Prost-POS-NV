@@ -54,7 +54,6 @@ def test_driver_requires_phone_and_saves_it():
 
 
 def test_attendance_uses_restaurant_clock_and_open_record_has_no_checkout(monkeypatch):
-    from datetime import datetime
     from broast_pos.data.repositories import delivery_repository as dr
     from broast_pos.data.repositories.delivery_repository import DeliveryRepository
 
@@ -74,8 +73,9 @@ def test_attendance_uses_restaurant_clock_and_open_record_has_no_checkout(monkey
 
 
 def test_restaurant_clock_is_cairo():
+    from datetime import datetime, timedelta, timezone
+
     from broast_pos.core.clock import restaurant_now
-    from datetime import datetime, timezone, timedelta
     utc = datetime.now(timezone.utc).replace(tzinfo=None)
     diff = restaurant_now() - utc
     assert timedelta(hours=1, minutes=59) <= diff <= timedelta(hours=3, minutes=1)

@@ -1,11 +1,17 @@
+# ruff: noqa: F811
 """Tests for the UX/parity batch: phone normaliser, live expected cash, zones,
 customer edit/search, category delete, monthly/yearly reports."""
 from __future__ import annotations
 
 import pytest
+from test_e2e_user_flows import (  # noqa: F401
+    POSUserClient,
+    _build_test_bridge,
+    qapp,
+    reset_db_singleton,
+)
 
 from broast_pos.core.phone import normalize_egyptian_mobile
-from test_e2e_user_flows import _build_test_bridge, POSUserClient, qapp, reset_db_singleton  # noqa: F401
 
 
 @pytest.mark.parametrize("raw,expected", [
@@ -128,7 +134,7 @@ def test_open_session_reports_live_expected_cash(qapp):
     bridge, c = _login_admin(qapp)
     uid = c.call("get_current_user")["data"]["id"]
     day = c.call("open_shift")["data"]["id"]
-    s = c.call("session.open", {"day_id": day, "user_id": uid, "station": "ALL", "opening_float_egp": 500.0})["data"]
+    c.call("session.open", {"day_id": day, "user_id": uid, "station": "ALL", "opening_float_egp": 500.0})["data"]
     products = c.call("get_all_products")["data"]
     prod = products[0]
     assert c.call("new_order", {"order_type": "takeaway"})["success"]
@@ -144,7 +150,10 @@ def test_open_session_reports_live_expected_cash(qapp):
 
 def test_settlements_filter_by_driver_and_date():
     from types import SimpleNamespace
-    from broast_pos.features.delivery_system.delivery_controller import DeliveryController
+
+    from broast_pos.features.delivery_system.delivery_controller import (
+        DeliveryController,
+    )
 
     def rec(i, d):
         return SimpleNamespace(

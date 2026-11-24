@@ -160,7 +160,8 @@ def test_visible_open_shift_to_cash_payment(qapp, monkeypatch, existing_day, con
         browser.wait("document.body.innerText.includes('استرجاع طلب معلّق (1)')")
         assert db.fetch_one("SELECT count(*) n FROM parked_order_drafts")["n"] == 1
         assert db.fetch_one("SELECT count(*) n FROM orders")["n"] == 0
-        browser.js("document.querySelector('[title=\"تسجيل الخروج\"]').click()")
+        browser.js("document.querySelector('[aria-label=\"قائمة المستخدم\"]').click()")
+        browser.click("تسجيل الخروج")
         browser.click("تأكيد")
         browser.wait("document.body.innerText.includes('تأكيد PIN')")
         for digit in ("5678" if cashier else "1234"):
@@ -339,7 +340,7 @@ def test_visible_long_and_legacy_text_pin_login_and_override(qapp, monkeypatch, 
         assert browser.js("document.querySelector('[aria-label=\"رمز PIN\"]').value.length") == len(pin)
         browser.screenshot("10-long-pin.png")
         browser.click("تأكيد PIN")
-        browser.wait("document.body.innerText.includes('Long UI')")
+        browser.wait("!!document.querySelector('[aria-label=\"قائمة المستخدم\"]')")
         url = QUrl.fromLocalFile(str(history_page))
         url.setFragment("manager=1")
         shell.web_view.load(url)

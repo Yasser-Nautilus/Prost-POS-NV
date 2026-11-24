@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import sqlite3
 
+from broast_pos.core.clock import restaurant_now_str
 from broast_pos.core.models.delivery import (
     DeliveryTrip,
     DriverAttendance,
     DriverStatus,
 )
-from broast_pos.core.clock import restaurant_now_str
 from broast_pos.data.repositories.base_repository import BaseRepository
 
 

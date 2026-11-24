@@ -22,9 +22,9 @@ import time
 from enum import Enum
 
 from broast_pos.config import config
-from broast_pos.core.phone import INVALID_PHONE_MSG, normalize_egyptian_mobile
 from broast_pos.core.models.audit import AuditEventType
 from broast_pos.core.models.user import User, UserRole
+from broast_pos.core.phone import INVALID_PHONE_MSG, normalize_egyptian_mobile
 from broast_pos.data.repositories.user_repository import UserRepository
 
 logger = logging.getLogger(__name__)
