@@ -109,6 +109,8 @@ class TestSettleDriverCompletesOrders:
         delivery_repo.get_driver_trips_for_date.return_value = [trip]
         delivery_repo.get_unsettled_trips.return_value = [trip]
         delivery_repo._db = MagicMock()
+        delivery_repo._db.fetch_one.return_value = None
+        delivery_repo._db.fetch_all.return_value = []
         # Simulate transaction() as a no-op context manager
         delivery_repo._db.transaction.return_value.__enter__ = MagicMock(return_value=None)
         delivery_repo._db.transaction.return_value.__exit__ = MagicMock(return_value=False)
@@ -147,6 +149,8 @@ class TestSettleDriverCompletesOrders:
         delivery_repo = MagicMock()
         delivery_repo.get_driver_trips_for_date.return_value = [trip]
         delivery_repo._db = MagicMock()
+        delivery_repo._db.fetch_one.return_value = None
+        delivery_repo._db.fetch_all.return_value = []
         delivery_repo._db.transaction.return_value.__enter__ = MagicMock(return_value=None)
         delivery_repo._db.transaction.return_value.__exit__ = MagicMock(return_value=False)
         delivery_repo._db.execute.return_value = None
@@ -181,9 +185,12 @@ class TestSettleDriverCompletesOrders:
         delivery_repo = MagicMock()
         delivery_repo.get_driver_trips_for_date.return_value = [_trip()]
         delivery_repo._db = MagicMock()
+        delivery_repo._db.fetch_one.return_value = None
+        delivery_repo._db.fetch_all.return_value = []
 
         settlement_repo = MagicMock()
-        settlement_repo.get_by_driver_date.return_value = MagicMock()  # already settled
+        settlement_repo.get_by_driver_date.return_value = MagicMock()  # historical row
+        delivery_repo._db.fetch_one.return_value = {"paid_amount": 30, "expense_id": 1}
 
         svc = DriverSettlementService(
             settlement_repo=settlement_repo, delivery_repo=delivery_repo,
@@ -209,6 +216,8 @@ class TestSettleDriverCompletesOrders:
         delivery_repo = MagicMock()
         delivery_repo.get_driver_trips_for_date.return_value = [settled_trip]
         delivery_repo._db = MagicMock()
+        delivery_repo._db.fetch_one.return_value = None
+        delivery_repo._db.fetch_all.return_value = []
         delivery_repo._db.transaction.return_value.__enter__ = MagicMock(return_value=None)
         delivery_repo._db.transaction.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -269,6 +278,8 @@ class TestSettleDriverCompletesOrders:
         delivery_repo.get_driver_trips_for_date.return_value = [_trip()]
         delivery_repo.get_unsettled_trips.return_value = [_trip()]
         delivery_repo._db = MagicMock()
+        delivery_repo._db.fetch_one.return_value = None
+        delivery_repo._db.fetch_all.return_value = []
         delivery_repo._db.transaction.return_value.__enter__ = MagicMock(return_value=None)
         delivery_repo._db.transaction.return_value.__exit__ = MagicMock(return_value=False)
         delivery_repo._db.execute.return_value = None
