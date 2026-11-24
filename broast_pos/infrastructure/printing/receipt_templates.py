@@ -79,6 +79,20 @@ def _print_header(printer: EscPosPrinter, brand: dict[str, str]) -> bool:
     return ok
 
 
+def _print_copy_label(printer: EscPosPrinter, order: dict[str, Any]) -> bool:
+    """Copies are explicit, including unpaid or cancelled historical orders."""
+    if not order.get("is_copy"):
+        return True
+    ok = printer.print_text("نسخة / COPY", align="center", bold=True, double_height=True)
+    if order.get("created_at"):
+        ok &= printer.print_text(str(order["created_at"]), align="center")
+    if order.get("status") == "cancelled":
+        ok &= printer.print_text("طلب ملغي / CANCELLED", align="center", bold=True)
+    if not order.get("is_paid"):
+        ok &= printer.print_text("غير مدفوع / UNPAID", align="center", bold=True)
+    return ok
+
+
 def _print_footer(printer: EscPosPrinter, brand: dict[str, str]) -> bool:
     """Print the branded footer + cut line. Returns True iff every line printed."""
     ok = printer.print_line("-", LINE_WIDTH)
@@ -153,6 +167,7 @@ def print_dinein_receipt(printer: EscPosPrinter, order: dict[str, Any]) -> bool:
     """
     brand = _get_branding()
     ok = _print_header(printer, brand)
+    ok &= _print_copy_label(printer, order)
 
     ok &= printer.print_text(f"Dine IN                Station: {order.get('cashier_slot', '')}")
     ok &= printer.print_text(f"Cashier: {order.get('cashier_name', '')}      Table: {order.get('table_no', '')}")
@@ -189,6 +204,7 @@ def print_delivery_receipt(printer: EscPosPrinter, order: dict[str, Any]) -> boo
     """Print a delivery customer receipt."""
     brand = _get_branding()
     ok = _print_header(printer, brand)
+    ok &= _print_copy_label(printer, order)
 
     ok &= printer.print_text(f"Delivery               Station: {order.get('cashier_slot', '')}")
     ok &= printer.print_text(f"Cashier: {order.get('cashier_name', '')}     Order: #{order.get('invoice_no', '')}")
@@ -236,6 +252,7 @@ def print_takeaway_receipt(printer: EscPosPrinter, order: dict[str, Any]) -> boo
     """
     brand = _get_branding()
     ok = _print_header(printer, brand)
+    ok &= _print_copy_label(printer, order)
 
     ok &= printer.print_text("** TAKEAWAY — انتظار **", align="center", bold=True)
     ok &= printer.print_text(f"Takeaway               Station: {order.get('cashier_slot', '')}")
@@ -276,6 +293,7 @@ def print_pickup_receipt(printer: EscPosPrinter, order: dict[str, Any]) -> bool:
     """
     brand = _get_branding()
     ok = _print_header(printer, brand)
+    ok &= _print_copy_label(printer, order)
 
     ok &= printer.print_text("** PICKUP — استلام من المحل **", align="center", bold=True)
     ok &= printer.print_text(f"Pickup                 Station: {order.get('cashier_slot', '')}")
