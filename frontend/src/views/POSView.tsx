@@ -562,6 +562,34 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
     }
   };
 
+  const handlePaymentConfirmSplit = async (parts: { method: string; amount: number }[], cashReceived: number) => {
+    if (!pendingOrderId) return;
+    const keepOpen = pendingOrderType === "takeaway";
+    try {
+      const payRes = await bridge.call<{ print_failed?: boolean }>("complete_payment_split", {
+        order_id: pendingOrderId,
+        parts,
+        cash_received: cashReceived,
+        keep_open: keepOpen,
+      });
+      setIsPaymentOpen(false);
+      setPendingOrderId(null);
+      setPendingOrderType(null);
+      setIsAmending(false);
+      setSelectedTable(null);
+      await fetchCurrentOrder();
+      fetchParkedCount();
+      alert(keepOpen
+        ? "تم تسجيل الدفع — الطلب في قائمة الانتظار حتى الاستلام"
+        : "تم تأكيد الطلب وتسجيل الدفع بنجاح!");
+      if (payRes?.print_failed) {
+        alert("تعذّرت طباعة الفاتورة — يرجى إبلاغ المدير");
+      }
+    } catch (e: any) {
+      alert("فشل تسجيل الدفع: " + e.message);
+    }
+  };
+
   // Parked orders panel
   const handleOpenParkedPanel = async () => {
     try {
@@ -1094,6 +1122,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
 
       <PaymentDialog
         isOpen={isPaymentOpen}
+        onConfirmSplit={handlePaymentConfirmSplit}
         onClose={() => {
           setIsPaymentOpen(false);
           setPendingOrderId(null);

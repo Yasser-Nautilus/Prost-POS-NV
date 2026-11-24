@@ -742,6 +742,24 @@ class POSBridgeClient {
         return true as any;
       }
 
+      case "complete_payment_split": {
+        const total = Math.round(((this.mockState.activeOrders.find((o: any) => o.id === payload.order_id)?.total) || 0) * 100);
+        const sum = (payload.parts || []).reduce((a: number, p: any) => a + Math.round(p.amount * 100), 0);
+        if (sum !== total) throw new Error("مجموع الدفعات لا يساوي إجمالي الطلب");
+        const activeOrder = this.mockState.activeOrders.find((o: any) => o.id === payload.order_id);
+        if (activeOrder) {
+          activeOrder.is_paid = true;
+          activeOrder.status = "completed";
+          activeOrder.payment_parts = payload.parts;
+        }
+        if (!payload.keep_open && this.mockState.currentOrder?.id === payload.order_id) {
+          this.mockState.currentOrder = null;
+          this.notifyListeners("orderChanged", null);
+        }
+        this.notifyListeners("tableStateChanged", this.getMockTableState());
+        return { print_failed: false } as any;
+      }
+
       case "load_order":
       case "load_order_by_table": {
         const found = this.mockState.activeOrders.find((o: any) =>
@@ -949,6 +967,13 @@ class POSBridgeClient {
         this.mockState.activeShift = shift;
         return shift as any;
       }
+
+      case "get_driver_stats":
+        return (payload.period === "month"
+          ? [{ driver_id: 1, driver_name: "أحمد السائق", trip_count: 42, delivery_count: 96, orders_total: 14400, avg_trip_minutes: 27.4, timed_trips: 40 },
+             { driver_id: 2, driver_name: "محمود علي", trip_count: 31, delivery_count: 70, orders_total: 10100, avg_trip_minutes: 33.1, timed_trips: 31 }]
+          : [{ driver_id: 1, driver_name: "أحمد السائق", trip_count: 3, delivery_count: 7, orders_total: 1050, avg_trip_minutes: 25.0, timed_trips: 3 },
+             { driver_id: 2, driver_name: "محمود علي", trip_count: 2, delivery_count: 4, orders_total: 600, avg_trip_minutes: 38.5, timed_trips: 2 }]) as any;
 
       case "get_report_monthly":
         return {

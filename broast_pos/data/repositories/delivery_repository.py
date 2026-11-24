@@ -331,6 +331,51 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
             for r in rows
         ]
 
+    def get_driver_stats(self, start_date: str, end_date: str) -> list[dict]:
+        """Per-driver deliveries and average trip time for [start_date, end_date).
+
+        Only dispatched trips count. Cancelled orders are not deliveries.
+        Average minutes is over trips that were dispatched AND returned.
+        """
+        rows = self._db.fetch_all(
+            """SELECT dt.driver_id, dt.driver_name,
+                      COUNT(DISTINCT dt.id) AS trip_count,
+                      COUNT(o.id) AS delivery_count,
+                      COALESCE(SUM(o.total), 0) AS orders_total
+               FROM delivery_trips dt
+               LEFT JOIN delivery_trip_orders dto ON dto.trip_id = dt.id
+               LEFT JOIN orders o ON o.id = dto.order_id AND o.status != 'cancelled'
+               WHERE dt.dispatched_at IS NOT NULL
+                 AND DATE(dt.dispatched_at) >= ? AND DATE(dt.dispatched_at) < ?
+               GROUP BY dt.driver_id, dt.driver_name
+               ORDER BY delivery_count DESC, dt.driver_name""",
+            (start_date, end_date),
+        )
+        times = self._db.fetch_all(
+            """SELECT driver_id,
+                      AVG((julianday(returned_at) - julianday(dispatched_at)) * 1440.0) AS avg_min,
+                      COUNT(*) AS timed_trips
+               FROM delivery_trips
+               WHERE dispatched_at IS NOT NULL AND returned_at IS NOT NULL
+                 AND DATE(dispatched_at) >= ? AND DATE(dispatched_at) < ?
+               GROUP BY driver_id""",
+            (start_date, end_date),
+        )
+        avg = {t["driver_id"]: t for t in times}
+        out = []
+        for r in rows:
+            t = avg.get(r["driver_id"])
+            out.append({
+                "driver_id": r["driver_id"],
+                "driver_name": r["driver_name"],
+                "trip_count": r["trip_count"],
+                "delivery_count": r["delivery_count"],
+                "orders_total": r["orders_total"],
+                "avg_trip_minutes": round(t["avg_min"], 1) if t and t["avg_min"] is not None else None,
+                "timed_trips": t["timed_trips"] if t else 0,
+            })
+        return out
+
     def get_all_drivers_shift_summary(self, shift_id: int) -> list[dict]:
         """Per-driver summary for ONE shift (H16: shift-scoped report).
 

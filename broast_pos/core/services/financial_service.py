@@ -28,10 +28,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-# Sanity cap for a single cash-out expense (guards against typos like an extra 0).
-MAX_EXPENSE_EGP = 50_000.0
-
-
 class FinancialService:
     """Business logic for shift management, expenses, and invoicing."""
 
@@ -127,9 +123,6 @@ class FinancialService:
 
         # Verify manager authorization
         self._verify_manager_pin(manager_pin)
-
-        if from_user_id == to_user_id:
-            raise ValueError("لا يمكن نقل الوردية إلى نفس المستخدم")
 
         # Fail-closed: reject delivery drivers as handover target.
         # Drivers have cashier_slot = None and cannot operate the register.
@@ -250,6 +243,12 @@ class FinancialService:
                 details={"shift_id": shift_id, "drivers_checked_out": int(checked_out)},
             )
 
+        # Daily automatic backup, after the close is committed. A backup
+        # problem is logged and never undoes or blocks the day close.
+        from broast_pos.operations.auto_backup import run_day_close_backup
+
+        self.last_backup_path = run_day_close_backup(self._financial._db.path)
+
         return saved
 
     # ------------------------------------------------------------------
@@ -294,10 +293,6 @@ class FinancialService:
 
         if amount <= 0:
             raise ValueError("المبلغ يجب أن يكون أكبر من صفر")
-        if amount > MAX_EXPENSE_EGP:
-            raise ValueError(
-                f"المبلغ يتجاوز الحد الأقصى للمصروف الواحد ({MAX_EXPENSE_EGP:,.0f} ج.م)"
-            )
 
         valid_categories = {"delivery_fees", "supplies", "other"}
         if category not in valid_categories:

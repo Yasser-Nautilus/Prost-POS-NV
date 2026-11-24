@@ -8,15 +8,25 @@ interface PaymentDialogProps {
   total: number;
   orderType?: string;
   onConfirm: (method: string, amountPaid: number, change: number) => void;
+  onConfirmSplit?: (parts: { method: string; amount: number }[], cashReceived: number) => void;
 }
+
+type SplitRow = { method: string; amount: string };
+const METHOD_LABELS: Record<string, string> = { cash: "نقدي", visa: "فيزا", online: "أونلاين" };
+const toPt = (v: string) => Math.round((parseFloat(v) || 0) * 100);
 
 export const PaymentDialog: React.FC<PaymentDialogProps> = ({
   isOpen,
   onClose,
   total,
   orderType,
-  onConfirm
+  onConfirm,
+  onConfirmSplit
 }) => {
+  const [splitMode, setSplitMode] = useState(false);
+  const [rows, setRows] = useState<SplitRow[]>([]);
+  const [people, setPeople] = useState("2");
+  const [cashGiven, setCashGiven] = useState("");
   const [method, setMethod] = useState("cash");
   const [cashReceived, setCashReceived] = useState("");
   const [change, setChange] = useState(0);
@@ -39,8 +49,54 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
       setMethod("cash");
       setCashReceived("");
       setChange(0);
+      setSplitMode(false);
+      setRows([]);
+      setCashGiven("");
     }
   }, [isOpen]);
+
+  const totalPt = Math.round(total * 100);
+  const paidPt = rows.reduce((a, r) => a + toPt(r.amount), 0);
+  const remainingPt = totalPt - paidPt;
+  const cashSharePt = rows.filter((r) => r.method === "cash").reduce((a, r) => a + toPt(r.amount), 0);
+  const givenPt = cashGiven.trim() ? toPt(cashGiven) : cashSharePt;
+  const splitChangePt = Math.max(0, givenPt - cashSharePt);
+
+  const startSplit = () => {
+    setSplitMode(true);
+    setRows([
+      { method: "cash", amount: (total / 2).toFixed(2) },
+      { method: "visa", amount: (total - Math.round(total * 100 / 2) / 100).toFixed(2) },
+    ]);
+  };
+
+  const splitEqually = () => {
+    const n = Math.max(2, Math.min(10, parseInt(people) || 2));
+    const each = Math.floor(totalPt / n);
+    const next: SplitRow[] = [];
+    for (let i = 0; i < n; i++) {
+      const pt = i === n - 1 ? totalPt - each * (n - 1) : each;
+      next.push({ method: rows[i]?.method || "cash", amount: (pt / 100).toFixed(2) });
+    }
+    setRows(next);
+  };
+
+  const handleSplitConfirm = () => {
+    if (!onConfirmSplit) return;
+    if (rows.some((r) => toPt(r.amount) <= 0)) {
+      alert("كل دفعة يجب أن تكون أكبر من صفر");
+      return;
+    }
+    if (remainingPt !== 0) {
+      alert("مجموع الدفعات لا يساوي إجمالي الطلب");
+      return;
+    }
+    if (givenPt < cashSharePt) {
+      alert("النقد المستلم أقل من حصة النقد");
+      return;
+    }
+    onConfirmSplit(rows.map((r) => ({ method: r.method, amount: toPt(r.amount) / 100 })), givenPt / 100);
+  };
 
   const handleQuickCash = (amt: number) => {
     setCashReceived(amt.toString());
@@ -66,13 +122,13 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        handlePayConfirm();
+        if (splitMode) handleSplitConfirm(); else handlePayConfirm();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, method, cashReceived, total]);
+  }, [isOpen, method, cashReceived, total, splitMode, rows, cashGiven]);
 
   if (!isOpen) return null;
 
@@ -94,7 +150,7 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             </div>
 
             {/* Payment Method Selector */}
-            <div className="grid grid-cols-3 gap-3 mb-6">
+            <div className={`grid grid-cols-3 gap-3 mb-3 ${splitMode ? "hidden" : ""}`}>
               <button
                 type="button"
                 onClick={() => {
@@ -145,8 +201,80 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
               </button>
             </div>
 
+            {onConfirmSplit && orderType !== "delivery" && !splitMode && (
+              <button
+                type="button"
+                onClick={startSplit}
+                className="w-full mb-6 py-2.5 rounded-xl border border-dashed border-brand-border/70 text-gray-300 hover:text-white hover:border-brand-red font-bold text-sm"
+              >
+                تقسيم الفاتورة / دفع مختلط (كاش + فيزا)
+              </button>
+            )}
+
+            {splitMode && (
+              <div className="space-y-3 mb-6" data-testid="split-payment">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-white">دفع مختلط / تقسيم الفاتورة</h4>
+                  <button type="button" onClick={() => setSplitMode(false)} className="text-xs text-gray-400 hover:text-white underline">رجوع لدفعة واحدة</button>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-400">قسّم بالتساوي على</span>
+                  <input
+                    type="number" min={2} max={10} value={people}
+                    onChange={(e) => setPeople(e.target.value)}
+                    aria-label="عدد الأشخاص"
+                    className="w-16 bg-brand-card border border-brand-border/50 rounded-lg p-1.5 text-white text-center font-mono"
+                  />
+                  <button type="button" onClick={splitEqually} className="px-3 py-1.5 rounded-lg bg-brand-card border border-brand-border/50 text-white font-semibold hover:border-brand-red">تقسيم</button>
+                </div>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {rows.map((r, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <select
+                        value={r.method}
+                        aria-label={`طريقة الدفعة ${i + 1}`}
+                        onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, method: e.target.value } : x))}
+                        className="bg-brand-card border border-brand-border/50 rounded-lg p-2 text-white"
+                      >
+                        {Object.keys(METHOD_LABELS).map((m) => <option key={m} value={m}>{METHOD_LABELS[m]}</option>)}
+                      </select>
+                      <input
+                        type="number" step="0.01" min="0" value={r.amount}
+                        aria-label={`مبلغ الدفعة ${i + 1}`}
+                        onChange={(e) => setRows(rows.map((x, j) => j === i ? { ...x, amount: e.target.value } : x))}
+                        className="flex-1 bg-brand-card border border-brand-border/50 rounded-lg p-2 text-white font-mono text-left"
+                      />
+                      {rows.length > 2 && (
+                        <button type="button" aria-label={`حذف الدفعة ${i + 1}`} onClick={() => setRows(rows.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-400 p-1"><X size={16} /></button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {rows.length < 10 && (
+                  <button
+                    type="button"
+                    onClick={() => setRows([...rows, { method: "cash", amount: Math.max(0, remainingPt / 100).toFixed(2) }])}
+                    className="text-sm text-brand-red font-bold"
+                  >
+                    + إضافة دفعة
+                  </button>
+                )}
+                {cashSharePt > 0 && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-gray-400">النقد المستلم (اختياري، لحساب الفكة)</span>
+                    <input
+                      type="number" step="0.01" min="0" value={cashGiven}
+                      aria-label="النقد المستلم"
+                      onChange={(e) => setCashGiven(e.target.value)}
+                      className="w-28 bg-brand-card border border-brand-border/50 rounded-lg p-1.5 text-white font-mono text-left"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Cash Calculations */}
-            {method === "cash" && (
+            {!splitMode && method === "cash" && (
               <div className="space-y-4 mb-6">
                 <div>
                   <label className="text-gray-400 text-sm block mb-1">فئات سريعة:</label>
@@ -174,8 +302,9 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
           <div className="w-full">
             <button
               type="button"
-              onClick={handlePayConfirm}
-              className="w-full h-16 rounded-2xl bg-brand-teal text-white hover:bg-opacity-90 font-bold text-xl flex items-center justify-center gap-2 active:translate-y-0.5 shadow-lg btn-hover-active"
+              disabled={splitMode && remainingPt !== 0}
+              onClick={splitMode ? handleSplitConfirm : handlePayConfirm}
+              className="w-full h-16 disabled:opacity-40 disabled:cursor-not-allowed rounded-2xl bg-brand-teal text-white hover:bg-opacity-90 font-bold text-xl flex items-center justify-center gap-2 active:translate-y-0.5 shadow-lg btn-hover-active"
             >
               <Check size={24} />
               إنهاء وتأكيد الدفع ({total.toFixed(2)} ج.م)
@@ -203,7 +332,28 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
               <span>إجمالي الطلب:</span>
               <span className="text-xl font-bold text-white">{total.toFixed(2)} ج.م</span>
             </div>
-            {method === "cash" && (
+            {splitMode && (
+              <>
+                <div className="flex justify-between items-center text-gray-400">
+                  <span>مجموع الدفعات:</span>
+                  <span className="text-xl font-bold text-white">{(paidPt / 100).toFixed(2)} ج.م</span>
+                </div>
+                <div className="h-px bg-brand-border/60" />
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-300 font-bold">{remainingPt >= 0 ? "المتبقي للدفع:" : "زيادة عن الإجمالي:"}</span>
+                  <span className={`text-2xl font-black ${remainingPt === 0 ? "text-brand-teal" : "text-brand-red"}`}>
+                    {(Math.abs(remainingPt) / 100).toFixed(2)} ج.م
+                  </span>
+                </div>
+                {cashSharePt > 0 && (
+                  <div className="flex justify-between items-center text-gray-400">
+                    <span>الفكة:</span>
+                    <span className="text-lg font-bold text-white">{(splitChangePt / 100).toFixed(2)} ج.م</span>
+                  </div>
+                )}
+              </>
+            )}
+            {!splitMode && method === "cash" && (
               <>
                 <div className="flex justify-between items-center text-gray-400">
                   <span>المبلغ المدفوع:</span>
@@ -222,7 +372,13 @@ export const PaymentDialog: React.FC<PaymentDialogProps> = ({
             )}
           </div>
 
-          {method === "cash" ? (
+          {splitMode ? (
+            <div className="flex-1 flex flex-col justify-center items-center text-center p-6 border-2 border-dashed border-brand-border/50 rounded-2xl">
+              <Wallet size={40} className="text-brand-red mb-3" />
+              <p className="text-gray-300 font-medium">أدخل مبلغ كل دفعة وطريقتها</p>
+              <p className="text-gray-500 text-sm mt-1">يجب أن يساوي المجموع إجمالي الطلب</p>
+            </div>
+          ) : method === "cash" ? (
             <Numpad
               value={cashReceived}
               onChange={(val) => {

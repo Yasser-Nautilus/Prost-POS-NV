@@ -382,11 +382,17 @@ class FinancialRepository(BaseRepository[Shift]):
         # are not counted — the driver still has that cash.
         # (FIN-001: Visa/online never enter the physical cash drawer.)
         cash_row = self._db.fetch_one(
-            """SELECT COALESCE(SUM(total), 0) AS cash_sales
-               FROM orders
-               WHERE shift_id = ? AND status != 'cancelled'
-                 AND payment_method = 'cash'
-                 AND is_paid = 1""",
+            """SELECT COALESCE(SUM(
+                          CASE
+                              WHEN EXISTS (SELECT 1 FROM order_payments p WHERE p.order_id = o.id)
+                              THEN (SELECT COALESCE(SUM(p.amount), 0) FROM order_payments p
+                                    WHERE p.order_id = o.id AND p.method = 'cash')
+                              WHEN o.payment_method = 'cash' THEN o.total
+                              ELSE 0
+                          END), 0) AS cash_sales
+               FROM orders o
+               WHERE o.shift_id = ? AND o.status != 'cancelled'
+                 AND o.is_paid = 1""",
             (shift_id,),
         )
         cash_sales = cash_row["cash_sales"] if cash_row else 0.0
