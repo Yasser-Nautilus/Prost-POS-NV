@@ -66,3 +66,48 @@ def test_boundary_errors_and_ascii_pin_policy(qapp):
     assert not result["success"] and "could not convert" not in json.dumps(result)
     assert normalize_egyptian_mobile("٠١٠١٢٣٤٥٦٧٨") is None
     assert "0-9" in INVALID_PHONE_MSG
+
+
+def test_multiple_trip_rows_do_not_block_day_fee_payment(qapp):
+    c, db, _, (driver, _) = _setup(qapp)
+    assert c.call("check_in_driver", {"driver_id": driver})["success"]
+    trips = []
+    for i in range(2):
+        if i == 0:
+            oid, _ = _delivery_order(c)
+        else:
+            customer = db.fetch_one("SELECT id FROM customers")
+            address = db.fetch_one("SELECT id FROM customer_addresses")
+            c.call("new_order", {"order_type": "delivery"})
+            c.call("set_customer_info", {"customer_id": customer["id"], "name": "عميل",
+                                          "phone": "01099887766", "address_id": address["id"],
+                                          "address": "ش 1", "payment_method": "cash"})
+            c.call("add_item", {"product_id": 1})
+            oid = c.call("confirm_order")["data"]["order_id"]
+        trip = c.call("create_trip", {"driver_id": driver, "order_ids": [oid]})["data"]["trip_id"]
+        trips.append(trip)
+        assert c.call("dispatch_trip", {"trip_id": trip})["success"]
+        assert c.call("return_trip", {"trip_id": trip})["success"]
+        assert c.call("settle_driver", {"driver_id": driver, "trip_id": trip})["success"]
+    assert len(db.fetch_all("SELECT * FROM driver_settlements")) == 2
+    assert c.call("settle_driver", {"driver_id": driver})["success"]
+    expenses = c.call("get_expenses")["data"]
+    assert len(expenses) == 1 and expenses[0]["amount"] == 30
+    assert db.fetch_one("SELECT count(*) n FROM cash_ledger WHERE entry_type='DRIVER_FEE_PAYOUT'")["n"] == 2
+    assert not c.call("settle_driver", {"driver_id": driver})["success"]
+
+
+def test_partial_historical_evidence_stops_payment_instead_of_double_paying(qapp):
+    c, db, _, (driver, _) = _setup(qapp)
+    oid, _ = _delivery_order(c)
+    c.call("check_in_driver", {"driver_id": driver})
+    trip = c.call("create_trip", {"driver_id": driver, "order_ids": [oid]})["data"]["trip_id"]
+    c.call("dispatch_trip", {"trip_id": trip}); c.call("return_trip", {"trip_id": trip})
+    assert c.call("settle_driver", {"driver_id": driver, "trip_id": trip})["success"]
+    # Mimic older expense-only recording, with no linked drawer payout.
+    c.call("add_expense", {"amount": 15, "description": "سائق 0", "category": "delivery_fees"})
+    count = db.fetch_one("SELECT count(*) n FROM cash_ledger")["n"]
+    result = c.call("settle_driver", {"driver_id": driver})
+    assert not result["success"] and "مراجعة" in result["error"]
+    assert db.fetch_one("SELECT count(*) n FROM cash_ledger")["n"] == count
+    assert len(c.call("get_expenses")["data"]) == 1
