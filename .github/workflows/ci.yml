@@ -61,4 +61,4 @@ jobs:
           POS_RUN_RENDERED_TESTS: '1'
           QTWEBENGINE_DISABLE_SANDBOX: '1'
           QTWEBENGINE_CHROMIUM_FLAGS: '--disable-gpu --no-sandbox --disable-dev-shm-usage'
-        run: pytest -v tests/test_visible_cash_workflow.py
+        run: pytest -v tests/test_visible_cash_workflow.py tests/test_visible_flows_extended.py
