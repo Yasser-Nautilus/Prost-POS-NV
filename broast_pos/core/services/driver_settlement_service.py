@@ -112,12 +112,46 @@ class DriverSettlementService:
                 f"لا توجد رحلات مؤهلة للتسوية ليوم {target_date}"
             )
 
-        return self._calculate_summary(
+        summary = self._calculate_summary(
             driver_id=driver_id,
             driver_name=driver.display_name or driver.username,
             settlement_date=target_date,
             eligible_trips=eligible_trips,
         )
+        summary["day_settlement"] = self._day_payment_state(driver_id, target_date, eligible_trips)
+        return summary
+
+    def _day_payment_state(self, driver_id, target_date, trips):
+        db = self._delivery._db
+        row = db.fetch_one(
+            "SELECT paid_amount, expense_id FROM driver_day_closures WHERE driver_id=? AND settlement_date=?",
+            (driver_id, target_date),
+        )
+        if row:
+            return {"completed": True, "paid_amount": row["paid_amount"], "expense_id": row["expense_id"]}
+        # Old single-trip rows are not proof of fee payment. Reconcile only
+        # when every trip has a fee payout and one matching expense exists.
+        fees = sum((self._orders.get_by_id(oid).delivery_fee or 0)
+                   for t in trips for oid in t.order_ids
+                   if self._orders.get_by_id(oid) and self._orders.get_by_id(oid).status != OrderStatus.CANCELLED)
+        paid = db.fetch_all(
+            "SELECT trip_id, -amount_pt / 100.0 AS amount FROM cash_ledger WHERE entry_type='DRIVER_FEE_PAYOUT' "
+            "AND trip_id IN (SELECT id FROM delivery_trips WHERE driver_id=?)", (driver_id,),
+        )
+        trip_ids = {t.id for t in trips}
+        paid_total = sum(r["amount"] for r in paid if r["trip_id"] in trip_ids)
+        driver = self._users.get_by_id(driver_id)
+        expenses = db.fetch_all(
+            "SELECT c.id,c.amount FROM cash_transactions c JOIN shifts s ON s.id=c.shift_id "
+            "WHERE c.category='delivery_fees' AND c.type='expense' AND c.description=? "
+            "AND COALESCE(s.business_date,substr(s.opened_at,1,10))=?",
+            (driver.display_name or driver.username, target_date),
+        )
+        if paid_total > 0 or expenses:
+            if abs(paid_total-fees) < .005 and len(expenses) == 1 and abs(expenses[0]["amount"]-fees) < .005:
+                return {"completed": True, "paid_amount": fees, "expense_id": expenses[0]["id"]}
+            return {"completed": False, "needs_review": True, "paid_amount": paid_total}
+        return {"completed": False, "paid_amount": 0}
 
     # ------------------------------------------------------------------
     # Settle — atomic: validate → calculate → commit
@@ -207,10 +241,12 @@ class DriverSettlementService:
             )
 
         # Guard (full-day only): don't create a second day record for already-closed day.
-        if trip_id is None and self._settlements.get_by_driver_date(driver_id, target_date) is not None:
-            raise ValueError(
-                f"تمت تسوية السائق {driver_name} ليوم {target_date} بالفعل"
-            )
+        if trip_id is None:
+            state = self._day_payment_state(driver_id, target_date, day_trips)
+            if state["completed"]:
+                raise ValueError(f"تمت تسوية السائق {driver_name} ليوم {target_date} بالفعل")
+            if state.get("needs_review"):
+                raise ValueError("توجد رسوم أو مصروفات سابقة تحتاج مراجعة المدير قبل الدفع لتجنب التكرار")
 
         # ── Step 4: Calculate financials server-side ──────────────────────
         summary = self._calculate_summary(
@@ -308,11 +344,16 @@ class DriverSettlementService:
                 #     expense in his name (category "رسوم توصيل") and a drawer
                 #     payout. Per-trip settlements do not book the fee.
                 if trip_id is None:
-                    self._record_delivery_fee_expense(
+                    expense_id = self._record_delivery_fee_expense(
                         driver_name=driver_name,
                         day_trips=day_trips,
                         total_fees=summary["total_delivery_fees"],
                         actor_id=settled_by_id,
+                    )
+                    db.execute(
+                        "INSERT INTO driver_day_closures (driver_id,settlement_date,settlement_id,expense_id,paid_amount) "
+                        "VALUES (?,?,?,?,?)",
+                        (driver_id, target_date, settlement.id, expense_id, summary["total_delivery_fees"]),
                     )
 
                 # 8. Audit event (inside transaction — all-or-nothing)
@@ -510,7 +551,7 @@ class DriverSettlementService:
         day_trips,
         total_fees: float,
         actor_id: int,
-    ) -> None:
+    ) -> int | None:
         """Record the driver's delivery-fee total as an expense in his name.
 
         - Expense row (category delivery_fees, description = driver name):
@@ -519,13 +560,15 @@ class DriverSettlementService:
           The business-day-close batch skips trips already paid out here, so
           the fee is never deducted twice.
         """
-        if self._expense_recorder is None or total_fees <= 0:
-            return
+        if total_fees <= 0:
+            return None
+        if self._expense_recorder is None:
+            # Legacy service-only integrations have no expense subsystem.
+            return None
         shift = self._expense_recorder.get_active_shift()
         if shift is None:
-            logger.warning("No active shift — delivery fee expense for %s not booked", driver_name)
-            return
-        self._expense_recorder.add_expense(
+            raise ValueError("لا توجد وردية مفتوحة لتسجيل رسوم السائق")
+        expense = self._expense_recorder.add_expense(
             shift_id=shift.id,
             amount=round(total_fees, 2),
             description=driver_name,
@@ -540,6 +583,7 @@ class DriverSettlementService:
                 if order and order.status != OrderStatus.CANCELLED:
                     fee += order.delivery_fee or 0.0
             self._create_driver_fee_payout_entry(trip.id, shift.id, fee, actor_id)
+        return expense.id
 
     def _create_driver_fee_payout_entry(
         self, trip_id: int, day_id: int, fee: float, actor_id: int,
@@ -562,8 +606,7 @@ class DriverSettlementService:
             or (open_sessions[0] if open_sessions else None)
         )
         if session is None:
-            logger.warning("No open session for day %d — fee payout for trip %d left to day close", day_id, trip_id)
-            return
+            raise ValueError("يجب فتح درج الكاشير قبل دفع رسوم السائق")
         import datetime as _dt
         self._ledger.append(CashLedgerEntry(
             id=None,

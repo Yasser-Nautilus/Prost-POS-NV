@@ -542,3 +542,13 @@ CREATE TABLE IF NOT EXISTS order_payments (
     amount    REAL    NOT NULL CHECK (amount > 0)
 );
 CREATE INDEX IF NOT EXISTS idx_order_payments_order ON order_payments(order_id);
+
+-- Daily fee payment is separate from immutable individual-trip settlements.
+CREATE TABLE IF NOT EXISTS driver_day_closures (
+    driver_id INTEGER NOT NULL REFERENCES users(id),
+    settlement_date TEXT NOT NULL,
+    settlement_id INTEGER REFERENCES driver_settlements(id),
+    expense_id INTEGER REFERENCES cash_transactions(id),
+    paid_amount REAL NOT NULL,
+    PRIMARY KEY(driver_id, settlement_date)
+);

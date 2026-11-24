@@ -603,9 +603,10 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
 
   const handleResumeParked = async (index: number) => {
     try {
-      await bridge.call("resume_parked_order", { index });
+      const restored = await bridge.call<any>("resume_parked_order", { index });
       setIsParkedPanelOpen(false);
-      setSelectedTable(null);
+      const order = restored || await bridge.call<any>("get_current_order");
+      setSelectedTable(order?.table_no ?? null);
       await fetchCurrentOrder();
       fetchParkedCount();
     } catch (e: any) {

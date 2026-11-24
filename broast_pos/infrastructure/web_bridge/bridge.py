@@ -282,6 +282,20 @@ class POSBridge(QObject):
 
     @pyqtSlot(str, str, result=str)
     def dispatch(self, action: str, payload_json: str) -> str:
+        result = json.loads(self._dispatch(action, payload_json))
+        if not result.get("success"):
+            error = str(result.get("error", ""))
+            technical = ("constraint", "FOREIGN KEY", "UNIQUE", "NOT NULL", "TypeError",
+                         "not supported between", "could not convert", "invalid literal",
+                         "has no attribute", "no such", "binding", "datatype", "syntax error")
+            if any(term.lower() in error.lower() for term in technical):
+                logger.error("Internal bridge error for %s: %s", action, error)
+                result["error"] = "تعذر تنفيذ العملية. تحقق من البيانات المختارة وحاول مرة أخرى"
+                if "message" in result:
+                    result["message"] = result["error"]
+        return json.dumps(result)
+
+    def _dispatch(self, action: str, payload_json: str) -> str:
         try:
             payload = json.loads(payload_json) if payload_json else {}
             logger.info("Bridge received action: %s", action)
@@ -936,9 +950,11 @@ class POSBridge(QObject):
 
             return json.dumps({"success": False, "error": f"إجراء غير معروف: {action}"})
 
-        except Exception as e:
-            logger.exception("Error in POSBridge dispatch for action %s", action)
+        except ValueError as e:
             return json.dumps({"success": False, "error": str(e)})
+        except Exception:
+            logger.exception("Error in POSBridge dispatch for action %s", action)
+            return json.dumps({"success": False, "error": "تعذر تنفيذ العملية. تحقق من البيانات وحاول مرة أخرى"})
 
     # ── Order sub-router ──────────────────────────────────────────────────────
 

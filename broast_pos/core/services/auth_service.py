@@ -181,7 +181,10 @@ class AuthService:
         user = self._find_user_by_pin(pin)
         if user is None or not user.is_active:
             self._record_failure(key, user_id=None, reason="wrong PIN (pin-only login)")
-            raise ValueError("رمز PIN غير صحيح أو المستخدم غير نشط")
+            message = "رمز PIN غير صحيح أو المستخدم غير نشط"
+            if any(ch.isdecimal() and not ch.isascii() for ch in pin):
+                message += "، استخدم الأرقام الإنجليزية (0-9)"
+            raise ValueError(message)
 
         self._reset_throttle(key)
         self._upgrade_if_legacy(user, pin)
@@ -381,9 +384,9 @@ class AuthService:
         if not pin:
             raise ValueError("رمز PIN مطلوب")
         # B-08: enforce minimum PIN length
-        if len(pin) < _PIN_MIN_LENGTH:
+        if not isinstance(pin, str) or not pin.isascii() or not pin.isdecimal() or len(pin) < _PIN_MIN_LENGTH:
             raise ValueError(
-                f"رمز PIN يجب أن يكون {_PIN_MIN_LENGTH} أحرف أو أرقام على الأقل"
+                f"رمز PIN يجب أن يكون {_PIN_MIN_LENGTH} أرقام إنجليزية (0-9) على الأقل"
             )
 
         if self._pin_in_use(pin):
@@ -490,9 +493,9 @@ class AuthService:
             if not pin:
                 raise ValueError("رمز PIN لا يمكن أن يكون فارغاً")
             # B-08: enforce minimum PIN length on update too
-            if len(pin) < _PIN_MIN_LENGTH:
+            if not isinstance(pin, str) or not pin.isascii() or not pin.isdecimal() or len(pin) < _PIN_MIN_LENGTH:
                 raise ValueError(
-                    f"رمز PIN يجب أن يكون {_PIN_MIN_LENGTH} أحرف أو أرقام على الأقل"
+                    f"رمز PIN يجب أن يكون {_PIN_MIN_LENGTH} أرقام إنجليزية (0-9) على الأقل"
                 )
             if self._pin_in_use(pin, exclude_user_id=user_id):
                 raise ValueError("رمز PIN مستخدم بالفعل لمستخدم آخر")

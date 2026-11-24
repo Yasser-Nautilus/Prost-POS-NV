@@ -392,13 +392,15 @@ class OrderService:
         # Apply removals as quantity deltas, keyed on (product_id, notes) so that
         # lines with the same product but different notes are addressed independently.
         if removed_items:
-            remove_deltas: dict[tuple[int, str], int] = {
-                (i.product_id, i.notes or ""): i.quantity for i in removed_items
-            }
+            remove_deltas: dict[tuple[int, str], int] = {}
+            for removed in removed_items:
+                key = (removed.product_id, removed.notes or "")
+                remove_deltas[key] = remove_deltas.get(key, 0) + removed.quantity
             new_items: list[OrderItem] = []
             for item in order.items:
                 key = (item.product_id, item.notes or "")
-                delta = remove_deltas.get(key, 0)
+                delta = min(item.quantity, remove_deltas.get(key, 0))
+                remove_deltas[key] = remove_deltas.get(key, 0) - delta
                 if delta:
                     new_qty = item.quantity - delta
                     if new_qty > 0:

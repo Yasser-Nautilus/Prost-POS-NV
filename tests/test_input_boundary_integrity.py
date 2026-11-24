@@ -104,10 +104,20 @@ def test_invalid_cash_payment_never_marks_paid(env, amount):
 @pytest.mark.parametrize("pin", ["987654", "9876543210987654", "legacyPass9"])
 def test_existing_long_and_text_pins_remain_valid_for_login_override_and_update(env, pin):
     bridge, _, call, _ = env
-    user = bridge._auth.create_user("long_pin", "Long PIN", UserRole.MANAGER, pin)
+    user = bridge._auth.create_user("long_pin", "Long PIN", UserRole.MANAGER, "987654")
+    # Seed a genuinely pre-existing PIN without invoking new-user validation.
+    user.pin_salt = bridge._auth._make_salt()
+    user.pin_hash = bridge._auth._hash_secure(pin, user.pin_salt)
+    bridge._auth._users.save(user)
     call("logout")
     assert call("login", {"pin": pin})["id"] == user.id
     assert call("verify_manager_pin", {"pin": pin})["id"] == user.id
-    bridge._auth.update_user(user.id, pin=pin + "0")
+    bridge._auth.update_user(user.id, display_name="Still supported")
+    if pin.isdecimal():
+        bridge._auth.update_user(user.id, pin=pin + "0")
+    else:
+        with pytest.raises(ValueError, match="0-9"):
+            bridge._auth.update_user(user.id, pin=pin + "0")
     call("logout")
-    assert call("login", {"pin": pin + "0"})["id"] == user.id
+    expected = pin + "0" if pin.isdecimal() else pin
+    assert call("login", {"pin": expected})["id"] == user.id

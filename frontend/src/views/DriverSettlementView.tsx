@@ -599,7 +599,12 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                         {dayMessage.text}
                       </div>
                     )}
-                    {confirmDay ? (
+                    {allTripsPreview?.day_settlement?.completed ? (
+                      <div role="status" className="text-green-300 font-bold space-y-3">
+                        <p>تمت تسوية آخر اليوم — المدفوع {fmtEGP(allTripsPreview.day_settlement.paid_amount)}</p>
+                        <button onClick={handlePrintDaySheet} disabled={dayBusy} className="px-5 py-3 bg-brand-card rounded-xl">طباعة الشيت</button>
+                      </div>
+                    ) : confirmDay ? (
                       <div className="flex gap-2">
                         <button onClick={handleSettleDay} disabled={dayBusy}
                           className="flex-1 py-3 bg-brand-red text-brand-dark font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2">

@@ -216,7 +216,7 @@ def test_existing_v6_upgrade_preserves_drafts_and_sales(env):
     db.commit()
     initialise_database(db)
     initialise_database(db)
-    assert db.fetch_one("SELECT version FROM schema_version")["version"] == 13
+    assert db.fetch_one("SELECT version FROM schema_version")["version"] == 14
     assert count(db, "parked_order_drafts") == 1
     assert count(db, "orders") == 0
 
@@ -302,5 +302,5 @@ def test_existing_v6_without_draft_table_upgrades(env):
     db.execute("UPDATE schema_version SET version=6")
     db.commit()
     initialise_database(db)
-    assert db.fetch_one("SELECT version FROM schema_version")["version"] == 13
+    assert db.fetch_one("SELECT version FROM schema_version")["version"] == 14
     assert count(db, "parked_order_drafts") == 0
