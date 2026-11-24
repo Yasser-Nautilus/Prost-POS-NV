@@ -318,3 +318,49 @@ def test_visible_overall_cards_navbar_and_input_limits(qapp, monkeypatch):
     finally:
         shell.close()
         DatabaseConnection.reset()
+
+
+def test_visible_tracking_receipt_reprint_current_and_historical(qapp, monkeypatch):
+    from unittest.mock import MagicMock
+
+    from test_batch_workflow_e2e import _setup
+    from test_driver_business_day import _call
+
+    monkeypatch.setenv("POS_DEV_MODE", "0")
+    c, db, _, _ = _setup(qapp)
+    _call(c, "new_order", {"order_type": "takeaway"})
+    _call(c, "add_item", {"product_id": 1})
+    oid = _call(c, "confirm_order")["order_id"]
+    c.bridge._printer.print_receipt = MagicMock(return_value=True)
+    _call(c, "logout")
+    shell, b = _show(c.bridge)
+    try:
+        _login(b, "2222")
+        for width in (1280, 1920):
+            shell.resize(width, 900)
+            b.click("متابعة الطلبات")
+            b.wait("!!document.querySelector('button[title=\"إعادة طباعة نسخة\"]')")
+            b.screenshot(f"70-reprint-active-{width}.png")
+        for _ in range(2):
+            b.js("document.querySelector('button[title=\"إعادة طباعة نسخة\"]').click()")
+            b.wait("document.querySelector('[role=status]')?.textContent.includes('تم إرسال') && !document.querySelector('button[title=\"إعادة طباعة نسخة\"]').disabled")
+        assert c.bridge._printer.print_receipt.call_count == 2
+        assert db.fetch_one("SELECT count(*) n FROM audit_log WHERE event_type='receipt_reprinted'")["n"] == 2
+        assert b.js("document.querySelector('h2').textContent") == "متابعة الطلبات النشطة"
+        c.bridge._printer.print_receipt.return_value = False
+        b.js("document.querySelector('button[title=\"إعادة طباعة نسخة\"]').click()")
+        b.wait("document.querySelector('[role=status]')?.textContent.includes('افحص الطابعة')")
+        b.screenshot("71-reprint-printer-failure.png")
+        db.execute("UPDATE orders SET status='completed',created_at='2024-01-02 12:00:00' WHERE id=?", (oid,)); db.commit()
+        b.click("سجل الأوردرات")
+        b.js("(()=>{const e=document.querySelector('input[type=date]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'2024-01-02');e.dispatchEvent(new Event('input',{bubbles:true}));})()")
+        b.wait("!!document.querySelector('button[title=\"إعادة طباعة نسخة\"]')")
+        c.bridge._printer.print_receipt.return_value = True
+        b.js("document.querySelector('button[title=\"إعادة طباعة نسخة\"]').click()")
+        b.wait("document.querySelector('[role=status]')?.textContent.includes('تم إرسال')")
+        assert c.bridge._printer.print_receipt.call_count == 4
+        shell.resize(1280, 900)
+        b.screenshot("72-reprint-historical.png")
+        assert not b.js("document.body.innerText.includes('PIN المدير')")
+    finally:
+        shell.close()

@@ -169,4 +169,4 @@ class PrintTriggers:
     ) -> bool:
         """Manual reprint of a customer receipt from Reports View."""
         logger.info("Print trigger: reprint receipt for order #%s → slot %d", order.get("invoice_no"), cashier_slot)
-        return self._pm.print_receipt(order, cashier_slot)
+        return self._pm.print_receipt({**order, "is_copy": True}, cashier_slot)

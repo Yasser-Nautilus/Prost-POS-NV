@@ -22,6 +22,7 @@ interface AuditLogViewProps {
 }
 
 const EVENT_TYPE_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
+  receipt_reprinted: { label: "إعادة طباعة نسخة", color: "text-gray-300 bg-gray-900/20 border-gray-700/30", icon: FileText },
   order_created:                { label: "إنشاء طلب",       color: "text-green-400 bg-green-900/20 border-green-700/30",  icon: Package },
   order_amended:                { label: "تعديل طلب",        color: "text-blue-400 bg-blue-900/20 border-blue-700/30",    icon: Package },
   order_cancelled:              { label: "إلغاء طلب",       color: "text-red-400 bg-red-900/20 border-red-700/30",       icon: XCircle },

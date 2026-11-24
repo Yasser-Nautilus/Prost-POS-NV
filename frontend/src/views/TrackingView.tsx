@@ -1,7 +1,7 @@
 import { ManagerApprovalDialog } from "../components/ManagerApprovalDialog";
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  Eye, RefreshCw, Loader2, X,
+  Eye, RefreshCw, Loader2, X, Printer,
   UtensilsCrossed, Truck, Package, ShoppingBag, History, Archive, Clock, HandCoins
 } from "lucide-react";
 
@@ -95,13 +95,22 @@ const CountdownTimer: React.FC<{ since: string | null; windowSecs: number }> = (
   );
 };
 
+const ReprintButton: React.FC<{ order: any; onReprint: (id: number) => void; printingId: number | null }> = ({ order, onReprint, printingId }) => (
+  <button type="button" disabled={printingId !== null}
+    onClick={(e) => { e.stopPropagation(); onReprint(order.id); }}
+    aria-label={`إعادة طباعة الفاتورة ${order.invoice_no || order.id}`}
+    title="إعادة طباعة نسخة" className="inline-flex items-center gap-1 py-1.5 px-2 rounded-lg border border-brand-border/50 text-gray-300 hover:text-white hover:bg-brand-card disabled:opacity-40 text-xs">
+    {printingId === order.id ? <Loader2 size={13} className="animate-spin" /> : <Printer size={13} />} نسخة
+  </button>
+);
+
 // ─── Per-type table columns ───────────────────────────────────────────────────
 
 // Dine-in rows are fully clickable: tapping a table opens it in the POS so the
 // cashier can add items, settle & close, or move it to another table. No inline
 // action column — the whole row is the affordance.
-const DineInTable: React.FC<{ orders: any[]; onResume: (o: any) => void; onCancel: (id: number) => void; canCancel: boolean }> =
-  ({ orders, onResume, onCancel, canCancel }) => (
+const DineInTable: React.FC<{ orders: any[]; onResume: (o: any) => void; onCancel: (id: number) => void; onReprint: (id: number) => void; printingId: number | null; canCancel: boolean }> =
+  ({ orders, onResume, onCancel, onReprint, printingId, canCancel }) => (
     <table className="w-full text-sm">
       <thead>
         <tr className="bg-brand-card/80 text-gray-400 text-xs">
@@ -146,6 +155,7 @@ const DineInTable: React.FC<{ orders: any[]; onResume: (o: any) => void; onCance
               {/* CHANGED: cancel (x) now available on dine-in too. stopPropagation
                   keeps the row's click (open table) from firing. */}
               <td className="py-2.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                <ReprintButton order={order} onReprint={onReprint} printingId={printingId} />
                 {canCancel && order.status !== "completed" && order.status !== "cancelled" && (
                   <button
                     onClick={() => onCancel(order.id)}
@@ -163,8 +173,8 @@ const DineInTable: React.FC<{ orders: any[]; onResume: (o: any) => void; onCance
     </table>
   );
 
-const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; onResume: (o: any) => void; canCancel: boolean; onViewCustomer?: (order: any) => void; onHandover?: (o: any) => void }> =
-  ({ orders, onCancel, onResume, canCancel, onViewCustomer, onHandover }) => (
+const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; onResume: (o: any) => void; onReprint: (id: number) => void; printingId: number | null; canCancel: boolean; onViewCustomer?: (order: any) => void; onHandover?: (o: any) => void }> =
+  ({ orders, onCancel, onResume, onReprint, printingId, canCancel, onViewCustomer, onHandover }) => (
     <table className="w-full text-sm">
       <thead>
         <tr className="bg-brand-card/80 text-gray-400 text-xs">
@@ -254,6 +264,7 @@ const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => v
                       <HandCoins size={11} /> تسليم
                     </button>
                   )}
+                  <ReprintButton order={order} onReprint={onReprint} printingId={printingId} />
                   {canCancel && order.status !== "completed" && order.status !== "cancelled" && order.status !== "out_for_delivery" && (
                     <button
                       onClick={() => onCancel(order.id)}
@@ -272,8 +283,8 @@ const DeliveryPickupTable: React.FC<{ orders: any[]; onCancel: (id: number) => v
     </table>
   );
 
-const TakeawayTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; onResume: (o: any) => void; canCancel: boolean }> =
-  ({ orders, onCancel, onResume, canCancel }) => (
+const TakeawayTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; onResume: (o: any) => void; onReprint: (id: number) => void; printingId: number | null; canCancel: boolean }> =
+  ({ orders, onCancel, onResume, onReprint, printingId, canCancel }) => (
     <table className="w-full text-sm">
       <thead>
         <tr className="bg-brand-card/80 text-gray-400 text-xs">
@@ -316,6 +327,7 @@ const TakeawayTable: React.FC<{ orders: any[]; onCancel: (id: number) => void; o
               {/* CHANGED: "إضافة" removed (row click opens the order). Keep cancel.
                   stopPropagation so the button doesn't trigger the row click. */}
               <td className="py-2.5 px-3 text-center" onClick={(e) => e.stopPropagation()}>
+                <ReprintButton order={order} onReprint={onReprint} printingId={printingId} />
                 {canCancel && order.status !== "completed" && order.status !== "cancelled" && (
                   <button
                     onClick={() => onCancel(order.id)}
@@ -348,7 +360,7 @@ function formatClock(dateStr: string | null): string {
   return d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" });
 }
 
-const HistoryTable: React.FC<{ orders: any[] }> = ({ orders }) => (
+const HistoryTable: React.FC<{ orders: any[]; onReprint: (id: number) => void; printingId: number | null }> = ({ orders, onReprint, printingId }) => (
   <table className="w-full text-sm">
     <thead>
       <tr className="bg-brand-card/80 text-gray-400 text-xs">
@@ -358,6 +370,7 @@ const HistoryTable: React.FC<{ orders: any[] }> = ({ orders }) => (
         <th className="py-2.5 px-3 text-center">الحالة</th>
         <th className="py-2.5 px-3 text-center">الوقت</th>
         <th className="py-2.5 px-3 text-center font-mono">الإجمالي</th>
+        <th className="py-2.5 px-3 text-center">نسخة</th>
       </tr>
     </thead>
     <tbody>
@@ -383,6 +396,7 @@ const HistoryTable: React.FC<{ orders: any[] }> = ({ orders }) => (
             <td className="py-2.5 px-3 text-center text-brand-red font-black font-mono text-sm">
               {(order.total || 0).toFixed(2)} ج.م
             </td>
+            <td className="py-2.5 px-3 text-center"><ReprintButton order={order} onReprint={onReprint} printingId={printingId} /></td>
           </tr>
         );
       })}
@@ -394,6 +408,24 @@ const HistoryTable: React.FC<{ orders: any[] }> = ({ orders }) => (
 
 export const TrackingView: React.FC<TrackingViewProps> = ({ onResumeOrder, onHandoverOrder }) => {
   const [orders, setOrders] = useState<any[]>([]);
+  const [printingId, setPrintingId] = useState<number | null>(null);
+  const printLock = React.useRef(false);
+  const [printNotice, setPrintNotice] = useState("");
+  const [historyDate, setHistoryDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
+  const handleReprint = async (orderId: number) => {
+    if (printLock.current) return;
+    printLock.current = true;
+    setPrintingId(orderId); setPrintNotice("");
+    try {
+      await bridge.call("reprint_receipt", { order_id: orderId });
+      setPrintNotice("تم إرسال نسخة للطابعة");
+    } catch (e: any) {
+      setPrintNotice(e.message || "تعذر طباعة النسخة. افحص الطابعة والورق");
+    } finally { printLock.current = false; setPrintingId(null); }
+  };
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [filterType, setFilterType] = useState<string>("all");
@@ -422,12 +454,12 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ onResumeOrder, onHan
 
   const fetchHistory = useCallback(async () => {
     try {
-      const res = await bridge.call("get_order_history");
+      const res = await bridge.call("get_order_history", { date: historyDate });
       setHistory(res || []);
     } catch (e) {
       console.error(e);
     }
-  }, []);
+  }, [historyDate]);
 
   // Keep polling active orders even while viewing history — that poll also runs
   // the backend's takeaway auto-close sweep, so the archive stays current.
@@ -491,7 +523,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ onResumeOrder, onHan
           <div>
             <h2 className="text-xl font-black text-white">{isHistory ? "سجل الأوردرات" : "متابعة الطلبات النشطة"}</h2>
             <p className="text-xs text-gray-400">
-              {isHistory ? `${history.length} طلب في السجل (اليوم)` : `${filteredOrders.length} طلب نشط`}
+              {isHistory ? `${history.length} طلب في السجل` : `${filteredOrders.length} طلب نشط`}
             </p>
           </div>
         </div>
@@ -537,12 +569,16 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ onResumeOrder, onHan
         </div>
       </div>
 
+      {printNotice && <div role="status" className="p-3 rounded-xl border border-brand-border text-sm text-white">{printNotice}</div>}
+      {isHistory && <label className="flex items-center gap-3 text-sm text-gray-300">تاريخ الطلبات
+        <input type="date" aria-label="تاريخ الطلبات" value={historyDate} onChange={(e) => { if (e.target.value) setHistoryDate(e.target.value); }} className="bg-brand-card border border-brand-border rounded-xl px-3 py-2" />
+      </label>}
       {/* Body: archive (finished orders) or active orders by type */}
       {isHistory ? (
         history.length === 0 ? (
           <div className="py-20 text-center text-gray-500">
             <Archive size={48} className="mx-auto mb-3 text-brand-border/30" />
-            <p>لا توجد طلبات في السجل اليوم</p>
+            <p>لا توجد طلبات في هذا التاريخ</p>
           </div>
         ) : (
           <div className="rounded-2xl border border-brand-border/40 overflow-hidden">
@@ -551,7 +587,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ onResumeOrder, onHan
               <span className="font-bold text-sm">كل الطلبات المنتهية</span>
               <span className="ml-auto bg-black/20 text-xs font-bold px-2 py-0.5 rounded-full">{history.length}</span>
             </div>
-            <HistoryTable orders={history} />
+            <HistoryTable orders={history} onReprint={handleReprint} printingId={printingId} />
           </div>
         )
       ) : filteredOrders.length === 0 ? (
@@ -575,6 +611,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ onResumeOrder, onHan
               {(type === "dine_in") && (
                 <DineInTable
                   orders={typeOrders}
+                  onReprint={handleReprint} printingId={printingId}
                   onResume={handleResume}
                   onCancel={handleCancelClick}
                   canCancel
@@ -583,6 +620,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ onResumeOrder, onHan
               {(type === "delivery" || type === "pickup") && (
                 <DeliveryPickupTable
                   orders={typeOrders}
+                  onReprint={handleReprint} printingId={printingId}
                   onCancel={handleCancelClick}
                   onResume={handleResume}
                   canCancel
@@ -596,6 +634,7 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ onResumeOrder, onHan
               {type === "takeaway" && (
                 <TakeawayTable
                   orders={typeOrders}
+                  onReprint={handleReprint} printingId={printingId}
                   onCancel={handleCancelClick}
                   onResume={handleResume}
                   canCancel

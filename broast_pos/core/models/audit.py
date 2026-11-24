@@ -19,6 +19,7 @@ class AuditEventType:
     """
 
     # Order events
+    RECEIPT_REPRINTED = "receipt_reprinted"
     ORDER_CREATED = "order_created"
     ORDER_AMENDED = "order_amended"
     ORDER_CANCELLED = "order_cancelled"

@@ -910,9 +910,9 @@ class OrderController:
         """Return active orders filtered by type."""
         return self._order_svc.get_active_by_type(OrderType(order_type))
 
-    def get_order_history(self) -> list[Order]:
+    def get_order_history(self, date_str: str | None = None) -> list[Order]:
         """Finished orders (completed + cancelled) for today — the archive."""
-        return self._order_svc.get_order_history()
+        return self._order_svc.get_order_history(date_str)
 
     @property
     def current_order(self) -> Order | None:
@@ -924,12 +924,33 @@ class OrderController:
     # ------------------------------------------------------------------
 
     def reprint_receipt(self, order_id: int) -> bool:
-        """Reprint a customer receipt for a completed order."""
+        """Print a marked copy of any saved order without changing its state."""
+        if type(order_id) is not int or order_id <= 0:
+            raise ValueError("رقم الطلب غير صحيح")
+        actor = self._auth_svc.get_current_user()
+        if actor is None:
+            raise ValueError("يجب تسجيل الدخول أولاً")
         order = self._order_svc.get_order_by_id(order_id)
         if order is None:
-            return False
+            raise ValueError("الطلب غير موجود")
         order_dict = self._order_to_dict(order)
-        return self._print.reprint_receipt(order_dict, self._cashier_slot)
+        order_dict.update(is_copy=True, is_paid=order.is_paid,
+                          status=order.status.value, created_at=order.created_at)
+        printed = False
+        try:
+            printed = bool(self._print.reprint_receipt(order_dict, self._cashier_slot))
+        except Exception:
+            logger.exception("Receipt reprint failed for order %s", order_id)
+        finally:
+            self._order_svc.audit_svc.log(
+                event_type=AuditEventType.RECEIPT_REPRINTED,
+                user_id=actor.id, user_name=actor.display_name or actor.username,
+                order_id=order.id, entity_type="order", entity_id=order.id,
+                action="إعادة طباعة نسخة" if printed else "فشل إعادة طباعة نسخة",
+                details={"printed": printed, "cashier_slot": self._cashier_slot,
+                         "invoice_no": order.invoice_no, "is_copy": True},
+            )
+        return printed
 
     # ------------------------------------------------------------------
     # Internal helpers
