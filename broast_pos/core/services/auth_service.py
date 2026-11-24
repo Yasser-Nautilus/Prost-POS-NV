@@ -359,6 +359,11 @@ class AuthService:
         """Return all users (active and inactive) for admin management."""
         return self._users.get_all()
 
+    @staticmethod
+    def _validate_cashier_slot(slot) -> None:
+        if slot is not None and (type(slot) is not int or slot not in (1, 2)):
+            raise ValueError("رقم الصندوق يجب أن يكون 1 أو 2 فقط")
+
     def create_user(
         self,
         username: str,
@@ -375,6 +380,7 @@ class AuthService:
         With ``require_driver_phone`` (set by the user-management screen),
         drivers (cashier role with no cashier_slot) must have a phone number.
         """
+        self._validate_cashier_slot(cashier_slot)
         username = username.strip()
         display_name = display_name.strip()
         if not username:
@@ -446,6 +452,8 @@ class AuthService:
         require_driver_phone: bool = False,
     ) -> User:
         """Update an existing user. Validates unique PIN if changed."""
+        if cashier_slot != -1 or isinstance(cashier_slot, bool):
+            self._validate_cashier_slot(cashier_slot)
         user = self._users.get_by_id(user_id)
         if user is None:
             raise ValueError("المستخدم غير موجود")

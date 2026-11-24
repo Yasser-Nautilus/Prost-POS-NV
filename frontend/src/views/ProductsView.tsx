@@ -97,7 +97,11 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     const price = parseFloat(formPrice);
-    if (!formName || isNaN(price) || !formCatId) {
+    if (!Number.isFinite(price) || price < 0 || price > 50000) {
+      alert("سعر المنتج يجب أن يكون رقماً من 0 إلى 50,000 ج.م");
+      return;
+    }
+    if (!formName || !formCatId) {
       alert("يرجى ملء جميع الحقول المطلوبة");
       return;
     }
@@ -373,12 +377,12 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
               {products.map((prod) => (
                 <div
                   key={prod.id}
-                  className={`p-4 bg-brand-card border border-brand-border/40 rounded-2xl flex flex-col justify-between h-36 transition-all group ${
+                  className={`p-4 bg-brand-card border border-brand-border/40 rounded-2xl flex flex-col justify-between min-h-36 min-w-0 gap-4 transition-all group ${
                     !prod.is_active ? "opacity-50" : "hover:border-brand-border"
                   }`}
                 >
                   <div>
-                    <h4 className="text-white font-bold text-sm leading-snug group-hover:text-brand-red transition-colors">
+                    <h4 className="text-white font-bold text-sm leading-snug break-words [overflow-wrap:anywhere] group-hover:text-brand-red transition-colors">
                       {prod.name}
                     </h4>
                     {!prod.is_active && (
@@ -387,7 +391,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                       </span>
                     )}
                   </div>
-                  <div className="flex justify-between items-center">
+                  <div className="flex flex-wrap gap-2 justify-between items-center">
                     <span className="text-brand-red font-extrabold text-base">
                       {prod.price}{" "}
                       <span className="text-[10px] font-semibold">ج.م</span>
@@ -459,11 +463,12 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-gray-400 text-xs block mb-1">السعر (ج.م) *</label>
+                  <label className="text-gray-400 text-xs block mb-1">السعر (ج.م) *، من 0 إلى 50,000</label>
                   <input
                     type="number"
                     required
                     min="0"
+                    max="50000"
                     step="0.5"
                     value={formPrice}
                     onChange={(e) => setFormPrice(e.target.value)}

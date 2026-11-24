@@ -281,3 +281,40 @@ def test_visible_driver_order_numbers_wrapping_and_day_rollover(qapp, monkeypatc
     finally:
         shell.close()
         DatabaseConnection.reset()
+
+
+def test_visible_overall_cards_navbar_and_input_limits(qapp, monkeypatch):
+    from test_batch_workflow_e2e import _setup
+    from test_driver_business_day import _call
+
+    monkeypatch.setenv("POS_DEV_MODE", "0")
+    c, _, _, _ = _setup(qapp)
+    _call(c, "logout"); _call(c, "login", {"pin": "1234"})
+    name = "اسم منتج عربي طويل English123 " * 10
+    _call(c, "create_product", {"name": name, "price": 50000, "category_id": 1})
+    _call(c, "logout")
+    shell, browser = _show(c.bridge)
+    try:
+        _login(browser)
+        for width in (1280, 1366, 1600, 1920):
+            shell.resize(width, 1000)
+            browser.click("شاشة البيع (POS)")
+            for tab in ("شاشة البيع (POS)", "إدارة المنتجات"):
+                browser.click(tab)
+                browser.wait("[...document.querySelectorAll('h4')].some(e=>e.textContent.startsWith('اسم منتج عربي'))")
+                assert browser.js("""(()=>{const h=[...document.querySelectorAll('h4')].find(e=>e.textContent.startsWith('اسم منتج عربي'));
+                  const card=h.parentElement.parentElement;const r=card.getBoundingClientRect();
+                  return [...card.querySelectorAll('*')].every(e=>{const b=e.getBoundingClientRect();return b.left>=r.left-1&&b.right<=r.right+1&&b.top>=r.top-1&&b.bottom<=r.bottom+1});})()""")
+            assert browser.js("""(()=>{const header=document.querySelector('header');
+              return [...header.querySelectorAll('button')].filter(e=>e.title==='مدير النظام'||e.textContent.includes('الوردية مفتوحة')).every(e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth});})()""")
+            browser.screenshot(f"60-fixed-products-{width}.png")
+        browser.click("منتج جديد")
+        assert browser.js("document.querySelector('input[placeholder=\"0.00\"]').max") == "50000"
+        browser.js("document.querySelector('button[aria-label=\"إغلاق النموذج\"]').click()")
+        browser.click("إدارة المستخدمين"); browser.click("مستخدم جديد")
+        assert browser.js("[...document.querySelector('[aria-label=\"رقم الصندوق\"]').options].map(e=>e.value)") == ["", "1", "2"]
+        assert browser.js("document.querySelector('input[type=password]').placeholder") == "أرقام 0-9 فقط"
+        browser.screenshot("61-fixed-user-slot-and-pin.png")
+    finally:
+        shell.close()
+        DatabaseConnection.reset()

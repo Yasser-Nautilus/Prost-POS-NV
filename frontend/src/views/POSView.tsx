@@ -1084,14 +1084,14 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
                 <div
                   key={prod.id}
                   onClick={() => handleAddProduct(prod)}
-                  className="p-4 bg-brand-card hover:bg-brand-border/10 border border-brand-border/40 rounded-2xl cursor-pointer flex flex-col justify-between h-40 transition-all hover:scale-[1.03] active:scale-[0.97] group"
+                  className="p-4 bg-brand-card hover:bg-brand-border/10 border border-brand-border/40 rounded-2xl cursor-pointer flex flex-col justify-between min-h-40 min-w-0 gap-4 transition-all hover:scale-[1.03] active:scale-[0.97] group"
                 >
                   <div>
-                    <h4 className="text-white font-bold text-sm leading-snug group-hover:text-brand-red transition-colors">
+                    <h4 className="text-white font-bold text-sm leading-snug break-words [overflow-wrap:anywhere] group-hover:text-brand-red transition-colors">
                       {prod.name}
                     </h4>
                   </div>
-                  <div className="flex justify-between items-center mt-4">
+                  <div className="flex flex-wrap gap-2 justify-between items-center mt-4">
                     <span className="text-brand-red font-extrabold text-base">
                       {prod.price} <span className="text-[10px] font-semibold">ج.م</span>
                     </span>

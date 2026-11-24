@@ -451,7 +451,7 @@ class POSBridge(QObject):
                 try:
                     prod = self._product.create_product(
                         name=payload.get("name", ""),
-                        price=float(payload.get("price", 0)),
+                        price=payload.get("price", 0),
                         category_id=int(payload.get("category_id")),
                         sort_order=int(payload.get("sort_order", 0)),
                     )
@@ -467,7 +467,7 @@ class POSBridge(QObject):
                     prod = self._product.update_product(
                         product_id=payload.get("product_id"),
                         name=payload.get("name"),
-                        price=float(payload["price"]) if "price" in payload else None,
+                        price=payload["price"] if "price" in payload else None,
                         category_id=payload.get("category_id"),
                         sort_order=payload.get("sort_order"),
                         is_active=payload.get("is_active"),
