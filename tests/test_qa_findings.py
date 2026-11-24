@@ -1,6 +1,6 @@
 # ruff: noqa: F811
 """Regression tests for the QA findings: users-list guard, duplicate zone names,
-same-user shift transfer, expense cap."""
+same-user shift transfer, expense cap, driver-stats bridge routing."""
 from __future__ import annotations
 
 from test_e2e_user_flows import (  # noqa: F401
@@ -64,3 +64,16 @@ def test_expense_cap(qapp):
     r = c.call("add_expense", {"amount": 50000.01, "category": "supplies", "description": "x"})
     assert r["success"] is False
     assert not c.call("add_expense", {"amount": 99999999, "category": "other", "description": "x"})["success"]
+
+
+def test_get_driver_stats_routed_through_real_bridge(qapp):
+    """The real bridge must route get_driver_stats to the delivery sub-router."""
+    c = _setup(qapp)
+    # cashier: routed, but stopped by the manager guard, not "unknown action"
+    r = _as(c, "2222").call("get_driver_stats", {"period": "day"})
+    assert r["success"] is False
+    assert "غير معروف" not in r["error"]
+    # manager: routed and returns the stats list
+    r = _as(c, "5555").call("get_driver_stats", {"period": "day"})
+    assert r["success"], r
+    assert isinstance(r["data"], list)
