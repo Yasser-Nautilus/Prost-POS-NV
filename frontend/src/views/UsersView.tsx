@@ -357,24 +357,27 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
                     required={!editingUser}
                     value={formPin}
                     onChange={(e) => setFormPin(e.target.value)}
-                    placeholder="4 أحرف أو أرقام على الأقل"
+                    placeholder="أرقام 0-9 فقط"
                     minLength={4}
                     className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-brand-red font-mono text-center text-xl tracking-widest"
                   />
+                  <p className="text-xs text-gray-400 mt-1">4 أرقام إنجليزية (0-9) على الأقل للرمز الجديد</p>
                 </div>
               </div>
 
               {formRole !== "driver" && (
                 <div>
                   <label className="text-gray-400 text-xs block mb-1">رقم الصندوق (cashier slot)</label>
-                  <input
-                    type="number"
-                    min="1"
+                  <select
+                    aria-label="رقم الصندوق"
                     value={formSlot}
                     onChange={(e) => setFormSlot(e.target.value)}
-                    placeholder="1"
                     className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white focus:outline-none focus:border-brand-red text-center font-mono"
-                  />
+                  >
+                    <option value="">بدون صندوق</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                  </select>
                 </div>
               )}
               {formRole === "driver" && (
