@@ -212,9 +212,9 @@ function App() {
       <header className="h-20 bg-brand-surface border-b border-brand-border/60 flex items-center justify-between px-6 z-20">
 
         {/* Right side: Logo & Navigation */}
-        <div className="flex items-center gap-6">
+        <div className="flex min-w-0 flex-1 items-center gap-4">
           {/* Logo */}
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <img src={prostshP} alt={brandFirst} className="h-12 w-auto drop-shadow" />
             <span className="font-extrabold text-xl text-white">
               {brandFirst} <span className="red-gradient-text">{brandRest}</span>
@@ -222,7 +222,7 @@ function App() {
           </div>
 
           {/* Navigation links */}
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden md:flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
             {navItems
               .filter((n) => n.visible)
               .map((n) => {
@@ -233,20 +233,19 @@ function App() {
                     onClick={() => setActiveTab(n.id)}
                     title={n.label}
                     aria-label={n.label}
-                    className={`group flex items-center min-h-12 min-w-12 justify-center py-3 ${activeTab === n.id ? "px-4" : "px-3.5 xl:px-4"} rounded-xl text-base font-bold whitespace-nowrap transition-all ${
+                    className={`group flex items-center shrink-0 min-h-12 min-w-12 justify-center py-3 ${activeTab === n.id ? "px-4" : "px-3.5 xl:px-4"} rounded-xl text-base font-bold whitespace-nowrap transition-all ${
                       activeTab === n.id
                         ? "bg-brand-red/10 text-brand-red border border-brand-red/30"
                         : "text-gray-400 hover:text-white hover:bg-brand-card/40 border border-transparent"
                     }`}
                   >
                     <Icon size={24} className="shrink-0" />
-                    {/* Crowded bar: the active tab keeps its label; the others
-                        slide their name in on hover (always visible on wide screens). */}
+                    {/* Keep labels compact; scroll navigation if hover labels need space. */}
                     <span
                       className={
                         activeTab === n.id
                           ? "ms-2"
-                          : "overflow-hidden whitespace-nowrap max-w-0 opacity-0 ms-0 -translate-x-2 transition-all duration-300 ease-out group-hover:max-w-[14rem] group-hover:opacity-100 group-hover:ms-2 group-hover:translate-x-0 group-focus-visible:max-w-[14rem] group-focus-visible:opacity-100 group-focus-visible:ms-2 group-focus-visible:translate-x-0 2xl:max-w-[14rem] 2xl:opacity-100 2xl:ms-2 2xl:translate-x-0"
+                          : "overflow-hidden whitespace-nowrap max-w-0 opacity-0 ms-0 -translate-x-2 transition-all duration-300 ease-out group-hover:max-w-[14rem] group-hover:opacity-100 group-hover:ms-2 group-hover:translate-x-0 group-focus-visible:max-w-[14rem] group-focus-visible:opacity-100 group-focus-visible:ms-2 group-focus-visible:translate-x-0"
                       }
                     >
                       {n.label}
@@ -258,7 +257,7 @@ function App() {
         </div>
 
         {/* Left side: Shift & Cashier Profiler */}
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3 ps-3">
           {/* Shift indicator */}
           <button
             onClick={() => setIsShiftOpen(true)}
