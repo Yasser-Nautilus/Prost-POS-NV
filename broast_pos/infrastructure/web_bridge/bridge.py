@@ -1212,6 +1212,7 @@ class POSBridge(QObject):
                     driver_id=payload.get("driver_id"),
                     settlement_date=payload.get("date"),
                     trip_id=payload.get("trip_id"),
+                    expected_day_id=payload.get("expected_day_id"),
                 )
                 if preview:
                     return json.dumps({"success": True, "data": preview})
@@ -1228,6 +1229,7 @@ class POSBridge(QObject):
                 settlement_date=payload.get("date"),
                 notes=payload.get("notes"),
                 trip_id=payload.get("trip_id"),
+                expected_day_id=payload.get("expected_day_id"),
             )
             if ok:
                 return json.dumps({"success": True, "data": {
@@ -1247,6 +1249,7 @@ class POSBridge(QObject):
             ok, result = ctrl.print_driver_day_sheet(
                 driver_id=payload.get("driver_id"),
                 settlement_date=payload.get("date"),
+                expected_day_id=payload.get("expected_day_id"),
             )
             if ok:
                 return json.dumps({"success": True, "data": {"printed": result["printed"]}})
