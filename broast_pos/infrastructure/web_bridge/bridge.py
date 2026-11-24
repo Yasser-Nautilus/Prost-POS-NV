@@ -345,6 +345,9 @@ class POSBridge(QObject):
                 return json.dumps({"success": False, "error": "ليست لديك صلاحيات مدير"})
 
             elif action == "get_users_management":
+                # Admin only: the list exposes every user incl. driver phones.
+                if not self._current_user or self._current_user.role.value != "admin":
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير النظام"})
                 users = self._auth.get_users_for_management()
                 return json.dumps({"success": True, "data": [self._user_to_dict(u) for u in users]})
 
@@ -828,6 +831,7 @@ class POSBridge(QObject):
                             "get_driver_attendance_today", "get_daily_driver_summary",
                             "get_unassigned_deliveries", "get_driver_settlement_preview",
                             "settle_driver", "get_driver_settlements",
+                            "get_driver_stats",
                             "print_driver_day_sheet"):
                 if not self._delivery_ctrl:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
