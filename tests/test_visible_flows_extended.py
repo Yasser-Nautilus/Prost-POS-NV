@@ -83,9 +83,10 @@ def test_visible_split_payment_cash_and_visa(qapp, monkeypatch):
         browser.field("النقد المستلم", "50")
         browser.wait("![...document.querySelectorAll('button')].find(b=>b.textContent.trim().startsWith('إنهاء وتأكيد الدفع')).disabled")
         browser.screenshot("20-split-payment.png")
-        browser.js("[...document.querySelectorAll('button')].find(b=>b.textContent.trim().startsWith('إنهاء وتأكيد الدفع')).click()")
+        browser.js("(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent.trim().startsWith('إنهاء وتأكيد الدفع')); b.click(); b.click();})()")
         browser.wait("window.__alerts.some(s=>s.includes('تم تسجيل الدفع'))")
         assert db.fetch_one("SELECT is_paid FROM orders")["is_paid"] == 1
+        assert browser.js("window.__alerts.filter(s=>s.includes('تم تسجيل الدفع')).length") == 1
         parts = db.fetch_all("SELECT method, amount FROM order_payments ORDER BY id")
         assert [(p["method"], p["amount"]) for p in parts] == [("cash", 35.0), ("visa", 35.0)]
         # Only the cash share reaches the drawer.
@@ -119,8 +120,12 @@ def test_visible_park_resume_dine_in_with_table(qapp, monkeypatch):
         browser.wait("document.body.innerText.includes('1 عناصر')")
         browser.js("[...document.querySelectorAll('button')].find(b=>b.textContent.includes('1 عناصر')).click()")
         browser.wait(f"document.body.innerText.includes({json.dumps(PRODUCT)}) && document.body.innerText.includes('70')")
-        # Resuming only restores the workspace; nothing was saved as an order yet.
-        assert db.fetch_one("SELECT count(*) n FROM orders")["n"] == 0
+        # Resuming retains table choice; confirming must not ask for it again.
+        browser.click("تأكيد الطلب")
+        browser.wait("window.__alerts.some(s=>s.includes('بنجاح'))")
+        assert db.fetch_one("SELECT table_no FROM orders")["table_no"] == 6
+        # Confirmed exactly once.
+        assert db.fetch_one("SELECT count(*) n FROM orders")["n"] == 1
         browser.screenshot("22-resumed-dine-in.png")
     finally:
         shell.close()
