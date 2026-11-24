@@ -31,6 +31,7 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
   const [selectedCatId, setSelectedCatId] = useState<number | null>(null);
   const [products, setProducts] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
   
   const [currentOrder, setCurrentOrder] = useState<any>(null);
   const [parkedCount, setParkedCount] = useState(0);
@@ -593,6 +594,37 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
     }
   };
 
+  // Cashier keyboard shortcuts (POS tab only, never while a dialog is open):
+  //   "/" or F2  focus the quick menu search
+  //   Enter      (in search) add the first match, clear and refocus the search
+  //   Esc        (in search) clear the search
+  //   F8         open the discount dialog
+  //   F9         checkout
+  const anyDialogOpen =
+    isDiscountOpen || isPaymentOpen || isCustomerLookupOpen || isTableGridOpen ||
+    isParkedPanelOpen || showPinGate || showAmendApproval || commentIdx !== null;
+  useEffect(() => {
+    if (!isActive) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (anyDialogOpen || e.ctrlKey || e.metaKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      const typing = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable);
+      if (e.key === "F2" || (e.key === "/" && !typing)) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      } else if (e.key === "F9") {
+        e.preventDefault();
+        handleCheckoutClick();
+      } else if (e.key === "F8") {
+        e.preventDefault();
+        if (currentOrder && currentOrder.items.length > 0 && !currentOrder.is_paid) setIsDiscountOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   return (
     <>
     <div className="flex-1 flex flex-col md:flex-row h-[calc(100vh-64px)] overflow-hidden">
@@ -973,9 +1005,21 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
           <div className="relative w-full md:w-72">
             <input
               type="text"
-              placeholder="ابحث عن وجبة أو مشروب..."
+              ref={searchInputRef}
+              placeholder="ابحث عن وجبة أو مشروب...  ( / أو F2 )"
               value={searchQuery}
               onChange={(e) => handleProductSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && products.length > 0 && searchQuery) {
+                  e.preventDefault();
+                  handleAddProduct(products[0]);
+                  handleProductSearch("");
+                  searchInputRef.current?.focus();
+                } else if (e.key === "Escape") {
+                  handleProductSearch("");
+                  searchInputRef.current?.blur();
+                }
+              }}
               className="w-full bg-brand-card border border-brand-border/60 rounded-xl py-2 px-4 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-red text-right"
             />
             <Search className="absolute left-3 top-2.5 text-gray-500" size={16} />
