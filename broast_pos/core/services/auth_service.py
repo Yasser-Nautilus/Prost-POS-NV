@@ -181,7 +181,10 @@ class AuthService:
         user = self._find_user_by_pin(pin)
         if user is None or not user.is_active:
             self._record_failure(key, user_id=None, reason="wrong PIN (pin-only login)")
-            raise ValueError("رمز PIN غير صحيح أو المستخدم غير نشط")
+            message = "رمز PIN غير صحيح أو المستخدم غير نشط"
+            if any(ch.isdecimal() and not ch.isascii() for ch in pin):
+                message += "، استخدم الأرقام الإنجليزية (0-9)"
+            raise ValueError(message)
 
         self._reset_throttle(key)
         self._upgrade_if_legacy(user, pin)
