@@ -381,9 +381,9 @@ class AuthService:
         if not pin:
             raise ValueError("رمز PIN مطلوب")
         # B-08: enforce minimum PIN length
-        if len(pin) < _PIN_MIN_LENGTH:
+        if not isinstance(pin, str) or not pin.isascii() or not pin.isdecimal() or len(pin) < _PIN_MIN_LENGTH:
             raise ValueError(
-                f"رمز PIN يجب أن يكون {_PIN_MIN_LENGTH} أحرف أو أرقام على الأقل"
+                f"رمز PIN يجب أن يكون {_PIN_MIN_LENGTH} أرقام إنجليزية (0-9) على الأقل"
             )
 
         if self._pin_in_use(pin):
@@ -490,9 +490,9 @@ class AuthService:
             if not pin:
                 raise ValueError("رمز PIN لا يمكن أن يكون فارغاً")
             # B-08: enforce minimum PIN length on update too
-            if len(pin) < _PIN_MIN_LENGTH:
+            if not isinstance(pin, str) or not pin.isascii() or not pin.isdecimal() or len(pin) < _PIN_MIN_LENGTH:
                 raise ValueError(
-                    f"رمز PIN يجب أن يكون {_PIN_MIN_LENGTH} أحرف أو أرقام على الأقل"
+                    f"رمز PIN يجب أن يكون {_PIN_MIN_LENGTH} أرقام إنجليزية (0-9) على الأقل"
                 )
             if self._pin_in_use(pin, exclude_user_id=user_id):
                 raise ValueError("رمز PIN مستخدم بالفعل لمستخدم آخر")
