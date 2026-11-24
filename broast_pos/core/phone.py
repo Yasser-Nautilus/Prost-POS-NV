@@ -11,7 +11,7 @@ import re
 _MOBILE = re.compile(r"^01[0125][0-9]{8}$", re.ASCII)
 _SEPARATORS = " \t-().\u200e\u200f\u202a\u202b\u202c\u00a0"
 
-INVALID_PHONE_MSG = "رقم الهاتف يجب أن يكون 11 رقم ويبدأ بـ 010 أو 011 أو 012 أو 015"
+INVALID_PHONE_MSG = "رقم الهاتف يجب أن يكون 11 رقم بالأرقام الإنجليزية (0-9) ويبدأ بـ 010 أو 011 أو 012 أو 015"
 
 
 def normalize_egyptian_mobile(raw: str | None) -> str | None:
