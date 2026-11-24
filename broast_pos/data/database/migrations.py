@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Version tracking (bumped when a new migration is added)
 # ---------------------------------------------------------------------------
-LATEST_VERSION = 13
+LATEST_VERSION = 14
 
 # ---------------------------------------------------------------------------
 # Path to the schema file (sibling of this module)
@@ -447,4 +447,5 @@ _MIGRATIONS: dict = {
     10: _migrate_v10_to_v11,
     11: _migrate_v11_to_v12,
     12: _migrate_v12_to_v13,
+    13: _apply_schema,
 }
