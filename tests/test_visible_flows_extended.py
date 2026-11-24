@@ -164,3 +164,50 @@ def test_visible_repeat_customer_reused_on_second_order(qapp, monkeypatch):
     finally:
         shell.close()
         DatabaseConnection.reset()
+
+
+def test_visible_single_trip_then_day_expense_and_completed_state(qapp, monkeypatch):
+    from test_batch_workflow_e2e import _delivery_order
+    from test_e2e_user_flows import POSUserClient
+
+    bridge, db, call = _start(qapp, monkeypatch)
+    bridge._settlement._expense_recorder = bridge._financial
+    db.execute("UPDATE cashier_sessions SET station='ALL'")
+    db.commit()
+    driver = call("create_user", {"username": "ali", "display_name": "علي", "role": "cashier",
+                                  "pin": "3333", "phone": "01012345678", "cashier_slot": None})["id"]
+    zone = next(z for z in call("get_active_zones") if "شارع الانتاج" in z["name"])
+    call("update_zone", {"zone_id": zone["id"], "delivery_fee": 65})
+    client = POSUserClient(bridge)
+    oid, _ = _delivery_order(client)
+    call("check_in_driver", {"driver_id": driver})
+    trip = call("create_trip", {"driver_id": driver, "order_ids": [oid]})["trip_id"]
+    call("dispatch_trip", {"trip_id": trip})
+    call("return_trip", {"trip_id": trip})
+    call("logout")
+    shell, browser = _show(bridge)
+    try:
+        _login(browser)
+        browser.click("تسوية السائقين")
+        browser.wait("document.body.innerText.includes('علي')")
+        browser.js("[...document.querySelectorAll('button')].find(b=>b.textContent.includes('علي')&&b.textContent.includes('حاضر اليوم')).click()")
+        browser.click("تسوية هذه الرحلة")
+        browser.click("تأكيد تسوية هذه الرحلة فقط")
+        browser.wait("document.body.innerText.includes('تمت التسوية بنجاح')")
+        assert call("get_expenses") == []
+        browser.click("تسوية رحلة أخرى لنفس السائق")
+        browser.click("تسوية آخر اليوم")
+        browser.wait("[...document.querySelectorAll('button')].some(b=>b.textContent.includes('تأكيد: تسجيل 65.00'))")
+        browser.js("[...document.querySelectorAll('button')].find(b=>b.textContent.includes('تأكيد: تسجيل')).click()")
+        browser.wait("document.body.innerText.includes('تمت تسوية آخر اليوم — المدفوع 65.00')")
+        assert not browser.js("[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='تسوية آخر اليوم')")
+        assert len(call("get_expenses")) == 1
+        assert call("get_expenses")[0]["amount"] == 65
+        assert db.fetch_one("SELECT count(*) n FROM cash_ledger WHERE entry_type='DRIVER_FEE_PAYOUT'")["n"] == 1
+        browser.screenshot("24-driver-day-completed.png")
+        browser.click("الوردية مفتوحة")
+        browser.wait("document.body.innerText.includes('سجل المصروفات بالوردية الحالية:')")
+        browser.screenshot("25-driver-expense.png")
+    finally:
+        shell.close()
+        DatabaseConnection.reset()
