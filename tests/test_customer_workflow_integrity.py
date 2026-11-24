@@ -108,7 +108,7 @@ def test_v8_address_migration_defaults_active_and_keeps_data(env):
     db.commit()
     initialise_database(db)
     initialise_database(db)
-    assert db.fetch_one("SELECT version FROM schema_version")["version"] == 14
+    assert db.fetch_one("SELECT version FROM schema_version")["version"] == 15
     assert db.fetch_one("SELECT is_active FROM customer_addresses WHERE id=?", (address["id"],))["is_active"] == 1
 
 

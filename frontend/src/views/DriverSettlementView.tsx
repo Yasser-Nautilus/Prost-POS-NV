@@ -21,6 +21,7 @@ import { bridge } from "../bridge";
 
 interface DriverSettlementViewProps {
   currentUser: any;
+  onDaySettled?: (message: { amount: number; printed: boolean }) => void;
 }
 
 type ViewState = "select_driver" | "trip_list" | "preview" | "success";
@@ -33,7 +34,7 @@ const fmtDate = (iso: string | null) => iso
   ? new Date(iso).toLocaleDateString("ar-EG", { day: "numeric", month: "long" })
   : "—";
 
-export function DriverSettlementView({ currentUser: _currentUser }: DriverSettlementViewProps) {
+export function DriverSettlementView({ currentUser: _currentUser, onDaySettled }: DriverSettlementViewProps) {
   const [drivers, setDrivers] = useState<any[]>([]);
   const [selectedDriver, setSelectedDriver] = useState<any | null>(null);
   /** All trips for the selected driver (both settled and unsettled) */
@@ -102,6 +103,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
       const data = await bridge.call("get_driver_settlement_preview", {
         driver_id: selectedDriver.id,
         trip_id: tripId,
+        expected_day_id: allTripsPreview?.day_id,
       });
       setPreview(data);
     } catch (e: any) {
@@ -120,6 +122,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
       const result = await bridge.call("settle_driver", {
         driver_id: selectedDriver.id,
         trip_id: selectedTripId,
+        expected_day_id: preview.day_id,
       });
       setSuccessData(result);
       setViewState("success");
@@ -137,10 +140,10 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
     setDayBusy(true);
     setDayMessage(null);
     try {
-      await bridge.call("settle_driver", { driver_id: selectedDriver.id });
+      const result = await bridge.call("settle_driver", { driver_id: selectedDriver.id, expected_day_id: allTripsPreview?.day_id });
       let printed = true;
       try {
-        const res = await bridge.call<{ printed: boolean }>("print_driver_day_sheet", { driver_id: selectedDriver.id });
+        const res = await bridge.call<{ printed: boolean }>("print_driver_day_sheet", { driver_id: selectedDriver.id, expected_day_id: allTripsPreview?.day_id });
         printed = res?.printed !== false;
       } catch { printed = false; }
       setDayMessage({
@@ -151,6 +154,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
       });
       setConfirmDay(false);
       await handleBackToTrips();
+      onDaySettled?.({ amount: result.total_delivery_fees, printed });
     } catch (e: any) {
       setDayMessage({ kind: "error", text: e.message || "فشل تسوية آخر اليوم" });
       setConfirmDay(false);
@@ -163,7 +167,7 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
     if (!selectedDriver) return;
     setDayBusy(true);
     try {
-      const res = await bridge.call<{ printed: boolean }>("print_driver_day_sheet", { driver_id: selectedDriver.id });
+      const res = await bridge.call<{ printed: boolean }>("print_driver_day_sheet", { driver_id: selectedDriver.id, expected_day_id: allTripsPreview?.day_id });
       setDayMessage(res?.printed === false
         ? { kind: "error", text: "تعذرت طباعة الشيت، تأكد من الطابعة" }
         : { kind: "ok", text: "تمت طباعة الشيت" });
@@ -312,18 +316,19 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                 </h3>
                 {preview.trips?.[0]?.orders?.map((order: any) => (
                   <div key={order.order_id} className="rounded-xl border border-brand-border p-3 bg-brand-card/40">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-bold text-white truncate max-w-[160px]">
+                    <div className="flex flex-wrap items-center gap-2 mb-2 min-w-0">
+                      <span className="shrink-0 rounded-lg bg-brand-red/15 px-2 py-1 font-bold text-brand-red">أوردر #{order.invoice_no ?? order.order_id}</span>
+                      <span className="min-w-0 flex-1 text-sm font-bold text-white break-words">
                         {order.customer_name}
                       </span>
                       <span className={`text-xs font-medium ${order.payment_method === "cash" ? "text-green-400" : "text-cyan-400"}`}>
                         {order.payment_method === "cash" ? "نقدي" : "أونلاين"}
                       </span>
                     </div>
-                    <div className="flex justify-between items-center text-xs text-gray-400">
-                      <span className="truncate max-w-[130px]">{order.customer_address || order.customer_zone || "—"}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-amber-400" title="رسوم التوصيل">توصيل: {fmtEGP(order.delivery_fee || 0)}</span>
+                    <div className="space-y-2 text-xs text-gray-400 min-w-0">
+                      <p className="break-words">{order.customer_address || order.customer_zone || "—"}</p>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="text-amber-400 whitespace-nowrap" title="رسوم التوصيل">توصيل: {fmtEGP(order.delivery_fee || 0)}</span>
                         <span className="text-white font-bold">{fmtEGP(order.total)}</span>
                       </div>
                     </div>
@@ -516,9 +521,12 @@ export function DriverSettlementView({ currentUser: _currentUser }: DriverSettle
                     {expandedTrip === trip.trip_id && (
                       <div className="mt-2 space-y-1 border-t border-brand-border/50 pt-2">
                         {trip.orders?.map((order: any) => (
-                          <div key={order.order_id} className="flex justify-between text-xs">
-                            <span className="text-gray-400 truncate max-w-[180px]">{order.customer_name}</span>
-                            <div className="flex items-center gap-2">
+                          <div key={order.order_id} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto] gap-2 text-xs rounded-lg bg-brand-surface/50 p-3 min-w-0">
+                            <div className="min-w-0 flex flex-wrap gap-2 items-start">
+                              <span className="shrink-0 text-brand-red font-bold">أوردر #{order.invoice_no ?? order.order_id}</span>
+                              <span className="text-gray-300 break-words min-w-0">{order.customer_name}</span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                               <span className="text-amber-400 font-medium">توصيل: {fmtEGP(order.delivery_fee || 0)}</span>
                               <span className={order.payment_method === "cash" ? "text-green-400" : "text-cyan-400"}>
                                 {order.payment_method === "cash" ? "نقدي" : "أونلاين"}

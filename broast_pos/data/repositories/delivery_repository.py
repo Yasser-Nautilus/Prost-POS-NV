@@ -416,6 +416,16 @@ class DeliveryRepository(BaseRepository[DeliveryTrip]):
             for r in rows
         ]
 
+    def get_driver_trips_for_day(self, driver_id: int, day_id: int) -> list[DeliveryTrip]:
+        """Use the orders' accounting day, never the trip's wall-clock date."""
+        rows = self._db.fetch_all(
+            "SELECT DISTINCT t.* FROM delivery_trips t "
+            "JOIN delivery_trip_orders dto ON dto.trip_id=t.id "
+            "JOIN orders o ON o.id=dto.order_id WHERE t.driver_id=? AND o.shift_id=? "
+            "ORDER BY t.created_at,t.id", (driver_id, day_id),
+        )
+        return [self._row_to_trip_with_orders(row) for row in rows]
+
     def get_driver_daily_trips(self, driver_id: int,
                                date_str: str) -> list[DeliveryTrip]:
         """All trips for one driver on a date."""

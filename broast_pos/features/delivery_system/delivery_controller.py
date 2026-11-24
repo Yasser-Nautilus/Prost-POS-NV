@@ -447,6 +447,7 @@ class DeliveryController:
         driver_id: int,
         settlement_date: str | None = None,
         trip_id: int | None = None,
+        expected_day_id: int | None = None,
     ) -> dict[str, Any] | None:
         """Return settlement preview without committing.
 
@@ -458,6 +459,7 @@ class DeliveryController:
             driver_id=driver_id,
             settlement_date=settlement_date,
             trip_id=trip_id,
+            expected_day_id=expected_day_id,
         )
 
     def settle_driver(
@@ -468,6 +470,7 @@ class DeliveryController:
         settlement_date: str | None = None,
         notes: str | None = None,
         trip_id: int | None = None,
+        expected_day_id: int | None = None,
     ) -> tuple[bool, Any]:
         """Atomically settle all eligible trips for a driver on a date.
 
@@ -485,6 +488,7 @@ class DeliveryController:
                 settlement_date=settlement_date,
                 notes=notes,
                 trip_id=trip_id,
+                expected_day_id=expected_day_id,
             )
             self._notify_drivers()
             return True, settlement
@@ -495,6 +499,7 @@ class DeliveryController:
         self,
         driver_id: int,
         settlement_date: str | None = None,
+        expected_day_id: int | None = None,
     ) -> tuple[bool, Any]:
         """Print the end-of-day settlement sheet (order count per delivery fee).
 
@@ -506,6 +511,7 @@ class DeliveryController:
         try:
             sheet = dict(self._settlement_svc.get_driver_settlement_preview(
                 driver_id=driver_id, settlement_date=settlement_date,
+                expected_day_id=expected_day_id,
             ))
             driver = self._delivery_svc._users.get_by_id(driver_id)
             sheet["driver_phone"] = getattr(driver, "phone", None) or ""

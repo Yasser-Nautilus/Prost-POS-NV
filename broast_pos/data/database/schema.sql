@@ -552,3 +552,13 @@ CREATE TABLE IF NOT EXISTS driver_day_closures (
     paid_amount REAL NOT NULL,
     PRIMARY KEY(driver_id, settlement_date)
 );
+
+-- Keep date-scoped historical markers unchanged; new payments use business day.
+CREATE TABLE IF NOT EXISTS driver_business_day_closures (
+    driver_id INTEGER NOT NULL REFERENCES users(id),
+    day_id INTEGER NOT NULL REFERENCES shifts(id),
+    settlement_id INTEGER REFERENCES driver_settlements(id),
+    expense_id INTEGER REFERENCES cash_transactions(id),
+    paid_amount REAL NOT NULL,
+    PRIMARY KEY(driver_id, day_id)
+);

@@ -59,6 +59,7 @@ function App() {
   const [isShiftOpen, setIsShiftOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [activeShift, setActiveShift] = useState<any>(null);
+  const [settlementNotice, setSettlementNotice] = useState<{ amount: number; printed: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   // H17: native-bridge connection state — "blocked" means no native shell
   // and demo mode isn't enabled, so no transaction may be allowed to run.
@@ -128,6 +129,7 @@ function App() {
       await bridge.call("logout");
       setCurrentUser(null);
       setActiveShift(null);
+      setSettlementNotice(null);
     } catch (e) {
       console.error(e);
     }
@@ -136,6 +138,7 @@ function App() {
   const handleShiftChange = async () => {
     const shift = await bridge.call("get_active_shift");
     setActiveShift(shift);
+    if (shift?.id !== activeShift?.id) setSettlementNotice(null);
   };
 
   if (loading) {
@@ -333,13 +336,25 @@ function App() {
         )}
         {activeTab === "reports"    && isManagerOrAbove && <ReportsView key={activeShift?.id ?? "closed"} currentUser={currentUser} />}
         {activeTab === "products"   && isManagerOrAbove && <ProductsView currentUser={currentUser} />}
-        {activeTab === "settlement" && <DriverSettlementView currentUser={currentUser} />}
+        {activeTab === "settlement" && <DriverSettlementView key={activeShift?.id ?? "closed"} currentUser={currentUser}
+          onDaySettled={(notice) => { setSettlementNotice(notice); setIsShiftOpen(true); }} />}
         {activeTab === "sessions"   && isManagerOrAbove && <SessionsView currentUser={currentUser} />}
         {activeTab === "audit"      && isManagerOrAbove && <AuditLogView currentUser={currentUser} />}
         {activeTab === "users"      && isAdmin           && <UsersView currentUser={currentUser} />}
       </main>
 
       {/* Global Dialogs */}
+      {settlementNotice && (
+        <div role="status" className="fixed top-20 left-4 right-4 md:left-auto md:w-96 z-[100] rounded-2xl border border-green-700/50 bg-brand-surface p-5 shadow-2xl space-y-2" dir="rtl">
+          <button aria-label="إغلاق رسالة التسوية" onClick={() => setSettlementNotice(null)} className="float-left text-gray-400 px-2">×</button>
+          <p className="font-bold text-green-300">تمت تسوية رسوم السائق بنجاح</p>
+          <p className="text-white">تم تسجيل {settlementNotice.amount.toFixed(2)} ج.م في مصروفات الوردية</p>
+          <p className={settlementNotice.printed ? "text-gray-400 text-sm" : "text-amber-300 text-sm"}>
+            {settlementNotice.printed ? "تمت طباعة الشيت" : "تعذرت الطباعة. يمكنك إعادة المحاولة من زر طباعة الشيت"}
+          </p>
+          <button onClick={() => { setIsShiftOpen(true); setSettlementNotice(null); }} className="text-green-300 font-bold">عرض مصروفات الوردية</button>
+        </div>
+      )}
       <ShiftDialog
         isOpen={isShiftOpen}
         onClose={() => setIsShiftOpen(false)}

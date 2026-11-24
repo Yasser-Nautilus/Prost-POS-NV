@@ -205,9 +205,79 @@ def test_visible_single_trip_then_day_expense_and_completed_state(qapp, monkeypa
         assert call("get_expenses")[0]["amount"] == 65
         assert db.fetch_one("SELECT count(*) n FROM cash_ledger WHERE entry_type='DRIVER_FEE_PAYOUT'")["n"] == 1
         browser.screenshot("24-driver-day-completed.png")
-        browser.click("الوردية مفتوحة")
+        # Successful settlement opens the cashier-accessible shift dialog.
+        browser.wait("document.body.innerText.includes('تمت تسوية رسوم السائق بنجاح')")
         browser.wait("document.body.innerText.includes('سجل المصروفات بالوردية الحالية:')")
         browser.screenshot("25-driver-expense.png")
+    finally:
+        shell.close()
+        DatabaseConnection.reset()
+
+
+def test_visible_driver_order_numbers_wrapping_and_day_rollover(qapp, monkeypatch):
+    from test_batch_workflow_e2e import _setup
+    from test_driver_business_day import _call, _trip
+
+    monkeypatch.setenv("POS_DEV_MODE", "0")
+    c, db, day, (driver, _) = _setup(qapp)
+    tid = _trip(c, driver, db)
+    long_name = "عميل بنفس الاسم طويل جداً للاختبار " * 4
+    db.execute("UPDATE orders SET customer_name=?, customer_address=?", (long_name, "عنوان طويل شارع رئيسي " * 6))
+    db.commit()
+    _call(c, "logout")
+    shell, browser = _show(c.bridge)
+    try:
+        _login(browser, "1234")
+        browser.click("تسوية السائقين")
+        browser.wait("document.body.innerText.includes('سائق 0')")
+        browser.js("[...document.querySelectorAll('button')].find(b=>b.textContent.includes('سائق 0')&&b.textContent.includes('حاضر اليوم')).click()")
+        browser.click("▼ عرض الطلبات")
+        browser.wait("document.body.innerText.includes('أوردر #1')")
+        shell.resize(1040, 900)
+        browser.screenshot("30-expanded-order-number-narrow.png")
+        browser.click("تسوية هذه الرحلة")
+        browser.wait("document.body.innerText.includes('أوردر #1')")
+        browser.screenshot("31-order-preview-narrow.png")
+        # No order-row descendant escapes the right-hand order-list card.
+        assert browser.js("""(()=>{const badge=[...document.querySelectorAll('span')].find(e=>e.textContent==='أوردر #1');
+          const card=badge.parentElement.parentElement;const r=card.getBoundingClientRect();
+          return [...card.querySelectorAll('*')].every(e=>{const b=e.getBoundingClientRect();return b.left>=r.left-1&&b.right<=r.right+1});})()""")
+        browser.click("تأكيد تسوية هذه الرحلة فقط")
+        browser.click("تسوية رحلة أخرى لنفس السائق")
+        browser.click("تسوية آخر اليوم")
+        browser.js("[...document.querySelectorAll('button')].find(b=>b.textContent.includes('تأكيد: تسجيل')).click()")
+        browser.wait("document.body.innerText.includes('إدارة وردية الصندوق')")
+        # Close the drawer through the real handler, then close the day through
+        # the visible dialog. Its status callback must reset the mounted view.
+        _call(c, "session.close", {"session_id": c.session_id, "counted_cash_egp": 500,
+                                    "manager_pin": "1234", "variance_reason": "UI rollover"})
+        browser.click("طباعة ملخص الوردية")
+        browser.click("إغلاق الوردية")
+        browser.field("رمز PIN للمدير", "1234")
+        browser.click("تأكيد الرمز")
+        browser.wait("document.body.innerText.includes('الوردية مغلقة')")
+        assert not browser.js("document.body.innerText.includes('أوردر #1')")
+        assert not browser.js("document.body.innerText.includes('تمت تسوية آخر اليوم — المدفوع')")
+        browser.click("الوردية مغلقة")
+        browser.wait("!!document.querySelector('[aria-label=\"محطة الدرج\"]')")
+        browser.field("محطة الدرج", "ALL", select=True)
+        browser.field("النقد الموجود بالدرج عند الفتح", "100")
+        browser.click("فتح يوم العمل ودرج الكاشير")
+        browser.wait("document.body.innerText.includes('الوردية مفتوحة')")
+        new_day = _call(c, "get_active_shift")["id"]
+        assert new_day != day
+        # Close dialog with its visible X and return to the same driver.
+        browser.js("[...document.querySelectorAll('h3')].find(e=>e.textContent.includes('إدارة وردية الصندوق')).parentElement.querySelector('button').click()")
+        browser.wait("document.body.innerText.includes('سائق 0')")
+        _call(c, "check_in_driver", {"driver_id": driver})
+        browser.js("document.querySelector('button[title=\"تحديث\"]').click()")
+        browser.wait("document.body.innerText.includes('حاضر اليوم')")
+        browser.js("[...document.querySelectorAll('button')].find(b=>b.textContent.includes('سائق 0')&&b.textContent.includes('حاضر اليوم')).click()")
+        browser.wait("document.body.innerText.includes('لا توجد رحلات')")
+        assert not browser.js("document.body.innerText.includes('أوردر #1')")
+        assert _call(c, "get_expenses") == []
+        browser.screenshot("32-new-business-day-no-old-trips.png")
+        assert db.fetch_one("SELECT is_settled FROM delivery_trips WHERE id=?", (tid,))["is_settled"]
     finally:
         shell.close()
         DatabaseConnection.reset()
