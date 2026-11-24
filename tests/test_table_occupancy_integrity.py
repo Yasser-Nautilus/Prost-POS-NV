@@ -165,7 +165,7 @@ def test_existing_duplicates_survive_upgrade_but_are_not_silently_selected(env):
     initialise_database(db)
     initialise_database(db)
     assert db.fetch_one("SELECT count(*) n FROM orders")["n"] == 2
-    assert db.fetch_one("SELECT version FROM schema_version")["version"] == 13
+    assert db.fetch_one("SELECT version FROM schema_version")["version"] == 14
     with pytest.raises(ValueError, match="متعددة"):
         repo.get_by_table(4)
     with pytest.raises(ValueError):
