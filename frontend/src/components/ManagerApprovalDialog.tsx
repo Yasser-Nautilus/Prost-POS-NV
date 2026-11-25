@@ -60,7 +60,7 @@ export const ManagerApprovalDialog: React.FC<ManagerApprovalDialogProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-md" dir="rtl">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 backdrop-blur-md" dir="rtl" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div
         role="dialog"
         aria-label={title}
