@@ -434,7 +434,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
 
       {/* Product Form Modal */}
       {showProductForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowProductForm(false); }}>
           <div className="w-full max-w-md mx-4 bg-brand-surface border border-brand-border rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="p-5 border-b border-brand-border/40 flex items-center justify-between">
               <h3 className="font-bold text-lg text-brand-red">
@@ -528,7 +528,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
 
       {/* Category Form Modal */}
       {showCatForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowCatForm(false); }}>
           <div className="w-full max-w-sm mx-4 bg-brand-surface border border-brand-border rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="p-5 border-b border-brand-border/40 flex items-center justify-between">
               <h3 className="font-bold text-lg text-brand-red">
