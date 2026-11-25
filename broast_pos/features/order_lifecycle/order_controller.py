@@ -952,6 +952,44 @@ class OrderController:
             )
         return printed
 
+    def print_trip_slips(self, order_ids: list[int]) -> list[int]:
+        """Print each order's delivery receipt for the driver (trip sent out).
+
+        Read-only: nothing is marked paid and no money or order state
+        changes; cash is still handed in at trip settlement. The slip is a
+        normal receipt (no COPY / UNPAID label). Each print is audited, and
+        a printer failure on one order never stops the others. Returns the
+        order ids whose slip could not be printed.
+        """
+        actor = self._auth_svc.get_current_user()
+        failed: list[int] = []
+        for oid in order_ids:
+            order = None
+            printed = False
+            try:
+                order = self._order_svc.get_order_by_id(oid)
+                if order is None:
+                    raise ValueError("الطلب غير موجود")
+                printed = bool(self._print.on_order_completed(
+                    {**self._order_to_dict(order), "driver_slip": True}, self._cashier_slot))
+            except Exception:
+                logger.exception("Trip slip failed for order %s", oid)
+            if not printed:
+                failed.append(oid)
+            if order is not None and actor is not None:
+                try:
+                    self._order_svc.audit_svc.log(
+                        event_type=AuditEventType.RECEIPT_REPRINTED,
+                        user_id=actor.id, user_name=actor.display_name or actor.username,
+                        order_id=order.id, entity_type="order", entity_id=order.id,
+                        action="طباعة ورقة السائق" if printed else "فشل طباعة ورقة السائق",
+                        details={"printed": printed, "trip_slip": True,
+                                 "invoice_no": order.invoice_no},
+                    )
+                except Exception:
+                    logger.exception("Trip slip audit failed for order %s", oid)
+        return failed
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------

@@ -1148,7 +1148,17 @@ class POSBridge(QObject):
             return json.dumps({"success": False, "error": res})
         elif action == "dispatch_trip":
             ok, msg = ctrl.dispatch_trip(payload.get("trip_id"))
-            return json.dumps({"success": ok, "message" if ok else "error": msg})
+            if not ok:
+                return json.dumps({"success": False, "error": msg})
+            # Driver slips: a marked copy of each order's receipt. Printing is
+            # best-effort and read-only; the dispatch above is already saved.
+            failed = []
+            details = ctrl.get_trip_details(payload.get("trip_id")) or {}
+            order_ids = [o["order_id"] for o in details.get("orders", [])]
+            if self._order_ctrl and order_ids:
+                failed = self._order_ctrl.print_trip_slips(order_ids)
+            failed_invoices = [o["invoice_no"] for o in details.get("orders", []) if o["order_id"] in failed]
+            return json.dumps({"success": True, "message": msg, "data": {"print_failed": failed_invoices}})
         elif action == "return_trip":
             ok, msg = ctrl.return_trip(payload.get("trip_id"))
             return json.dumps({"success": ok, "message" if ok else "error": msg})

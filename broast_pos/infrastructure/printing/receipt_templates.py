@@ -224,17 +224,24 @@ def print_delivery_receipt(printer: EscPosPrinter, order: dict[str, Any]) -> boo
     service = order.get("service_amount", 0)
     if service:
         ok &= printer.print_text(f"Service:              {_fmt_money(service)}")
-    ok &= printer.print_text(f"Delivery Fee:         {_fmt_money(order.get('delivery_fee', 0))}")
+    slip = bool(order.get("driver_slip"))
+    if not slip:
+        ok &= printer.print_text(f"Delivery Fee:         {_fmt_money(order.get('delivery_fee', 0))}")
 
     ok &= printer.print_double_line(LINE_WIDTH)
     ok &= printer.print_text("Total", align="center")
     ok &= printer.print_text(_fmt_money(order.get("total", 0)), align="center", bold=True, double_height=True)
     ok &= printer.print_double_line(LINE_WIDTH)
+    if slip:
+        # Driver slip reads like an invoice: total, then the delivery fee.
+        # No Paid / Change lines (the order is still unpaid until settlement).
+        ok &= printer.print_text(f"Delivery Fee:         {_fmt_money(order.get('delivery_fee', 0))}")
 
     payment = PAYMENT_LABELS.get(order.get("payment_method", ""), order.get("payment_method", ""))
     ok &= printer.print_text(f"Payment:           {payment}")
-    ok &= printer.print_text(f"Paid:              {_fmt_money(order.get('amount_paid', 0))}")
-    ok &= printer.print_text(f"Change:            {_fmt_money(order.get('change_given', 0))}")
+    if not slip:
+        ok &= printer.print_text(f"Paid:              {_fmt_money(order.get('amount_paid', 0))}")
+        ok &= printer.print_text(f"Change:            {_fmt_money(order.get('change_given', 0))}")
 
     ok &= _print_footer(printer, brand)
     ok &= printer.cut()

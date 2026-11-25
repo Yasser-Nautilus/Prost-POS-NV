@@ -245,12 +245,17 @@ export const DeliveryView: React.FC<DeliveryViewProps> = () => {
         driver_id: parseInt(selectedDriverId),
         order_ids: selectedOrders,
       });
+      let printFailed: string[] = [];
       if (tripResult?.trip_id) {
-        await bridge.call("dispatch_trip", { trip_id: tripResult.trip_id });
+        const sent = await bridge.call("dispatch_trip", { trip_id: tripResult.trip_id });
+        printFailed = sent?.print_failed ?? [];
       }
       setSelectedOrders([]);
       setSelectedDriverId("");
       fetchAll();
+      if (printFailed.length > 0) {
+        alert("تم إرسال الرحلة لكن تعذرت طباعة ورقة السائق للطلبات: " + printFailed.join("، ") + ". افحص الطابعة والورق وأعد الطباعة من المتابعة (نسخة).");
+      }
     } catch (err: any) {
       alert("فشل إنشاء الرحلة: " + err.message);
     }
