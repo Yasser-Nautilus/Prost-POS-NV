@@ -13,6 +13,7 @@ import { UsersView } from "./views/UsersView";
 import { DriverSettlementView } from "./views/DriverSettlementView";
 import { AuditLogView } from "./views/AuditLogView";
 import { SessionsView } from "./views/SessionsView";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { ShiftDialog } from "./components/ShiftDialog";
 import { bridge } from "./bridge";
 import prostshP from "./assets/prostsh-p.png";
@@ -258,6 +259,7 @@ function App() {
 
         {/* Left side: Shift & Cashier Profiler */}
         <div className="flex shrink-0 items-center gap-3 ps-3">
+          <ThemeToggle />
           {/* Shift indicator */}
           <button
             onClick={() => setIsShiftOpen(true)}

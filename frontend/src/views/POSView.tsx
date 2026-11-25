@@ -509,7 +509,10 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
         setSelectedTable(null);
         await fetchCurrentOrder();
         fetchParkedCount();
-        alert(`تم تأكيد الطلب بنجاح! رقم الفاتورة: ${confirmRes.invoice_no}`);
+        // Delivery orders: the user already pressed confirm, no second notice.
+        if (capturedType !== "delivery") {
+          alert(`تم تأكيد الطلب بنجاح! رقم الفاتورة: ${confirmRes.invoice_no}`);
+        }
       }
     } catch (e: any) {
       alert("فشل تأكيد الطلب: " + e.message);

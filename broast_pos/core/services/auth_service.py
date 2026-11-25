@@ -364,6 +364,13 @@ class AuthService:
         if slot is not None and (type(slot) is not int or slot not in (1, 2)):
             raise ValueError("رقم الصندوق يجب أن يكون 1 أو 2 فقط")
 
+    def _ensure_unique_username(self, username: str, exclude_id: int | None = None) -> None:
+        """Usernames are identities: block a repeat (case-insensitive), inactive users included."""
+        wanted = username.casefold()
+        for other in self._users.get_all():
+            if other.id != exclude_id and (other.username or "").strip().casefold() == wanted:
+                raise ValueError("اسم المستخدم موجود بالفعل")
+
     def create_user(
         self,
         username: str,
@@ -395,6 +402,7 @@ class AuthService:
                 f"رمز PIN يجب أن يكون {_PIN_MIN_LENGTH} أرقام إنجليزية (0-9) على الأقل"
             )
 
+        self._ensure_unique_username(username)
         if self._pin_in_use(pin):
             raise ValueError("رمز PIN مستخدم بالفعل لمستخدم آخر")
 
@@ -485,6 +493,7 @@ class AuthService:
             username = username.strip()
             if not username:
                 raise ValueError("اسم المستخدم مطلوب")
+            self._ensure_unique_username(username, exclude_id=user_id)
             user.username = username
 
         if display_name is not None:

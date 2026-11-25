@@ -3,6 +3,7 @@ import { Users, ShieldAlert, Loader2 } from "lucide-react";
 import { Numpad } from "../components/Numpad";
 import { bridge } from "../bridge";
 import loginBackground from "../assets/prostsh-brand.webp";
+import { ThemeToggle } from "../components/ThemeToggle";
 import prostshP from "../assets/prostsh-p.png";
 
 interface LoginViewProps {
@@ -60,7 +61,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       <div
         role="region"
         aria-label="قائمة الموظفين — اختر حسابك"
-        className="w-full min-w-0 flex-1 text-right space-y-6 flex flex-col justify-center"
+        className="login-art w-full min-w-0 flex-1 text-right space-y-6 flex flex-col justify-center"
       >
         <div className="space-y-2">
           <div className="inline-block py-1.5 px-4 bg-brand-red/10 border border-brand-red/30 rounded-full text-brand-red text-sm font-bold">
@@ -132,13 +133,14 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
           )}
         </div>
 
+        <ThemeToggle className="fixed top-4 left-4 z-50" />
         <h3 className="text-xl font-bold text-white mb-1">تسجيل الدخول للنظام</h3>
         <p className="text-gray-400 text-sm mb-6 text-center">أدخل رمز الـ PIN الخاص بك</p>
 
         <input type="password" aria-label="رمز PIN" value={pin}
           autoComplete="current-password" onChange={(e) => setPin(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") handleLoginSubmit(); }}
-          className="w-full text-center text-xl bg-transparent text-white mb-4" />
+          className="sr-only" />
         {/* PIN Dot indicators */}
         <div className="flex justify-center gap-3 mb-6">
           {Array.from({ length: Math.max(4, Math.min(pin.length, 12)) }, (_, idx) => (

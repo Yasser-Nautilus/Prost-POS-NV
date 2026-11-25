@@ -81,3 +81,61 @@ body {
 .grid-flow-col-rtl {
   grid-auto-flow: column;
 }
+
+/* ── Light theme ─────────────────────────────────────────────────────────
+   Dark is the default. Adding the "light" class on <html> swaps the palette
+   variables; every utility class reads them, so no component changes. */
+html.light {
+  --color-brand-dark: #f4f5f7;
+  --color-brand-surface: #ffffff;
+  --color-brand-card: #eceef2;
+  --color-brand-border: #cfd3da;
+  --color-white: #111827;
+  --color-gray-200: #1f2937;
+  --color-gray-300: #374151;
+  --color-gray-400: #4b5563;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #9ca3af;
+  --color-red-400: #dc2626;
+  --color-red-300: #b91c1c;
+  --color-green-400: #15803d;
+  --color-green-300: #166534;
+  --color-blue-400: #1d4ed8;
+  --color-amber-400: #b45309;
+  --color-yellow-400: #a16207;
+  --color-purple-400: #7e22ce;
+  --color-cyan-400: #0e7490;
+  background-color: var(--color-brand-dark);
+  color: #111827;
+}
+/* Text on solid red / teal / gradient buttons stays white in light mode */
+html.light .bg-brand-red,
+html.light .red-gradient-bg,
+html.light [class*="from-red-"],
+html.light [class*="bg-red-6"],
+html.light [class*="bg-red-7"],
+html.light .bg-brand-teal,
+html.light [class*="bg-green-6"],
+html.light [class*="bg-green-7"] {
+  --color-white: #ffffff;
+}
+html.light .bg-brand-teal { --color-brand-dark: #ffffff; }
+html.light .glassmorphism {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(160, 170, 190, 0.5);
+}
+/* The login artwork is always dark, so the text on it keeps the dark palette */
+html.light .login-art {
+  --color-brand-dark: #131313;
+  --color-brand-surface: #1b1b1e;
+  --color-brand-card: #242428;
+  --color-brand-border: #3a3a40;
+  --color-white: #ffffff;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-red-400: #f87171;
+  --color-green-400: #4ade80;
+  color: #f3f4f6;
+}

@@ -135,6 +135,15 @@ class ProductService:
             raise ValueError(PRICE_VALIDATION_MESSAGE)
         return value
 
+    def _ensure_unique_name(self, name: str, exclude_id: int | None = None) -> None:
+        """Block a second active product with the same name (case-insensitive)."""
+        wanted = " ".join(name.split()).casefold()
+        for other in self._products.get_all_products():
+            if other.id == exclude_id or not other.is_active:
+                continue
+            if " ".join(other.name.split()).casefold() == wanted:
+                raise ValueError("اسم المنتج موجود بالفعل")
+
     def create_product(
         self,
         name: str,
@@ -151,6 +160,7 @@ class ProductService:
         if not name:
             raise ValueError("اسم المنتج مطلوب")
         price = self.validate_price(price)
+        self._ensure_unique_name(name)
 
         product = Product(
             name=name,
@@ -186,6 +196,8 @@ class ProductService:
             name = name.strip()
             if not name:
                 raise ValueError("اسم المنتج مطلوب")
+            if product.is_active and is_active is not False:
+                self._ensure_unique_name(name, exclude_id=product_id)
             product.name = name
 
         if price is not None:
@@ -198,6 +210,8 @@ class ProductService:
             product.sort_order = sort_order
 
         if is_active is not None:
+            if is_active and not product.is_active:
+                self._ensure_unique_name(product.name, exclude_id=product_id)
             product.is_active = is_active
 
         return self._products.save(product)
