@@ -226,3 +226,42 @@ class ProductService:
         if product is None:
             raise ValueError("المنتج غير موجود")
         self._products.delete(product_id)
+
+    def remove_product(self, product_id: int) -> None:
+        """Permanently delete a product (unlike hide, which only deactivates).
+
+        A product that appears on past orders cannot be deleted without
+        breaking those orders and the reports, so it must be hidden instead.
+
+        Raises:
+            ValueError: if the product is missing or has order history.
+        """
+        product = self._products.get_by_id(product_id)
+        if product is None:
+            raise ValueError("المنتج غير موجود")
+        if self._products.has_order_history(product_id):
+            raise ValueError(
+                "لا يمكن حذف منتج عليه طلبات سابقة، استخدم إخفاء بدلاً من الحذف"
+            )
+        self._products.hard_delete(product_id)
+
+    def reorder_products(self, category_id: int, ordered_ids: list[int]) -> None:
+        """Save a manual order for the products of one category.
+
+        ``ordered_ids`` must list every product of the category (hidden ones
+        included) exactly once, in the wanted order.
+
+        Raises:
+            ValueError: if the list does not match the category's products.
+        """
+        try:
+            ids = [int(i) for i in ordered_ids]
+        except (TypeError, ValueError):
+            raise ValueError("قائمة الترتيب غير صالحة") from None
+        current = {
+            p.id for p in self._products.get_all_products()
+            if p.category_id == category_id
+        }
+        if len(set(ids)) != len(ids) or set(ids) != current:
+            raise ValueError("قائمة الترتيب لا تطابق منتجات الفئة")
+        self._products.set_sort_orders(ids)
