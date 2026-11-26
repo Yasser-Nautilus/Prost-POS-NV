@@ -1,6 +1,6 @@
 # Order Lifecycle — Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 > **Source of Truth:** `order_service.py`, `order.py`, `order_controller.py`, `bridge.py`
 
 ---
@@ -162,3 +162,14 @@ All types:
 | Frontend (POSView) | Implemented |
 | Frontend (TrackingView) | Implemented |
 | Bridge integration | Implemented |
+
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26.
+
+- `amendment_tracker.py`: lines are identified by `(product_id, notes)`; removals are consumed once across identical lines; quantity deltas fixed [#71, #94].
+- `order_controller.py`: `save_amendment()` reloads the persisted order; `print_trip_slips(order_ids)` prints receipts for a trip's orders; every valid print attempt is audited; cashier amendment and cancel need manager PIN and reason [#71, #94, #107].
+- `payment_coordinator.py`: paid-order guard, mixed payment and equal split [#72, #100].
+- Receipt reprint from tracking, copies marked "COPY" [#106].
