@@ -160,3 +160,8 @@ Seeds the database with a default admin user on first run.
 | Foreign Keys | Enforced |
 | Busy Timeout | 5,000 ms |
 | Cash Ledger Protection | UPDATE/DELETE triggers |
+
+## Update 2026-11-27 (Batch 5: menu and products)
+
+- `menu_data.py`: pieces, meals, crispy/zinger and tender/zinger items are now separate regular and spicy products (for example "2 قطع دجاج عادي" and "2 قطع دجاج حار"). `SPLIT_PRODUCTS` maps each old name to its two new names.
+- `seed.ensure_menu_products`: `PRAGMA user_version` 2 marks the split. A database imported with the old menu is upgraded once: the old product keeps its id and becomes the regular one, a spicy copy with the same price, category and active state is inserted right after it. Missing or renamed products are skipped.
