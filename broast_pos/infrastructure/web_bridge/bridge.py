@@ -505,6 +505,35 @@ class POSBridge(QObject):
                 except (ValueError, TypeError) as e:
                     return json.dumps({"success": False, "error": str(e)})
 
+            elif action == "remove_product":
+                # Manager/Admin only. Permanent; refused for products with order history.
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
+                try:
+                    pid = int(payload.get("product_id"))
+                    old = self._product.get_product(pid)
+                    self._product.remove_product(pid)
+                except (ValueError, TypeError) as e:
+                    return json.dumps({"success": False, "error": str(e)})
+                self._audit_event(
+                    "product_removed", "product", pid,
+                    before={"name": old.name, "price": old.price} if old else None,
+                )
+                return json.dumps({"success": True})
+
+            elif action == "reorder_products":
+                # Manager/Admin only. Saves a manual product order for one category.
+                if not self._current_user or not self._current_user.is_manager_or_above():
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير"})
+                try:
+                    self._product.reorder_products(
+                        int(payload.get("category_id")),
+                        payload.get("product_ids") or [],
+                    )
+                except (ValueError, TypeError) as e:
+                    return json.dumps({"success": False, "error": str(e)})
+                return json.dumps({"success": True})
+
             elif action == "create_category":
                 # Manager/Admin only
                 if not self._current_user or not self._current_user.is_manager_or_above():
