@@ -486,9 +486,27 @@ class POSBridgeClient {
       case "update_product": {
         const prod = this.mockState.products.find((x: any) => x.id === payload.product_id);
         if (!prod) throw new Error("المنتج غير موجود");
-        Object.assign(prod, { name: payload.name, price: payload.price, category_id: payload.category_id, sort_order: payload.sort_order });
+        for (const key of ["name", "price", "category_id", "sort_order", "is_active"]) {
+          if (payload[key] !== undefined) (prod as any)[key] = payload[key];
+        }
         return prod as any;
       }
+
+      case "remove_product": {
+        this.mockState.products = this.mockState.products.filter((x: any) => x.id !== payload.product_id);
+        return true as any;
+      }
+
+      case "reorder_products": {
+        (payload.product_ids as number[]).forEach((id, index) => {
+          const prod = this.mockState.products.find((x: any) => x.id === id);
+          if (prod) prod.sort_order = index + 1;
+        });
+        return true as any;
+      }
+
+      case "get_all_products":
+        return [...this.mockState.products].sort((a: any, b: any) => a.sort_order - b.sort_order) as any;
 
       case "deactivate_product": {
         const prod = this.mockState.products.find((x: any) => x.id === payload.product_id);
