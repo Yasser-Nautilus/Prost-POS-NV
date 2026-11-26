@@ -372,6 +372,8 @@ class POSBridge(QObject):
                 try:
                     role_str = payload.get("role", "cashier")
                     role = UserRole(role_str)
+                    if role == UserRole.ADMIN:
+                        return json.dumps({"success": False, "error": "لا يمكن إنشاء مدير نظام آخر"})
                     user = self._auth.create_user(
                         username=payload.get("username", ""),
                         display_name=payload.get("display_name", ""),
@@ -392,6 +394,10 @@ class POSBridge(QObject):
                 try:
                     role_val = payload.get("role")
                     role = UserRole(role_val) if role_val else None
+                    if role == UserRole.ADMIN:
+                        target = self._auth._users.get_by_id(payload.get("user_id"))
+                        if target is None or target.role != UserRole.ADMIN:
+                            return json.dumps({"success": False, "error": "لا يمكن ترقية مستخدم إلى مدير نظام"})
                     user = self._auth.update_user(
                         user_id=payload.get("user_id"),
                         username=payload.get("username"),
@@ -420,6 +426,16 @@ class POSBridge(QObject):
                         is_active=False,
                     )
                     return json.dumps({"success": True, "data": self._user_to_dict(user)})
+                except ValueError as e:
+                    return json.dumps({"success": False, "error": str(e)})
+
+            elif action == "delete_user":
+                # Admin only
+                if not self._current_user or self._current_user.role.value != "admin":
+                    return json.dumps({"success": False, "error": "يتطلب صلاحيات مدير النظام"})
+                try:
+                    self._auth.delete_user(payload.get("user_id"))
+                    return json.dumps({"success": True, "data": {"deleted": True}})
                 except ValueError as e:
                     return json.dumps({"success": False, "error": str(e)})
 
