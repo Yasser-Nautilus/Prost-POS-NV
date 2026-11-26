@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { X, Search, Plus, UserPlus, MapPin, Check, Pencil } from "lucide-react";
 import { bridge } from "../bridge";
-import { INVALID_PHONE_MSG, looksLikePhone, normalizeEgyptianMobile } from "../phone";
+import { INVALID_PHONE_MSG, capPhoneInput, looksLikePhone, normalizeEgyptianMobile } from "../phone";
 
 interface CustomerLookupProps {
   isOpen: boolean;
@@ -262,7 +262,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                 inputMode="tel"
                 placeholder="أدخل رقم الموبايل..."
                 value={phone}
-                onChange={(e) => { setPhone(e.target.value); setPhoneError(""); }}
+                onChange={(e) => { setPhone(capPhoneInput(e.target.value)); setPhoneError(""); }}
                 onKeyDown={(e) => e.key === "Enter" && handleSearch()}
                 className="w-full bg-brand-card border border-brand-border/60 rounded-xl py-3 pl-11 pr-4 text-white placeholder-gray-500 focus:outline-none focus:border-brand-red text-left font-mono text-lg"
               />
@@ -363,7 +363,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                             type="text"
                             inputMode="tel"
                             value={editPhone}
-                            onChange={(e) => { setEditPhone(e.target.value); setEditError(""); }}
+                            onChange={(e) => { setEditPhone(capPhoneInput(e.target.value)); setEditError(""); }}
                             className="w-full bg-brand-surface border border-brand-border/50 rounded-lg p-2.5 text-white text-left font-mono focus:outline-none focus:border-brand-red"
                           />
                         </div>
