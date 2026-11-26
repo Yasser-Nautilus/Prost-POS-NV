@@ -78,6 +78,7 @@ def seed_database(db: DatabaseConnection) -> None:
 
 
 _MENU_IMPORT_MARKER = 1  # PRAGMA user_version value once the menu was imported
+_MENU_SPLIT_MARKER = 2   # ...and once regular/spicy items were split into two products
 
 
 def ensure_menu_products(db: DatabaseConnection) -> int:
@@ -86,13 +87,22 @@ def ensure_menu_products(db: DatabaseConnection) -> int:
     Runs a single time per database (tracked with ``PRAGMA user_version``), so
     items the owner later deletes or deactivates are not brought back. Existing
     categories/products are matched by exact name and are never modified.
-    """
-    from broast_pos.data.database.menu_data import MENU
 
+    A database imported before the regular/spicy split is upgraded once by
+    ``_split_regular_spicy`` (see ``menu_data.SPLIT_PRODUCTS``).
+    """
     row = db.fetch_one("PRAGMA user_version")
     current = (row[0] if row is not None else 0) or 0
-    if current >= _MENU_IMPORT_MARKER:
-        return 0
+    added = 0
+    if current < _MENU_IMPORT_MARKER:
+        added = _import_menu(db)
+    if current < _MENU_SPLIT_MARKER:
+        _split_regular_spicy(db)
+    return added
+
+
+def _import_menu(db: DatabaseConnection) -> int:
+    from broast_pos.data.database.menu_data import MENU
 
     added = 0
     with db.transaction():
@@ -123,6 +133,47 @@ def ensure_menu_products(db: DatabaseConnection) -> int:
     db.commit()
     logger.info("Menu import: added %d products", added)
     return added
+
+
+def _split_regular_spicy(db: DatabaseConnection) -> int:
+    """Turn each one-product item into a regular product plus a spicy copy.
+
+    The old product keeps its id (so past orders stay linked) and is renamed to
+    the regular name. A product that is missing or already renamed is skipped,
+    and a spicy product is never created twice.
+    """
+    from broast_pos.data.database.menu_data import SPLIT_PRODUCTS
+
+    created = 0
+    with db.transaction():
+        for old_name, (regular, spicy) in SPLIT_PRODUCTS.items():
+            prod = db.fetch_one(
+                "SELECT id, price, category_id, sort_order, is_active"
+                " FROM products WHERE name = ?",
+                (old_name,),
+            )
+            if prod is None:
+                continue
+            if db.fetch_one("SELECT 1 FROM products WHERE name = ?", (regular,)) is None:
+                db.execute("UPDATE products SET name = ? WHERE id = ?", (regular, prod["id"]))
+            if db.fetch_one("SELECT 1 FROM products WHERE name = ?", (spicy,)) is not None:
+                continue
+            db.execute(
+                "UPDATE products SET sort_order = sort_order + 1"
+                " WHERE category_id = ? AND sort_order > ?",
+                (prod["category_id"], prod["sort_order"]),
+            )
+            db.execute(
+                "INSERT INTO products (name, price, category_id, is_active, sort_order)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (spicy, prod["price"], prod["category_id"], prod["is_active"],
+                 prod["sort_order"] + 1),
+            )
+            created += 1
+    db.execute(f"PRAGMA user_version = {_MENU_SPLIT_MARKER}")
+    db.commit()
+    logger.info("Menu split: added %d spicy products", created)
+    return created
 
 
 def validate_no_default_admin(db: DatabaseConnection) -> None:
