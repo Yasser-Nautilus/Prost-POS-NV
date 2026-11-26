@@ -1,6 +1,6 @@
 # Financial System — Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 > **Source of Truth:** `financial_service.py`, `cashier_session_service.py`, `business_day_service.py`, `cash_ledger_repository.py`, `cashier_session.py`, `financial.py`
 
 ---
@@ -211,3 +211,14 @@ Handles legacy financial bridge actions:
 | ShiftDialog frontend | Implemented (Legacy) | Still mounted |
 | Session bridge controller | Implemented | |
 | Financial bridge controller | Implemented | Has private attribute access issue |
+
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26.
+
+- `session_controller.py`: public `get_all_sessions()` uses the service (no private repo access); open lets only managers open for another user, cashiers always open their own; close is limited to the caller's own session [#60, #74, #94].
+- Handover: `HandoverDialog` flow (select target, cash count, variance, manager PIN, cash drop, incoming session) is atomic and validates `0 <= cash_drop <= counted` [#59, #61, #86].
+- `financial_controller.py`: `get_users_for_transfer()` returns cashier-slot users only; same-user transfer is rejected; open sessions show live expected cash; shifts show the cashier name [#68, #95, #97, #110].
+- Cashier blind count and close; large variance needs manager PIN and reason [#94].
