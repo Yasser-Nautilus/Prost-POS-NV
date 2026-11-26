@@ -34,7 +34,11 @@ from broast_pos.core.services.product_service import ProductService
 from broast_pos.core.services.report_service import ReportService
 from broast_pos.data.database.connection import DatabaseConnection
 from broast_pos.data.database.migrations import initialise_database
-from broast_pos.data.database.seed import seed_database, validate_no_default_admin
+from broast_pos.data.database.seed import (
+    ensure_menu_products,
+    seed_database,
+    validate_no_default_admin,
+)
 from broast_pos.data.repositories.audit_repository import AuditRepository
 from broast_pos.data.repositories.cash_ledger_repository import CashLedgerRepository
 from broast_pos.data.repositories.cashier_session_repository import (
@@ -135,6 +139,10 @@ def main() -> int:
         db = DatabaseConnection.get_instance()
         initialise_database(db)
         seed_database(db)
+        try:
+            ensure_menu_products(db)
+        except Exception:  # noqa: BLE001 - menu import must never block startup
+            logger.exception("Menu import failed; continuing without it")
         validate_no_default_admin(db)
         logger.info("Database ready (WAL mode)")
     except Exception as exc:
