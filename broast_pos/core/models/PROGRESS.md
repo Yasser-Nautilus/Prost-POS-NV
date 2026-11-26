@@ -1,6 +1,6 @@
 # Core Models — Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 > **Source of Truth:** Actual implementation files in `broast_pos/core/models/`
 
 ---
@@ -247,3 +247,13 @@ Centralized discount computation with the following behavior:
 | `driver_settlement.py` | DriverSettlement | Implemented |
 | `order_status_history.py` | OrderStatusHistory | Implemented |
 | `policies/discount.py` | compute_discount function | Implemented |
+
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26.
+
+- `user.py`: users have a phone (required for drivers, migration v13); cashier slot is limited to 1 or 2 [#94, #93].
+- `financial.py`: session data includes `cashier_name`; `CASH_DROP` entries are booked at handover [#110, #86].
+- `order.py`, `delivery.py`, `audit.py` changed for amendment line identity, business-day scoping and print audit details [#71, #104, #106, #107].
