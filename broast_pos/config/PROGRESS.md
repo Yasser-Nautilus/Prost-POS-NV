@@ -89,4 +89,4 @@ Configured values for:
 - `.env.example` documents the variables; `.gitignore` ignores `.env`, `.env.*` (except `.env.example`), `*.secret`, `*.key`, `*.pem` [#90].
 - `main.py` imports `config` so `config.LOGS_PATH` resolves for rotating file logging [#59, #60].
 - `PROST_PRINTER_SIMULATE=1` turns on simulated printer mode (default 0) [#69].
-- `restaurant.json` and `printers.json` were changed in this period; see the PR diffs for the exact values.
+- `restaurant.json`: theme colors moved to the Prostsh red/black palette (accent and confirm buttons `#e01038`, near-black surfaces) [#79]. `printers.json` was deleted from the repo and added to `.gitignore`: it is now a local per-machine file. A missing file falls back to a dummy config outside production and fails closed in production, where dummy and simulated printing are forbidden.
