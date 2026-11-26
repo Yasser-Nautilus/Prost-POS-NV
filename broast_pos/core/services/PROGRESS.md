@@ -381,7 +381,7 @@ AuditService
 ### CashierSessionService / FinancialService / BusinessDayService
 - `open_session()` and `close_session()` run in one transaction; `get_all_sessions_for_day()` is a public method [#60, #75].
 - `close_shift` is atomic with its audit write; shift audit events populate `audit_log.action` [#63, #66].
-- `expected_cash = cash_sales - expenses`; unpaid orders are no longer subtracted twice [#73].
+- Expected cash comes from the cash ledger: `SUM(cash_ledger.amount_pt)` for the session is the one authorised formula; the orders-based `cash_sales − expenses` is only a fallback, and unpaid (pending) amounts are shown separately, never subtracted twice (H04) [#73].
 - Expense cap of 50,000 EGP; `add_expense` is atomic; expenses cannot post to a closed shift [#97, #77].
 - `transfer_shift` rejects same-user transfers and targets without a cashier slot [#97].
 - Day close runs through one guarded atomic operation that checks out all drivers [#77, #94]; schema v15 adds business-day closure keys [#104].
@@ -397,4 +397,4 @@ AuditService
 - Product prices validated from 0 to 50,000 EGP [#93].
 - Customer lookup by phone, edit name/phone, repeat-customer history [#95, #100].
 - Report endpoints need manager role; period reports count paid orders only [#80, #98].
-- `AuditService` is exposed through a public `audit_svc` property on the order controller [#63].
+- `AuditService` is exposed through a public `audit_svc` property on `OrderService` (always a real `AuditService`, never None or bypassed) [#63].
