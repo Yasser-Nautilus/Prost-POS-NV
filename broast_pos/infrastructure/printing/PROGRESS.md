@@ -1,6 +1,6 @@
 # Printing Infrastructure — Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 > **Source of Truth:** `printer_manager.py`, `print_triggers.py`, `escpos_printer.py`, `receipt_templates.py`, `printer_config.py`
 
 ---
@@ -119,3 +119,15 @@ Loads printer configuration from `printers.json`.
 | ReceiptTemplates | `receipt_templates.py` | — | Implemented |
 | PrinterConfig | `printer_config.py` | — | Implemented |
 | Hardware validation | — | — | Needs Verification |
+
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26.
+
+- `printer_manager.py`: `initialise()` runs at startup, `shutdown()` on app exit, `get_status()` exposes readiness (bridge action `get_printer_status`) [#78, #84].
+- `escpos_printer.py`, `print_triggers.py`: print success reflects real low-level results; errors surface to the operator and can be retried [#84, #98].
+- Simulated printer mode (`PROST_PRINTER_SIMULATE=1`): jobs return `True` and write timestamped JSON to `printouts/` [#69].
+- `receipt_templates.py`: marked COPY receipts (unpaid/cancelled copies carry warnings and the original date); driver slips for trips [#106, #107].
+- `printer_config.py`: updated printer settings [#84].
