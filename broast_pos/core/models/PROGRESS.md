@@ -254,6 +254,6 @@ Centralized discount computation with the following behavior:
 
 > Added 2026-11-26.
 
-- `user.py`: users have a phone (required for drivers, migration v13); cashier slot is limited to 1 or 2 [#94, #93].
-- `financial.py`: session data includes `cashier_name`; `CASH_DROP` entries are booked at handover [#110, #86].
+- `user.py`: users have a phone (required for drivers, migration v13) [#94]. The cashier slot 1-or-2 rule is enforced in `AuthService._validate_cashier_slot()`, not in the model [#93].
+- `financial.py`: expected cash is now ledger-backed — a `ledger_expected_cash` field set from `SUM(cash_ledger.amount_pt)` is authoritative, with the orders-based `cash_sales − total_expenses` kept only as a fallback; unpaid (pending) amounts are reported separately and are never deducted (H04) [#73]. `CASH_DROP` entries are booked at handover [#86]. The `cashier_name` shown in session lists is added in `features/financial/session_controller.py`, not here [#110].
 - `order.py`, `delivery.py`, `audit.py` changed for amendment line identity, business-day scoping and print audit details [#71, #104, #106, #107].
