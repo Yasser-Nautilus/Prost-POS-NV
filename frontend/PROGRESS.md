@@ -161,7 +161,7 @@ The bridge exposes actions for all implemented features:
 
 ### Branding and styling
 - Rebrand to Prostsh: brand accent changed from gold to red (`brand-gold` renamed `brand-red`), near-black surfaces, new login art and logo [#79]. Light login art and self-hosted Cairo font (`frontend/src/fonts/`) added [#110].
-- Login: logo sits in the circle at the top of the PIN card; duplicate white PIN dots removed (keyboard typing still works); helper text says new PINs need at least four English digits [#99, #108, #110].
+- Login: logo sits in the circle at the top of the PIN card; duplicate white PIN dots removed (keyboard typing still works) [#99, #108, #110].
 
 ### Views and components
 - `POSView`: cashier shortcuts (`/` or `F2` jumps to search, `Enter` adds the first match, `Esc` clears, `F8` opens discount) [#99]; per-item comment and mixed payment/bill split in `PaymentDialog` [#100]; discount re-validated after removing items [#98].
@@ -171,7 +171,7 @@ The bridge exposes actions for all implemented features:
 - `DriverStats`, `PeriodReports`: driver statistics and monthly/yearly reports (manager and above) [#95, #100].
 - `SettlementHistory`, `DriverSettlementView`: settlement history, daily settlement completed state, invoice number first in trip previews, optional notes field removed from single-trip settlement [#95, #96, #104, #105].
 - `ShiftDialog`: Escape closes it, expenses and pending shown for cashiers; `SessionsView` day-close Z-report no longer disappears after closing [#94, #97].
-- `UsersView`: delete (only users without history) and reactivate buttons, no second system admin in the role dropdown, driver form hides PIN and cashier slot [#94, #110].
+- `UsersView`: delete (only users without history; users with records must be deactivated) and reactivate buttons, no second system admin in the role dropdown, the driver form hides the PIN (an internal 8-digit one is generated) and cashier slot, and the PIN field notes that new PINs need at least four English digits [#94, #108, #110].
 - `ProductsView`: price validation (0 to 50,000 EGP), duplicate names blocked, category delete [#93, #95, #108].
 - `TrackingView`: copy buttons for receipts, date picker in the archive, "sent to printer" notice clears after 5 seconds [#106, #109].
-- `ToastHost`, `ConfirmDialog`, `ManagerApprovalDialog`: new shared components [#60, #94].
+- `ToastHost`, `ConfirmDialog`, `ManagerApprovalDialog`: new shared components [#60, #94, #108].
