@@ -1,6 +1,6 @@
 # Tests — Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 > **Source of Truth:** File listing of `tests/` directory
 
 ---
@@ -77,3 +77,12 @@ Based on file names, the test suite covers:
 4. Add frontend tests (currently no React/TypeScript tests exist).
 5. Add printing infrastructure tests (mocked, since hardware is unavailable).
 
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26.
+
+- Suite grew past 1,000 tests. New files include regression tests for the driver picker, duplicate names, QA findings, and combined audit fixes [#67, #92, #97, #108].
+- `tests/test_frontend_bridge_actions.py` checks every frontend action is routed in the real `POSBridge`; `tests/test_visible_flows_extended.py` runs rendered UI flows (split payment, repeat customer, park/resume) through the real React app, QWebChannel bridge and SQLite [#102].
+- CI installs a headless Qt runtime so the Qt bridge tests run in GitHub Actions [#93, #110].
