@@ -95,7 +95,7 @@ def test_menu_import_adds_once_and_is_idempotent(env):
     assert ensure_menu_products(db) == 0
     total = sum(len(items) for _, _, items in MENU)
     names = [r["name"] for r in db.fetch_all("SELECT name FROM products")]
-    assert "هالك توست" in names and "20 قطعة دجاج" in names
+    assert "هالك توست" in names and "20 قطعة دجاج عادي" in names and "20 قطعة دجاج حار" in names
     assert first <= total
 
 
