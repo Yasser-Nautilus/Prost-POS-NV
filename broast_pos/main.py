@@ -14,9 +14,11 @@ Startup sequence:
 from __future__ import annotations
 
 import logging
+import os
 import sys
 
 from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication
 
 from broast_pos.config import config
@@ -246,6 +248,19 @@ def main() -> int:
     QApplication.setAttribute(Qt.ApplicationAttribute.AA_ShareOpenGLContexts)
     app = QApplication(sys.argv)
     app.setApplicationName(get_app_name())
+    app.setApplicationDisplayName("Nautix POS")
+
+    # Taskbar/dock icon — Nautix hex-N logo (all windows inherit it)
+    icon_base = (
+        sys._MEIPASS  # type: ignore[attr-defined]
+        if getattr(sys, "frozen", False)
+        else os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+    icon_path = os.path.join(icon_base, "assets", "branding", "nautix_app_icon.png")
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
+    else:
+        logger.warning("App icon not found: %s", icon_path)
 
     # Apply dark theme + Arabic font + RTL
     apply_theme(app)
@@ -292,4 +307,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
