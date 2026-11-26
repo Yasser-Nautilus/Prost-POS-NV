@@ -29,3 +29,20 @@ export function normalizeEgyptianMobile(raw: string | null | undefined): string 
 export function looksLikePhone(text: string): boolean {
   return /^[+\d\s\-().]+$/.test(text.trim()) && text.trim().length > 0;
 }
+
+/**
+ * Stops digit input at the Egyptian mobile length (11) so a wrong number is
+ * obvious without counting. Text that contains letters (a name search) is
+ * left alone, and pasted international forms (+20..., 0020..., 20...) keep
+ * the extra length they legitimately need.
+ */
+export function capPhoneInput(raw: string): string {
+  if (/[^\d+\s\-().\u200e\u200f\u202a\u202b\u202c\u00a0]/.test(raw)) return raw;
+  const compact = raw.replace(SEPARATORS, "");
+  let max = 11;
+  if (compact.startsWith("+")) max = 13;
+  else if (compact.startsWith("0020")) max = 14;
+  else if (compact.startsWith("20")) max = 12;
+  if (compact.length <= max) return raw;
+  return compact.slice(0, max);
+}
