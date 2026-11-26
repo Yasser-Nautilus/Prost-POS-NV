@@ -891,6 +891,9 @@ const SessionCard: React.FC<{
           </div>
           <div>
             <span className="text-sm font-bold text-white block">{stationLabels[session.station]} #{session.id}</span>
+            {session.cashier_name && (
+              <span className="text-xs text-brand-teal font-bold block mt-0.5">{session.cashier_name}</span>
+            )}
             <span className="text-[10px] text-gray-400 block mt-0.5">
               <Clock size={10} className="inline ml-1" />
               {session.opened_at ? new Date(session.opened_at).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }) : "—"}
@@ -1104,6 +1107,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ currentUser }) => {
               <thead>
                 <tr className="bg-brand-surface text-gray-400 text-xs">
                   <th className="py-3 px-4 text-right font-bold">المحطة</th>
+                  <th className="py-3 px-4 text-right font-bold">الكاشير</th>
                   <th className="py-3 px-4 text-right font-bold">وقت الفتح</th>
                   <th className="py-3 px-4 text-right font-bold">وقت الإغلاق</th>
                   <th className="py-3 px-4 text-right font-bold">العهدة</th>
@@ -1123,6 +1127,7 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ currentUser }) => {
                   return (
                     <tr key={s.id} className="border-t border-brand-border/20 hover:bg-brand-surface/50 transition-colors">
                       <td className="py-3 px-4 text-white font-bold">{s.station}</td>
+                      <td className="py-3 px-4 text-white">{s.cashier_name || "—"}</td>
                       <td className="py-3 px-4 text-gray-400">
                         {s.opened_at ? new Date(s.opened_at).toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit" }) : "—"}
                       </td>
