@@ -48,6 +48,7 @@ export interface CashierSession {
   id: number;
   day_id: number;
   user_id: number;
+  cashier_name?: string | null;
   station: SessionStation;
   is_open: boolean;
   opened_at: string;
@@ -408,6 +409,7 @@ class POSBridgeClient {
 
       case "create_user": {
         this.requireMockAdmin();
+        if (payload.role === "admin") throw new Error("لا يمكن إنشاء مدير نظام آخر");
         const all = [...this.mockState.users, ...this.mockState.drivers];
         if (all.some((u: any) => u.username === payload.username)) throw new Error("اسم المستخدم موجود بالفعل");
         if (all.some((u: any) => u.pin === payload.pin)) throw new Error("رمز PIN مستخدم بالفعل");
@@ -430,6 +432,7 @@ class POSBridgeClient {
         if (payload.role) target.role = payload.role;
         if (payload.pin) target.pin = payload.pin;
         if (payload.phone !== undefined) target.phone = payload.phone;
+        if (payload.is_active !== undefined) target.is_active = payload.is_active;
         if (payload.cashier_slot !== undefined && payload.cashier_slot !== -1) target.cashier_slot = payload.cashier_slot;
         return target as any;
       }
@@ -439,6 +442,13 @@ class POSBridgeClient {
         const target = [...this.mockState.users, ...this.mockState.drivers].find((u: any) => u.id === payload.user_id);
         if (target) target.is_active = false;
         return true as any;
+      }
+
+      case "delete_user": {
+        this.requireMockAdmin();
+        this.mockState.users = this.mockState.users.filter((u: any) => u.id !== payload.user_id);
+        this.mockState.drivers = this.mockState.drivers.filter((u: any) => u.id !== payload.user_id);
+        return { deleted: true } as any;
       }
 
       case "verify_manager_pin": {
