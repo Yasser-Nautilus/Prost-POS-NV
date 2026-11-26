@@ -379,7 +379,7 @@ The core POS functionality — order management, product/customer management, de
 
 ### New top-level pieces
 - `broast_pos/operations/` (`auto_backup.py`, `recovery.py`): automatic DB backup at day close into a `backups/` folder next to the DB (keeps the last 30, never blocks closing the day) [#100]; safe SQLite backup and recovery [#93]. See `docs/backup-recovery.md`.
-- `broast_pos/core/clock.py`, `broast_pos/core/phone.py`, `broast_pos/core/policies/` (`discount.py`, `input_values.py`): local-device-time helper, shared Egyptian mobile-number helper [#95], discount and input-value rules (price range 0 to 50,000 EGP, cashier slot 1 or 2) [#93, #98].
+- `broast_pos/core/clock.py`, `broast_pos/core/phone.py`, `broast_pos/core/policies/` (`discount.py`, `input_values.py`): restaurant wall-clock helper that stamps attendance in the restaurant timezone (Africa/Cairo) whatever the OS clock zone says, shared Egyptian mobile-number helper [#95], the single discount computation/rescale rule, and boundary checks for unit counts and counted cash [#93, #98]. The 0 to 50,000 EGP caps live in `ProductService` (price) and `FinancialService` (expense); the cashier slot 1-or-2 rule lives in `AuthService` [#93, #97, #98].
 - `docs/audit-fixes/` (points 9 to 14), `docs/backup-recovery.md`, `docs/dependency-security.md` [#93].
 - `assets/branding/`: restaurant logo and sidebar art; `nautix_app_icon.png` is the new app icon [#110].
 - `.env.example`, `.gitignore`: configuration is loaded from `.env` with process environment first; real secret files stay out of version control [#90].
