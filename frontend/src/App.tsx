@@ -30,7 +30,7 @@ const ConfirmDialog: React.FC<{
 }> = ({ isOpen, message, onConfirm, onCancel }) => {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm" onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
       <div className="bg-brand-surface border border-brand-border/60 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-5" dir="rtl">
         <p className="text-white font-bold text-sm text-center">{message}</p>
         <div className="flex gap-3">

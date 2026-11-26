@@ -234,6 +234,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md"
       onKeyDown={(e) => { if (e.key === "Escape") onClose(); }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="w-full max-w-2xl mx-4 bg-brand-surface border border-brand-border rounded-3xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
         

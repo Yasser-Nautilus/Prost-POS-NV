@@ -415,6 +415,11 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ onResumeOrder, onHan
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
+  useEffect(() => {
+    if (!printNotice) return;
+    const t = setTimeout(() => setPrintNotice(""), 5000);
+    return () => clearTimeout(t);
+  }, [printNotice]);
   const handleReprint = async (orderId: number) => {
     if (printLock.current) return;
     printLock.current = true;

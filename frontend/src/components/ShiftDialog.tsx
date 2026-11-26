@@ -273,7 +273,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
 
   return (
     <>
-      <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-md">
+      <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-md" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
         <div className="w-full max-w-4xl mx-4 bg-brand-surface border border-brand-border rounded-3xl max-h-[90vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in duration-200">
 
           {/* Header */}
