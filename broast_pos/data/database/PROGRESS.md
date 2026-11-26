@@ -169,5 +169,5 @@ Seeds the database with a default admin user on first run.
 
 - Migrations: v13 adds `users.phone`; v15 adds business-day closure keys without rewriting historical financial records [#94, #104].
 - `schema.sql`: new table `order_payments` (`CREATE IF NOT EXISTS`) for mixed payment [#100].
-- `menu_data.py`, `seed.py`: menu import and updated seed menu [#110].
-- `connection.py` and `__init__.py` changed alongside the backup and recovery work [#93].
+- `menu_data.py`, `seed.py`: one-time menu import (`ensure_menu_products()`, tracked with `PRAGMA user_version` so items the owner deletes are not brought back) and updated seed menu [#110].
+- `connection.py`: all operations now run under a thread lock (`threading.RLock`), nested `transaction()` scopes use real SQLite savepoints, and `executescript` is refused inside a managed transaction [#93]. `__init__.py` and `seed.py` add `validate_no_default_admin()`: production start fails if no active admin/manager exists or one still has the default PIN 1234 [#90].
