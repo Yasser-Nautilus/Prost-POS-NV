@@ -3,7 +3,7 @@ import { Users, ShieldAlert, Loader2 } from "lucide-react";
 import { Numpad } from "../components/Numpad";
 import { bridge } from "../bridge";
 import loginBackground from "../assets/prostsh-brand.webp";
-import loginBackgroundLight from "../assets/prostsh-brand-light.webp";
+import loginBackgroundLight from "../assets/3-prostsh-brand-light.webp";
 import { ThemeToggle } from "../components/ThemeToggle";
 import prostshP from "../assets/prostsh-p.png";
 
