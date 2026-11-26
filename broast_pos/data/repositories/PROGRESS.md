@@ -221,3 +221,7 @@ All repositories extend `BaseRepository`, which provides:
 | DriverSettlementRepository | `driver_settlement_repository.py` | 131 | Implemented | INSERT-only |
 | OrderStatusHistoryRepository | `order_status_history_repository.py` | 121 | Implemented | INSERT-only |
 | **Total** | **12 files** | | |
+
+## Update 2026-11-27 (Batch 5: menu and products)
+
+- `ProductRepository`: added `has_order_history`, `hard_delete` and `set_sort_orders`. Product lists now order by `sort_order, id` so equal sort values keep a stable order.
