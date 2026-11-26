@@ -77,6 +77,54 @@ def seed_database(db: DatabaseConnection) -> None:
     _seed_zones(db)
 
 
+_MENU_IMPORT_MARKER = 1  # PRAGMA user_version value once the menu was imported
+
+
+def ensure_menu_products(db: DatabaseConnection) -> int:
+    """Add the printed menu's categories and products once. Returns rows added.
+
+    Runs a single time per database (tracked with ``PRAGMA user_version``), so
+    items the owner later deletes or deactivates are not brought back. Existing
+    categories/products are matched by exact name and are never modified.
+    """
+    from broast_pos.data.database.menu_data import MENU
+
+    row = db.fetch_one("PRAGMA user_version")
+    current = (row[0] if row is not None else 0) or 0
+    if current >= _MENU_IMPORT_MARKER:
+        return 0
+
+    added = 0
+    with db.transaction():
+        for cat_name, cat_order, items in MENU:
+            cat = db.fetch_one("SELECT id FROM categories WHERE name = ?", (cat_name,))
+            if cat is None:
+                cur = db.execute(
+                    "INSERT INTO categories (name, sort_order, is_active) VALUES (?, ?, 1)",
+                    (cat_name, cat_order),
+                )
+                cat_id = cur.lastrowid
+            else:
+                cat_id = cat["id"]
+            base = db.fetch_one(
+                "SELECT COALESCE(MAX(sort_order), 0) AS m FROM products WHERE category_id = ?",
+                (cat_id,),
+            )["m"]
+            for i, (name, price) in enumerate(items, start=1):
+                if db.fetch_one("SELECT 1 FROM products WHERE name = ?", (name,)):
+                    continue
+                db.execute(
+                    "INSERT INTO products (name, price, category_id, is_active, sort_order)"
+                    " VALUES (?, ?, ?, 1, ?)",
+                    (name, price, cat_id, base + i),
+                )
+                added += 1
+    db.execute(f"PRAGMA user_version = {_MENU_IMPORT_MARKER}")
+    db.commit()
+    logger.info("Menu import: added %d products", added)
+    return added
+
+
 def validate_no_default_admin(db: DatabaseConnection) -> None:
     """Verify that no active admin or manager has the default/known PIN '1234' in production.
 
