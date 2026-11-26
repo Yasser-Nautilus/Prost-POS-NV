@@ -1,6 +1,6 @@
 # Database — Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 > **Source of Truth:** `schema.sql`, `connection.py`, `migrations.py`, `seed.py`
 
 ---
@@ -160,3 +160,14 @@ Seeds the database with a default admin user on first run.
 | Foreign Keys | Enforced |
 | Busy Timeout | 5,000 ms |
 | Cash Ledger Protection | UPDATE/DELETE triggers |
+
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26.
+
+- Migrations: v13 adds `users.phone`; v15 adds business-day closure keys without rewriting historical financial records [#94, #104].
+- `schema.sql`: new table `order_payments` (`CREATE IF NOT EXISTS`) for mixed payment [#100].
+- `menu_data.py`, `seed.py`: menu import and updated seed menu [#110].
+- `connection.py` and `__init__.py` changed alongside the backup and recovery work [#93].
