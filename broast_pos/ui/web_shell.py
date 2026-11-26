@@ -30,7 +30,7 @@ class POSWebPage(QWebEnginePage):
     def _box(self, text: str, icon) -> QMessageBox:
         box = QMessageBox(self._dialog_parent)
         box.setIcon(icon)
-        box.setWindowTitle("Prost POS")
+        box.setWindowTitle("Nautix POS")
         box.setText(text)
         box.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
         return box
@@ -71,7 +71,7 @@ class WebShell(QMainWindow):
     def __init__(self, bridge: POSBridge, parent=None):
         super().__init__(parent)
         self.bridge = bridge
-        self.setWindowTitle("Prost POS - نظام البيع")
+        self.setWindowTitle("Nautix POS - نظام البيع")
         self.setMinimumSize(1280, 800)
         self.showMaximized()
 

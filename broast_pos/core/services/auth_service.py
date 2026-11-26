@@ -554,6 +554,38 @@ class AuthService:
 
         return saved
 
+    def delete_user(self, user_id: int) -> None:
+        """Permanently delete a user that has no recorded history.
+
+        Users referenced by shifts, orders, ledger or audit rows cannot be
+        removed without corrupting those records; they must be deactivated.
+        """
+        user = self._users.get_by_id(user_id)
+        if user is None:
+            raise ValueError("المستخدم غير موجود")
+        if self._current_user is not None and self._current_user.id == user_id:
+            raise ValueError("لا يمكنك حذف حسابك الخاص")
+        if user.role == UserRole.ADMIN:
+            raise ValueError("لا يمكن حذف مدير النظام")
+        if self._users.has_references(user_id):
+            raise ValueError(
+                "لا يمكن حذف هذا المستخدم لأن له سجلات (ورديات أو طلبات). يمكنك تعطيل حسابه بدلاً من ذلك"
+            )
+        self._users.hard_delete(user_id)
+        if self._audit is not None:
+            actor = self._current_user
+            try:
+                self._audit.log(
+                    event_type=AuditEventType.USER_DEACTIVATED,
+                    user_id=actor.id if actor else None,
+                    user_name=(actor.display_name or actor.username) if actor else "System",
+                    entity_type="user", entity_id=user_id,
+                    action="User deleted",
+                    details={"username": user.username, "deleted": True},
+                )
+            except Exception:  # noqa: BLE001
+                pass
+
     # ------------------------------------------------------------------
     # PIN hashing
     # ------------------------------------------------------------------

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { Users, Plus, Edit3, UserX, RefreshCw, Loader2, X, Check, Shield } from "lucide-react";
+import { Users, Plus, Edit3, UserX, UserCheck, Trash2, RefreshCw, Loader2, X, Check, Shield } from "lucide-react";
 import { bridge } from "../bridge";
 import { useConfirm } from "../components/ConfirmDialog";
-import { INVALID_PHONE_MSG, normalizeEgyptianMobile } from "../phone";
+import { INVALID_PHONE_MSG, capPhoneInput, normalizeEgyptianMobile } from "../phone";
 
 interface UsersViewProps {
   currentUser: any;
@@ -12,8 +12,8 @@ const ROLE_OPTIONS = [
   { value: "cashier",  label: "كاشير صندوق",          color: "text-brand-teal" },
   { value: "driver",   label: "طيار (مندوب توصيل)",   color: "text-purple-400" },
   { value: "manager",  label: "مدير المطعم",          color: "text-brand-red" },
-  { value: "admin",    label: "مدير النظام",           color: "text-red-400" },
 ];
+// مدير النظام (admin) لا يظهر هنا: لا يمكن إنشاء مدير نظام آخر.
 
 const ROLE_LABELS: Record<string, string> = {
   cashier: "كاشير",
@@ -27,6 +27,13 @@ const ROLE_COLORS: Record<string, string> = {
   manager: "text-brand-red bg-brand-red/10 border-brand-red/30",
   admin:   "text-red-400 bg-red-900/20 border-red-800/30",
   driver:  "text-purple-400 bg-purple-900/20 border-purple-800/30",
+};
+
+// Drivers never log in, but the backend still requires a unique PIN. Generate a random 8-digit one.
+const generateInternalPin = (): string => {
+  const buf = new Uint32Array(1);
+  crypto.getRandomValues(buf);
+  return String(10000000 + (buf[0] % 90000000));
 };
 
 export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
@@ -93,6 +100,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
     // Detect driver: backend stores as role=cashier + cashier_slot=null
     const isDriver = user.role === "cashier" && user.cashier_slot == null;
     setFormRole(isDriver ? "driver" : (user.role || "cashier"));
+    setFormPin("");
     setFormPin(""); // don't pre-fill PIN
     setFormSlot(user.cashier_slot != null ? user.cashier_slot.toString() : "");
     setFormPhone(user.phone || "");
@@ -128,12 +136,12 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
           username: formUsername || undefined,
           display_name: formDisplayName || undefined,
           role: backendRole,
-          pin: formPin || undefined,
+          pin: isDriver ? undefined : (formPin || undefined),
           cashier_slot: isDriver ? null : (formSlot !== "" ? parseInt(formSlot) : -1),
           phone: phoneToSave,
         });
       } else {
-        if (!formPin) {
+        if (!isDriver && !formPin) {
           alert("رمز PIN مطلوب للمستخدم الجديد");
           return;
         }
@@ -141,7 +149,8 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
           username: formUsername,
           display_name: formDisplayName,
           role: backendRole,
-          pin: formPin,
+          // الطيار ليس له PIN: نولّد رمزاً داخلياً عشوائياً لا يُعرض ولا يُستخدم
+          pin: isDriver ? generateInternalPin() : formPin,
           cashier_slot: isDriver ? null : (formSlot !== "" ? parseInt(formSlot) : null),
           phone: phoneToSave,
         });
@@ -164,6 +173,30 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
       fetchUsers();
     } catch (err: any) {
       alert("فشل إلغاء التفعيل: " + err.message);
+    }
+  };
+
+  const handleReactivate = async (userId: number, userName: string) => {
+    if (!(await showConfirm(`هل تريد إعادة تفعيل المستخدم "${userName}"؟`))) return;
+    try {
+      await bridge.call("update_user", { user_id: userId, is_active: true });
+      fetchUsers();
+    } catch (err: any) {
+      alert("فشل إعادة التفعيل: " + err.message);
+    }
+  };
+
+  const handleDelete = async (userId: number, userName: string) => {
+    if (userId === currentUser?.id) {
+      alert("لا يمكنك حذف حسابك الخاص");
+      return;
+    }
+    if (!(await showConfirm(`هل تريد حذف المستخدم "${userName}" نهائياً؟ لا يمكن التراجع.`))) return;
+    try {
+      await bridge.call("delete_user", { user_id: userId });
+      fetchUsers();
+    } catch (err: any) {
+      alert("فشل الحذف: " + err.message);
     }
   };
 
@@ -273,6 +306,27 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
                   <Edit3 size={12} />
                   تعديل
                 </button>
+                {!user.is_active && (
+                  <button
+                    onClick={() => handleReactivate(user.id, user.display_name)}
+                    aria-label="إعادة تفعيل الحساب"
+                    title="إعادة تفعيل الحساب"
+                    className="py-1.5 px-3 text-xs font-bold text-green-400 border border-green-900/30 bg-green-950/20 hover:bg-green-950/40 rounded-lg flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <UserCheck size={12} />
+                    تفعيل
+                  </button>
+                )}
+                {user.role !== "admin" && (
+                  <button
+                    onClick={() => handleDelete(user.id, user.display_name)}
+                    aria-label="حذف المستخدم"
+                    title="حذف المستخدم"
+                    className="py-1.5 px-3 text-xs font-bold text-red-400 border border-red-900/30 bg-red-950/20 hover:bg-red-950/40 rounded-lg flex items-center justify-center transition-all"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                )}
                 {user.is_active && (
                   <button
                     onClick={() => handleDeactivate(user.id, user.display_name)}
@@ -348,13 +402,14 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
                     ))}
                   </select>
                 </div>
+                {formRole !== "driver" && (
                 <div>
                   <label className="text-gray-400 text-xs block mb-1">
                     رمز PIN {editingUser ? "(اتركه فارغاً للإبقاء)" : "*"}
                   </label>
                   <input
                     type="password"
-                    required={!editingUser}
+                    required={!editingUser && formRole !== "driver"}
                     value={formPin}
                     onChange={(e) => setFormPin(e.target.value)}
                     placeholder="أرقام 0-9 فقط"
@@ -363,6 +418,7 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
                   />
                   <p className="text-xs text-gray-400 mt-1">4 أرقام إنجليزية (0-9) على الأقل للرمز الجديد</p>
                 </div>
+                )}
               </div>
 
               {formRole !== "driver" && (
@@ -388,17 +444,12 @@ export const UsersView: React.FC<UsersViewProps> = ({ currentUser }) => {
                     required
                     inputMode="tel"
                     value={formPhone}
-                    onChange={(e) => { setFormPhone(e.target.value.replace(/[^0-9+\s\-]/g, "")); setPhoneError(""); }}
+                    onChange={(e) => { setFormPhone(capPhoneInput(e.target.value.replace(/[^0-9+\s\-]/g, ""))); setPhoneError(""); }}
                     placeholder="01xxxxxxxxx"
                     aria-label="رقم تليفون الطيار"
                     className="w-full bg-brand-card border border-brand-border/50 rounded-xl p-2.5 text-white placeholder-gray-600 focus:outline-none focus:border-brand-red text-center font-mono"
                   />
                   {phoneError && <p className="text-red-400 text-xs mt-1" role="alert">{phoneError}</p>}
-                </div>
-              )}
-              {formRole === "driver" && (
-                <div className="py-2 px-3 bg-purple-900/20 border border-purple-800/30 rounded-xl text-purple-400 text-xs text-center">
-                  الطيارون لا يملكون رقم صندوق — يُضافون تلقائياً لقائمة الطيارين
                 </div>
               )}
 

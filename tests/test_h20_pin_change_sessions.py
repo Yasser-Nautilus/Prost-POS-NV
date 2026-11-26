@@ -15,6 +15,7 @@ from unittest.mock import MagicMock
 import pytest
 from PyQt6.QtCore import QCoreApplication
 
+from broast_pos.core.models.user import UserRole
 from broast_pos.core.services.audit_service import AuditService
 from broast_pos.core.services.auth_service import AuthService
 from broast_pos.core.services.business_day_service import BusinessDayService
@@ -158,13 +159,12 @@ def two_admins(stations):
     """Admin B (seeded) on station 2, admin A (second admin) on station 1."""
     station_1, station_2, db = stations
     _login(station_2, SEED_ADMIN_PIN)
-    created = station_2.call("create_user", {
-        "username": "admin_a", "display_name": "Admin A",
-        "role": "admin", "pin": ADMIN_A_PIN,
-    })
-    assert created["success"], created
+    # The UI/bridge no longer creates a second admin, so seed one directly.
+    created = station_2.bridge._auth.create_user(
+        "admin_a", "Admin A", UserRole.ADMIN, ADMIN_A_PIN,
+    )
     admin_a = _login(station_1, ADMIN_A_PIN)
-    assert admin_a["id"] == created["data"]["id"]
+    assert admin_a["id"] == created.id
     return station_1, station_2, db, admin_a["id"]
 
 

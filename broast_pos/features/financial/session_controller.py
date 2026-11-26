@@ -289,12 +289,24 @@ class SessionController:
             return s.expected_cash_pt
         return value if isinstance(value, int) else s.expected_cash_pt
 
+    def _cashier_name(self, s: CashierSession) -> str | None:
+        """Display name of the cashier who opened the session (best effort)."""
+        try:
+            user = self._auth._users.get_by_id(s.user_id)
+        except Exception:  # noqa: BLE001 - auth service may be absent or mocked
+            return None
+        if user is None:
+            return None
+        name = getattr(user, "display_name", None) or getattr(user, "username", None)
+        return name if isinstance(name, str) else None
+
     def _session_to_dict(self, s: CashierSession) -> dict[str, Any]:
         expected_pt = self._live_expected_pt(s)
         return {
             "id": s.id,
             "day_id": s.day_id,
             "user_id": s.user_id,
+            "cashier_name": self._cashier_name(s),
             "station": s.station.value,
             "is_open": s.is_open,
             "opened_at": s.opened_at,
