@@ -1,6 +1,6 @@
 # User Permissions — Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 > **Source of Truth:** `auth_service.py`, `user.py`, `permissions_controller.py`, `bridge.py`
 
 ---
@@ -152,3 +152,15 @@ The default admin user is seeded with a legacy SHA-256 hash (no salt). The hash 
 | Frontend (UsersView) | Implemented | Admin only |
 | Bridge auth guard | Implemented | |
 | Manager MANAGE_USERS | **Partially Implemented** | Defined in AuthService but blocked by bridge |
+
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26.
+
+- Report endpoints require manager role; `get_users_management` is admin-only [#80, #97].
+- Cashier amendment/cancel and large-variance close need a manager PIN and reason; cashiers see only their own session [#74, #94].
+- Deactivation or demotion revokes authority immediately; self-deactivation, self-demotion and removing the last active admin are blocked [#89].
+- No second system admin (blocked in the role dropdown and the backend) [#110].
+- PIN throttle covers PIN-only login; production secrets and secure initial admin setup are enforced [#87, #90].
