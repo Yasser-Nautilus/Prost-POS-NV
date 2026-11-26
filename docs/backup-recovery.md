@@ -64,3 +64,7 @@ orders/items/ledger/audit/parked rows intact, repeatable upgrade, source preserv
 existing-target/symlink protection, invalid input rejection and failure cleanup.
 This is an operational method and test evidence, not a claim that backups are now
 running for a restaurant or that a machine/storage failure has been covered.
+
+## Reset to a fresh install
+
+To clear test data before real use, stop the app and run `python -m broast_pos.operations.reset_data` (add `--db PATH` for another file). It writes a validated backup next to the database first, then deletes orders, shifts, expenses, reports data, history, customers, drivers and every user except the admin. The admin, menu, categories and zones are kept. To undo, restore the backup file as described above.
