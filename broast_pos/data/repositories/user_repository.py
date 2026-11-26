@@ -36,6 +36,29 @@ class UserRepository(BaseRepository[User]):
         )
         self._db.commit()
 
+    def has_references(self, user_id: int) -> bool:
+        """True if any table holds a foreign key pointing at this user."""
+        tables = self._db.fetch_all(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'"
+        )
+        for t in tables:
+            name = t["name"]
+            if name == "users":
+                continue
+            for fk in self._db.fetch_all(f'PRAGMA foreign_key_list("{name}")'):
+                if fk["table"] == "users":
+                    row = self._db.fetch_one(
+                        f'SELECT 1 AS x FROM "{name}" WHERE "{fk["from"]}" = ? LIMIT 1',
+                        (user_id,),
+                    )
+                    if row:
+                        return True
+        return False
+
+    def hard_delete(self, user_id: int) -> None:
+        self._db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        self._db.commit()
+
     # ------------------------------------------------------------------
     # Query methods
     # ------------------------------------------------------------------
