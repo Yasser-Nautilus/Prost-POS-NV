@@ -3,6 +3,7 @@ import { Users, ShieldAlert, Loader2 } from "lucide-react";
 import { Numpad } from "../components/Numpad";
 import { bridge } from "../bridge";
 import loginBackground from "../assets/prostsh-brand.webp";
+import loginBackgroundLight from "../assets/prostsh-brand-light.webp";
 import { ThemeToggle } from "../components/ThemeToggle";
 import prostshP from "../assets/prostsh-p.png";
 
@@ -45,16 +46,11 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
 
   return (
     <main
-      className="relative min-h-screen overflow-y-auto bg-brand-dark bg-right bg-no-repeat"
-      style={{ backgroundImage: `url(${loginBackground})`, backgroundSize: "auto 135%" }}
+      className="login-main relative min-h-screen overflow-y-auto bg-brand-dark bg-right bg-no-repeat"
+      style={{ ["--login-bg" as string]: `url(${loginBackground})`, ["--login-bg-light" as string]: `url(${loginBackgroundLight})` }}
     >
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background: "linear-gradient(90deg, rgba(10, 10, 12, 0.97) 0%, rgba(10, 10, 12, 0.89) 33%, rgba(10, 10, 12, 0.62) 52%, rgba(10, 10, 12, 0.12) 78%, rgba(10, 10, 12, 0.08) 100%)",
-        }}
-      />
+      <div aria-hidden="true" className="login-bg pointer-events-none absolute inset-0 bg-right bg-no-repeat" style={{ backgroundSize: "auto 135%" }} />
+      <div aria-hidden="true" className="login-shade pointer-events-none absolute inset-0" />
       <div className="relative z-10 mr-auto ml-0 flex min-h-screen w-full max-w-[900px] flex-col items-center justify-center gap-6 px-6 py-8 md:flex-row md:gap-8 md:px-12" dir="rtl">
 
       {/* Right column: Branding & Cashier Tiles */}
