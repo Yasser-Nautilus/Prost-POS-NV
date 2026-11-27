@@ -530,23 +530,16 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                   <Power size={48} className="text-red-500/80 mb-3" />
                   <h4 className="text-lg font-bold text-white mb-2">لا توجد وردية مفتوحة حالياً</h4>
                   {lastDay && !lastDay.is_active ? (
-                    <>
-                      <p className="text-gray-400 text-sm max-w-sm mb-2">
-                        يوم العمل مقفول (اتقفل الساعة {String(lastDay.closed_at || "").slice(11, 16)}).
-                        لازم المدير يفتح يوم عمل جديد قبل ما تقدر تفتح درج وتستقبل دفع.
-                      </p>
-                      <p className="text-yellow-500 text-xs max-w-sm mb-6">
-                        كل الأوردرات والورديات القديمة محفوظة في شاشة الورديات.
-                      </p>
-                    </>
+                    <p className="text-gray-400 text-sm max-w-sm mb-2">
+                      يوم العمل مقفول (اتقفل الساعة {String(lastDay.closed_at || "").slice(11, 16)}).
+                      المدير يفتح يوم عمل جديد من هنا، وكل الأوردرات والورديات القديمة محفوظة في شاشة الورديات.
+                    </p>
                   ) : (
-                    <>
-                      <p className="text-gray-400 text-sm max-w-sm mb-6">
-                        الوردية مغلقة. يرجى فتح وردية جديدة حتى تتمكن من بدء المعاملات وطباعة الفواتير.
-                      </p>
-                      {openingControls}
-                    </>
+                    <p className="text-gray-400 text-sm max-w-sm mb-6">
+                      الوردية مغلقة. يرجى فتح وردية جديدة حتى تتمكن من بدء المعاملات وطباعة الفواتير.
+                    </p>
                   )}
+                  {openingControls}
                 </div>
               )}
             </div>
