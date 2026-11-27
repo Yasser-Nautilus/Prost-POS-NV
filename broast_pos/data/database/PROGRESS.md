@@ -175,3 +175,9 @@ Seeds the database with a default admin user on first run.
 - `schema.sql`: new table `order_payments` (`CREATE IF NOT EXISTS`) for mixed payment [#100].
 - `menu_data.py`, `seed.py`: one-time menu import (`ensure_menu_products()`, tracked with `PRAGMA user_version` so items the owner deletes are not brought back) and updated seed menu [#110].
 - `connection.py`: all operations now run under a thread lock (`threading.RLock`), nested `transaction()` scopes use real SQLite savepoints, and `executescript` is refused inside a managed transaction [#93]. `__init__.py` and `seed.py` add `validate_no_default_admin()`: production start fails if no active admin/manager exists or one still has the default PIN 1234 [#90].
+
+## Update 2026-11-27 (Batch 6: shifts, keyboard, live orders)
+
+- `connection.py` calls `clock.configure_process_timezone()` at import, so every stored timestamp (column defaults included) is Cairo time even on a machine whose OS timezone is wrong. Fixes shifts saved two hours behind and a brand-new order showing "02:06" elapsed.
+
+---
