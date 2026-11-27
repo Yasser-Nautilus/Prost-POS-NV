@@ -180,3 +180,16 @@ The bridge exposes actions for all implemented features:
 - `ProductsView`: price validation (0 to 50,000 EGP), duplicate names blocked, category delete [#93, #95, #108].
 - `TrackingView`: copy buttons for receipts, date picker in the archive, "sent to printer" notice clears after 5 seconds [#106, #109].
 - `ToastHost`, `ConfirmDialog`, `ManagerApprovalDialog`: new shared components [#60, #94, #108].
+
+## Update 2026-11-27 (Batch 6: shifts, keyboard, live orders)
+
+- `TrackingView`: subscribes to `ordersChanged` and refreshes at once (the 30s poll stays as a safety net).
+- `ConfirmDialog`: one decision per open — Enter confirms, Escape cancels, key repeat and the focused button's own Enter are ignored so an action never runs twice.
+- `ShiftDialog`: shift-change label reworded; when no shift is open the dialog now tells a closed day apart from a missing one (closed day → "a manager must open a new day", instead of offering a drawer that cannot open).
+- `SessionsView`: after the day is closed the screen keeps showing that day's sessions with a banner instead of going blank.
+- `CustomerLookup`: the register and address forms take the cursor on open, so Enter saves without the mouse.
+- `POSView`: an item note saves when the field loses focus and is cleared when the order changes, so it cannot leak into the next order.
+- `DeliveryView`: a zone repeated inside the street line is shown once.
+- `bridge.ts`: `ordersChanged` listener (plus a mock-mode emit) and `sessionLastDay()`.
+
+---
