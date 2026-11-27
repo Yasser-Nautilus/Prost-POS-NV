@@ -24,6 +24,12 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Optional
 
+from broast_pos.core.clock import configure_process_timezone
+
+# Item 4 (batch 6): every entry point reaches the database layer, so pinning the
+# timezone here makes all stored times Cairo time, not the host's timezone.
+configure_process_timezone()
+
 logger = logging.getLogger(__name__)
 
 
