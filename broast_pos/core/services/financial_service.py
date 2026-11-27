@@ -362,6 +362,10 @@ class FinancialService:
             summary.ledger_expected_cash = round(ledger_balance_pt / 100, 2)
         return summary
 
+    def get_last_shift(self) -> Shift | None:
+        """Most recent business day (open or closed)."""
+        return self._financial.get_last_shift()
+
     def get_shift_history(self) -> list[Shift]:
         """Past closed shifts, most recent first."""
         return self._financial.get_shift_history()
