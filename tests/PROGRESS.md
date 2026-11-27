@@ -77,6 +77,10 @@ Based on file names, the test suite covers:
 4. Add frontend tests (currently no React/TypeScript tests exist).
 5. Add printing infrastructure tests (mocked, since hardware is unavailable).
 
+## Update 2026-11-27 (Batch 5: menu and products)
+
+- `test_batch5_products_reset.py`: hide/show, remove (blocked when ordered), reorder validation, fresh and upgraded regular/spicy menu split, and the data reset script.
+- `test_user_admin_menu_batch.py`: menu import check updated for the split names.
 ---
 
 ## Updates since 2026-11-20 (PRs #59 to #110)

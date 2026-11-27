@@ -93,10 +93,30 @@ class ProductRepository(BaseRepository[Product]):
         rows = self._db.fetch_all(
             """SELECT * FROM products
                WHERE category_id = ? AND is_active = 1
-               ORDER BY sort_order, name""",
+               ORDER BY sort_order, id""",
             (category_id,),
         )
         return [self._row_to_product(r) for r in rows]
+
+    def has_order_history(self, product_id: int) -> bool:
+        """True when any order line ever referenced this product."""
+        row = self._db.fetch_one(
+            "SELECT 1 FROM order_items WHERE product_id = ? LIMIT 1", (product_id,)
+        )
+        return row is not None
+
+    def hard_delete(self, product_id: int) -> None:
+        """Permanently remove a product that has no order history."""
+        self._db.execute("DELETE FROM products WHERE id = ?", (product_id,))
+        self._db.commit()
+
+    def set_sort_orders(self, ordered_ids: list[int]) -> None:
+        """Give each product the sort_order matching its position (1-based)."""
+        for position, product_id in enumerate(ordered_ids, start=1):
+            self._db.execute(
+                "UPDATE products SET sort_order = ? WHERE id = ?", (position, product_id)
+            )
+        self._db.commit()
 
     def search_products(self, query: str) -> list[Product]:
         """Text search across product names."""
@@ -116,7 +136,7 @@ class ProductRepository(BaseRepository[Product]):
     def get_all_products(self) -> list[Product]:
         """All products (active and inactive) — for product management screen."""
         rows = self._db.fetch_all(
-            "SELECT * FROM products ORDER BY category_id, sort_order"
+            "SELECT * FROM products ORDER BY category_id, sort_order, id"
         )
         return [self._row_to_product(r) for r in rows]
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Package, Plus, Edit3, EyeOff, RefreshCw, Loader2, AlertCircle, X, Check, GripVertical, Trash2 } from "lucide-react";
+import { Package, Plus, Edit3, Eye, EyeOff, RefreshCw, Loader2, AlertCircle, X, Check, GripVertical, Trash2 } from "lucide-react";
 import { bridge } from "../bridge";
 import { ZonesPanel } from "../components/ZonesPanel";
 import { useConfirm } from "../components/ConfirmDialog";
@@ -19,6 +19,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
   // CHANGED: drag & drop reordering of categories
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
+  // drag & drop reordering of products inside the selected category
+  const [prodDragIndex, setProdDragIndex] = useState<number | null>(null);
+  const [prodOverIndex, setProdOverIndex] = useState<number | null>(null);
 
   // Product form state
   const [showProductForm, setShowProductForm] = useState(false);
@@ -54,8 +57,9 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
 
   const fetchProducts = async (catId: number) => {
     try {
-      const prods = await bridge.call("get_products_by_category", { category_id: catId });
-      setProducts(prods || []);
+      // All products of the category, hidden ones included, so they can be shown again.
+      const all = await bridge.call("get_all_products");
+      setProducts((all || []).filter((p: any) => p.category_id === catId));
     } catch (e) {
       console.error(e);
     }
@@ -140,13 +144,55 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
     }
   };
 
-  const handleDeactivateProduct = async (prodId: number, prodName: string) => {
-    if (!(await showConfirm(`هل تريد إلغاء تفعيل المنتج "${prodName}"؟`))) return;
+  const handleHideProduct = async (prodId: number, prodName: string) => {
+    if (!(await showConfirm(`هل تريد إخفاء المنتج "${prodName}" من شاشة الكاشير؟ يمكنك إظهاره لاحقاً.`))) return;
     try {
-      await bridge.call("deactivate_product", { product_id: prodId });
+      await bridge.call("update_product", { product_id: prodId, is_active: false });
       if (selectedCatId !== null) fetchProducts(selectedCatId);
     } catch (err: any) {
-      alert("فشل الإلغاء: " + err.message);
+      alert("فشل الإخفاء: " + err.message);
+    }
+  };
+
+  const handleShowProduct = async (prodId: number) => {
+    try {
+      await bridge.call("update_product", { product_id: prodId, is_active: true });
+      if (selectedCatId !== null) fetchProducts(selectedCatId);
+    } catch (err: any) {
+      alert("فشل الإظهار: " + err.message);
+    }
+  };
+
+  const handleRemoveProduct = async (prodId: number, prodName: string) => {
+    if (!(await showConfirm(`هل تريد حذف المنتج "${prodName}" نهائياً؟ لا يمكن التراجع.`))) return;
+    try {
+      await bridge.call("remove_product", { product_id: prodId });
+      if (selectedCatId !== null) fetchProducts(selectedCatId);
+    } catch (err: any) {
+      alert("فشل الحذف: " + err.message);
+    }
+  };
+
+  // ── Product drag & drop reordering ────────────────────────────────────────
+
+  const handleProductDrop = async () => {
+    const from = prodDragIndex;
+    const to = prodOverIndex;
+    setProdDragIndex(null);
+    setProdOverIndex(null);
+    if (from === null || to === null || from === to || selectedCatId === null) return;
+    const reordered = [...products];
+    const [moved] = reordered.splice(from, 1);
+    reordered.splice(to, 0, moved);
+    setProducts(reordered);
+    try {
+      await bridge.call("reorder_products", {
+        category_id: selectedCatId,
+        product_ids: reordered.map((p) => p.id),
+      });
+    } catch (err: any) {
+      alert("فشل حفظ الترتيب: " + err.message);
+      fetchProducts(selectedCatId); // revert to server state on failure
     }
   };
 
@@ -374,11 +420,28 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
         <div className="flex-1 overflow-y-auto">
           {products.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {products.map((prod) => (
+              {products.map((prod, index) => (
                 <div
                   key={prod.id}
+                  draggable={isManagerOrAbove}
+                  onDragStart={() => setProdDragIndex(index)}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (prodOverIndex !== index) setProdOverIndex(index);
+                  }}
+                  onDragEnd={() => {
+                    setProdDragIndex(null);
+                    setProdOverIndex(null);
+                  }}
+                  onDrop={handleProductDrop}
                   className={`p-4 bg-brand-card border border-brand-border/40 rounded-2xl flex flex-col justify-between min-h-36 min-w-0 gap-4 transition-all group ${
                     !prod.is_active ? "opacity-50" : "hover:border-brand-border"
+                  } ${isManagerOrAbove ? "cursor-grab active:cursor-grabbing" : ""} ${
+                    prodDragIndex === index ? "opacity-40" : ""
+                  } ${
+                    prodOverIndex === index && prodDragIndex !== null && prodDragIndex !== index
+                      ? "border-brand-red border-dashed"
+                      : ""
                   }`}
                 >
                   <div>
@@ -387,7 +450,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                     </h4>
                     {!prod.is_active && (
                       <span className="text-[10px] text-red-400 font-bold block mt-0.5">
-                        غير نشط
+                        مخفي
                       </span>
                     )}
                   </div>
@@ -397,7 +460,7 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                       <span className="text-[10px] font-semibold">ج.م</span>
                     </span>
                     {isManagerOrAbove && (
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-1">
                         <button
                           onClick={() => openEditProduct(prod)}
                           aria-label="تعديل المنتج"
@@ -406,16 +469,33 @@ export const ProductsView: React.FC<ProductsViewProps> = ({ currentUser }) => {
                         >
                           <Edit3 size={12} />
                         </button>
-                        {prod.is_active && (
+                        {prod.is_active ? (
                           <button
-                            onClick={() => handleDeactivateProduct(prod.id, prod.name)}
-                            aria-label="إيقاف تفعيل المنتج"
-                            title="إيقاف تفعيل المنتج"
-                            className="h-7 w-7 rounded-lg bg-red-950/30 text-red-400 flex items-center justify-center hover:bg-red-950/60 transition-all"
+                            onClick={() => handleHideProduct(prod.id, prod.name)}
+                            aria-label="إخفاء المنتج"
+                            title="إخفاء المنتج"
+                            className="h-7 w-7 rounded-lg bg-gray-700/30 text-gray-300 flex items-center justify-center hover:bg-gray-700/60 transition-all"
                           >
                             <EyeOff size={12} />
                           </button>
+                        ) : (
+                          <button
+                            onClick={() => handleShowProduct(prod.id)}
+                            aria-label="إظهار المنتج"
+                            title="إظهار المنتج"
+                            className="h-7 w-7 rounded-lg bg-brand-teal/10 text-brand-teal flex items-center justify-center hover:bg-brand-teal/20 transition-all"
+                          >
+                            <Eye size={12} />
+                          </button>
                         )}
+                        <button
+                          onClick={() => handleRemoveProduct(prod.id, prod.name)}
+                          aria-label="حذف المنتج"
+                          title="حذف المنتج نهائياً"
+                          className="h-7 w-7 rounded-lg bg-red-950/30 text-red-400 flex items-center justify-center hover:bg-red-950/60 transition-all"
+                        >
+                          <Trash2 size={12} />
+                        </button>
                       </div>
                     )}
                   </div>

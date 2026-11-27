@@ -165,6 +165,9 @@ The bridge contains 6 internal controller classes that handle specific action do
 | FinancialController | Implemented (242 lines) |
 | **Total bridge code** | **1,016 lines** (bridge.py) + **2,671 lines** (controllers) |
 
+## Update 2026-11-27 (Batch 5: menu and products)
+
+- New manager/admin actions `remove_product` (audited as `product_removed`) and `reorder_products` (`category_id`, `product_ids`). `update_product` with `is_active` is used to hide and show a product.
 ---
 
 ## Updates since 2026-11-20 (PRs #59 to #110)

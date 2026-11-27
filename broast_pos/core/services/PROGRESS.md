@@ -362,6 +362,10 @@ AuditService
 | AuditService | `audit_service.py` | 168 | Implemented |
 | **Total** | **11 files** | **4,696** | |
 
+## Update 2026-11-27 (Batch 5: menu and products)
+
+- `ProductService.remove_product`: permanent delete, refused with an Arabic message when the product appears on any past order (use hide instead).
+- `ProductService.reorder_products(category_id, ordered_ids)`: saves a manual order; the list must contain every product of the category (hidden ones too) exactly once.
 ---
 
 ## Updates since 2026-11-20 (PRs #59 to #110)

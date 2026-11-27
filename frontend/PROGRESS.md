@@ -144,6 +144,11 @@ The bridge exposes actions for all implemented features:
 | ShiftDialog still active | Legacy component coexists with new session system |
 | `window.confirm()` | Used for logout — may not work in QWebEngineView |
 
+## Update 2026-11-27 (Batch 5: menu and products)
+
+- `ProductsView`: products can be dragged to a new position inside a category (saved with `reorder_products`). Each card shows Edit, Hide/Show and Remove side by side. Hide keeps the product listed (dimmed, marked "مخفي") with a Show button; Remove deletes it after a confirm.
+- The product list now loads `get_all_products` so hidden products stay visible on this screen; the cashier screen still gets active products only.
+- `bridge.ts` mock: added `remove_product`, `reorder_products`, `get_all_products`, and `update_product` only changes fields that are sent.
 ---
 
 ## Updates since 2026-11-20 (PRs #59 to #110)
