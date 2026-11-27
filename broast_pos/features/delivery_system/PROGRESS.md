@@ -164,3 +164,9 @@ Handles all delivery-related bridge actions:
 - Driver picker excludes manager and admin users; driver phone required [#67, #94].
 - Settlement is isolated by business day; invoice number first in trip previews; settlement history and daily completed state; notes removed from single-trip settlement [#95, #96, #104, #105].
 - Delivery zones management, unique zone names; driver statistics per driver, daily and monthly (manager only) [#95, #97, #100].
+
+## Update 2026-11-27 (Batch 6: shifts, keyboard, live orders)
+
+- `DeliveryController.print_trip_sheet(driver_id, trip_id, ...)`: prints one trip's handover sheet (invoice, customer, cash due per order, online marked paid, cash and fees total) **without settling the trip**.
+
+---
