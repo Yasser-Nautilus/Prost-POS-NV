@@ -402,3 +402,14 @@ AuditService
 - Customer lookup by phone, edit name/phone, repeat-customer history [#95, #100].
 - Report endpoints need manager role; period reports count paid orders only [#80, #98].
 - `AuditService` is exposed through a public `audit_svc` property on `OrderService` (always a real `AuditService`, never None or bypassed) [#63].
+
+## Update 2026-11-27 (Batch 6: shifts, keyboard, live orders)
+
+- `AuthService.create_user` / `update_user`: a second **active** system admin is refused (`allow_second_admin=True` exists only for seeding and test fixtures). The bridge already refused it; the service now refuses direct callers too.
+- `ProductService.delete_category`: permanent delete, refused with an Arabic message while any product (hidden ones included) still references the category — hiding stays a separate action.
+- `BusinessDayService.close_business_day`: `_guard_drivers_settled()` blocks the close while a driver has a returned, unsettled trip on that day and names the driver in the Arabic message.
+- `FinancialService.get_last_shift()`: the most recent business day, open or closed, so a closed day can still be shown.
+- `DriverSettlementService` preview: each trip order now carries `cash_due` and `online_paid`, which the trip-sheet print uses.
+- `core/clock.py`: `configure_process_timezone()` pins the process to Africa/Cairo (called at database import), so Python `datetime.now()` and SQLite's `datetime('now','localtime')` defaults agree with the restaurant clock instead of the OS timezone.
+
+---
