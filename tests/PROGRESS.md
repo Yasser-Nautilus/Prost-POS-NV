@@ -90,3 +90,9 @@ Based on file names, the test suite covers:
 - Suite grew past 800 tests (814 test functions on 2026-11-26). New files include regression tests for the driver picker, duplicate names, QA findings, and combined audit fixes [#67, #92, #97, #108].
 - `tests/test_frontend_bridge_actions.py` checks every frontend action is routed in the real `POSBridge`; `tests/test_visible_flows_extended.py` runs rendered UI flows (split payment, repeat customer, park/resume) through the real React app, QWebChannel bridge and SQLite [#102].
 - CI installs a headless Qt runtime so the Qt bridge tests run in GitHub Actions [#93, #110].
+
+## Update 2026-11-27 (Batch 6: shifts, keyboard, live orders)
+
+- `test_h20_pin_change_sessions` and `test_expense_integrity` seed their second admin with `allow_second_admin=True`, because the service now refuses a second active admin (batch 6).
+
+---
