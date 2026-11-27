@@ -19,6 +19,9 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
 }) => {
   const [activeShift, setActiveShift] = useState<any>(null);
   const [summary, setSummary] = useState<any>(null);
+  // Item 9: when there is no open shift we must say whether the day is still
+  // open (just open your drawer) or already closed (a manager must open a new day).
+  const [lastDay, setLastDay] = useState<any>(null);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [summaryPrinted, setSummaryPrinted] = useState(false);
@@ -70,6 +73,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
       setSessionLoaded(true);
 
       if (shift) {
+        setLastDay(null);
         // Bridge auto-resolves shift_id from active shift when not passed
         const sumData = await bridge.call("get_shift_summary");
         setSummary(sumData);
@@ -79,6 +83,8 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
       } else {
         setSummary(null);
         setExpenses([]);
+        const last = await bridge.sessionLastDay().catch(() => null);
+        setLastDay(last?.day ?? null);
       }
     } catch (e) {
       console.error(e);
@@ -512,7 +518,7 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                         /* Cashier: totals are revealed only to the manager at shift change. */
                         <div className="col-span-2 bg-brand-card/30 p-4 rounded-xl border border-brand-border/30 text-center">
                           <span className="text-gray-400 text-xs">
-                            يظهر إجمالي المبيعات والنقد للمدير فقط عند تغيير الوردية.
+                            إجمالي المبيعات والنقد بيتسلّم للمدير وقت تغيير الوردية.
                           </span>
                         </div>
                       )}
@@ -523,10 +529,24 @@ export const ShiftDialog: React.FC<ShiftDialogProps> = ({
                 <div className="text-center py-12 bg-brand-card/20 rounded-3xl border border-brand-border/30 flex flex-col items-center justify-center">
                   <Power size={48} className="text-red-500/80 mb-3" />
                   <h4 className="text-lg font-bold text-white mb-2">لا توجد وردية مفتوحة حالياً</h4>
-                  <p className="text-gray-400 text-sm max-w-sm mb-6">
-                    الوردية مغلقة. يرجى فتح وردية جديدة حتى تتمكن من بدء المعاملات وطباعة الفواتير.
-                  </p>
-                  {openingControls}
+                  {lastDay && !lastDay.is_active ? (
+                    <>
+                      <p className="text-gray-400 text-sm max-w-sm mb-2">
+                        يوم العمل مقفول (اتقفل الساعة {String(lastDay.closed_at || "").slice(11, 16)}).
+                        لازم المدير يفتح يوم عمل جديد قبل ما تقدر تفتح درج وتستقبل دفع.
+                      </p>
+                      <p className="text-yellow-500 text-xs max-w-sm mb-6">
+                        كل الأوردرات والورديات القديمة محفوظة في شاشة الورديات.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-gray-400 text-sm max-w-sm mb-6">
+                        الوردية مغلقة. يرجى فتح وردية جديدة حتى تتمكن من بدء المعاملات وطباعة الفواتير.
+                      </p>
+                      {openingControls}
+                    </>
+                  )}
                 </div>
               )}
             </div>
