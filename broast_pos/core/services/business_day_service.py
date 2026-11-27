@@ -196,6 +196,11 @@ class BusinessDayService:
         # FR-DAY-1: All sessions must be closed
         self._guard_all_sessions_closed(day_id)
 
+        # Item 8 (batch 6): a driver whose trips are back but whose end-of-day
+        # settlement is still pending must be settled first, otherwise his cash
+        # and his delivery fees never reach the ledger or the expenses.
+        self._guard_drivers_settled(day_id)
+
         # H09: Verify manager authorization BEFORE any booking so invalid auth
         # fails fast without leaving ledger state.
         self._verify_manager_pin(manager_pin)
@@ -267,6 +272,28 @@ class BusinessDayService:
                 f"لا يمكن إغلاق اليوم بينما توجد وردية مفتوحة: {names}. "
                 "أغلق جميع الورديات أولاً."
             )
+
+    def _guard_drivers_settled(self, day_id: int) -> None:
+        """Raise while any driver with returned trips on this day has no day closure."""
+        rows = self._sessions._db.fetch_all(
+            """
+            SELECT DISTINCT t.driver_id AS driver_id, t.driver_name AS driver_name
+            FROM delivery_trips t
+            JOIN delivery_trip_orders dto ON dto.trip_id = t.id
+            JOIN orders o ON o.id = dto.order_id
+            WHERE o.shift_id = ?
+              AND t.returned_at IS NOT NULL
+              AND t.is_settled = 0
+            ORDER BY t.driver_name
+            """,
+            (day_id,),
+        )
+        if not rows:
+            return
+        names = "، ".join(r["driver_name"] or f"#{r['driver_id']}" for r in rows)
+        raise ValueError(
+            f"السواق {names} لسه مش متسوي — اعمل تسوية نهاية اليوم الأول وبعدين اقفل"
+        )
 
     def _verify_manager_pin(self, manager_pin: str | None) -> None:
         """Verify manager authorization if auth_service or financial_service is configured."""
