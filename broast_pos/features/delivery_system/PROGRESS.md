@@ -1,6 +1,6 @@
 # Delivery System — Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 > **Source of Truth:** `delivery_service.py`, `driver_settlement_service.py`, `delivery_controller.py`, `delivery.py`, `driver_settlement.py`
 
 ---
@@ -153,3 +153,14 @@ Handles all delivery-related bridge actions:
 | Frontend (DriverSettlementView) | Implemented | |
 | Bridge controller | Implemented | 484 lines |
 | Audit logging | Implemented | All operations logged |
+
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26.
+
+- `delivery_controller.py`: dispatch prints driver slips for each order in the trip; a printer failure never undoes the dispatch (`print_failed` returned) [#107].
+- Driver picker excludes manager and admin users; driver phone required [#67, #94].
+- Settlement is isolated by business day; invoice number first in trip previews; settlement history and daily completed state; notes removed from single-trip settlement [#95, #96, #104, #105].
+- Delivery zones management, unique zone names; driver statistics per driver, daily and monthly (manager only) [#95, #97, #100].

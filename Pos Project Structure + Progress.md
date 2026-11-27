@@ -1,6 +1,6 @@
 # Prost POS — Project Structure & Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 > **Branch:** `dev`
 > **Schema Version:** 6
 > **Documentation generated from:** Source code audit of all implementation files
@@ -370,3 +370,30 @@ The core POS functionality — order management, product/customer management, de
 9. Cloud sync (deferred).
 
 **The project should not be assigned a single completion percentage** without first defining and agreeing on a weighted task list. The backend and bridge layers are substantially complete; the frontend has one significant unintegrated view; hardware validation and test execution remain outstanding.
+
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26. This section records what merged to `dev` after the 2026-11-20 documentation sync. Details come from the merged PR descriptions (PR numbers in brackets). Each part's own PROGRESS.md has the per-part detail.
+
+### New top-level pieces
+- `broast_pos/operations/` (`auto_backup.py`, `recovery.py`): automatic DB backup at day close into a `backups/` folder next to the DB (keeps the last 30, never blocks closing the day) [#100]; safe SQLite backup and recovery [#93]. See `docs/backup-recovery.md`.
+- `broast_pos/core/clock.py`, `broast_pos/core/phone.py`, `broast_pos/core/policies/` (`discount.py`, `input_values.py`): restaurant wall-clock helper that stamps attendance in the restaurant timezone (Africa/Cairo) whatever the OS clock zone says, shared Egyptian mobile-number helper [#95], the single discount computation/rescale rule, and boundary checks for unit counts and counted cash [#93, #98]. The 0 to 50,000 EGP caps live in `ProductService` (price) and `FinancialService` (expense); the cashier slot 1-or-2 rule lives in `AuthService` [#93, #97, #98].
+- `docs/audit-fixes/` (points 9 to 14), `docs/backup-recovery.md`, `docs/dependency-security.md` [#93].
+- `assets/branding/`: restaurant logo and sidebar art; `nautix_app_icon.png` is the new app icon [#110].
+- `.env.example`, `.gitignore`: configuration is loaded from `.env` with process environment first; real secret files stay out of version control [#90].
+- `.github/workflows/ci.yml`: CI runs ruff, the test suite, rendered UI tests through the real React app and bridge, and a check that every frontend bridge action is routed [#93, #98, #102].
+
+### Product changes by theme
+- **Branding:** UI rebranded to Prostsh (red/black theme, new login art and logo) [#79, #76]; the application window and dialogs are now named "Nautix POS" and the app icon is the hex N [#110].
+- **Cash and sessions (audit H01 to H13):** cash sales post to the authenticated cashier's session, expected cash no longer double-subtracts unpaid orders, session ownership and blind count are enforced, session open/close are atomic, day close goes through one guarded operation, handover validates the cash drop and books a `CASH_DROP` entry, refunds go to the currently open till [#70 to #75, #77, #81, #86].
+- **Orders:** stable amendment line identity, paid orders cannot be paid again or have totals changed, backend resolves product price and delivery fee, inactive products are rejected, discounts are re-validated after item removal and audited on the in-memory path [#62, #64, #71, #72, #88, #91, #98].
+- **Delivery:** driver picker excludes managers and admins, handover list excludes drivers, trip dispatch/return are atomic, settlement is isolated by business day, driver slips print for each order when a trip is sent, driver stats and daily fee closure were added [#67, #68, #83, #100, #104, #107].
+- **Security:** PIN-only throttle fixed, stale authority revoked on deactivation or demotion, report endpoints need manager role, mock bridge needs an explicit flag, secrets and initial admin setup are enforced [#80, #85, #87, #89, #90].
+- **Printing:** printers initialise on startup, print errors reach the operator, simulated printer mode, marked receipt copies, driver slips [#69, #78, #84, #106, #107].
+- **UX:** dark/light theme toggle, modals close on outside click, keyboard shortcuts for the cashier, phone validation, delivery zones, repeat-customer lookup, mixed payment and bill split, settlement history [#94, #95, #99, #100, #108, #109].
+- **Admin:** users page has delete and reactivate; no second system admin; duplicate usernames and product names are blocked; menu import; shifts show the cashier name [#108, #110].
+
+### Tests
+- Suite grew from 331 (PR #62 period) to 800+ tests, plus rendered UI cases through the real bridge [#92, #93, #102].

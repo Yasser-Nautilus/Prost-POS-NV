@@ -1,6 +1,6 @@
 # Repositories — Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 > **Source of Truth:** Actual implementation files in `broast_pos/data/repositories/`
 
 ---
@@ -225,3 +225,14 @@ All repositories extend `BaseRepository`, which provides:
 ## Update 2026-11-27 (Batch 5: menu and products)
 
 - `ProductRepository`: added `has_order_history`, `hard_delete` and `set_sort_orders`. Product lists now order by `sort_order, id` so equal sort values keep a stable order.
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26.
+
+- `user_repository.py`: `get_drivers()` restricted to `role = 'cashier'` with no cashier slot; user delete/reactivate and duplicate-name checks [#67, #110, #108].
+- `cashier_session_repository.py`: `set_handover_link()` sets the handover FK without the `is_open` guard [#61].
+- `delivery_repository.py`: removed the double `localtime` conversion in date filters; business-day scoped queries [#65, #104].
+- `cash_ledger_repository.py`, `financial_repository.py`, `order_repository.py`: `CASH_DROP` booking, refund routing and mixed payment parts [#86, #81, #100].
+- `customer_repository.py`, `parked_draft_repository.py`, `audit_repository.py` changed for customer lookup and durable parking [#95, #93].
