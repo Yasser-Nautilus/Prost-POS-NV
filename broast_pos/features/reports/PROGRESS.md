@@ -1,6 +1,6 @@
 # Reports — Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 > **Source of Truth:** `report_service.py`, `report_repository.py`, `reports_controller.py`
 
 ---
@@ -88,3 +88,13 @@ The reporting system generates financial and operational reports at daily, shift
 | Report printing | Implemented |
 | Frontend (ReportsView) | Implemented |
 | Bridge controller | Implemented |
+
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26.
+
+- `reports_controller.py`: database errors are raised with a clear Arabic message and returned as `success: false` instead of zeros; `print_daily_summary()` passes the correct data shape and returns an error string [#78, #84, #98].
+- Monthly and yearly reports (manager and above); period reports count paid orders only; driver stats report [#95, #98, #100].
+- Report endpoints in the bridge need manager role [#80].

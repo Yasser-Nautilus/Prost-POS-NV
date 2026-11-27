@@ -1,6 +1,6 @@
 # UI Components — Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 
 ---
 
@@ -51,3 +51,11 @@ All UI functionality previously provided by these components is now implemented 
 ## Disposition
 
 These files are retained for reference. They should not be modified and are not part of active development.
+
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26 after reviewing the code against the merged PRs.
+
+No code changes in this directory this period. The legacy `pos_view.py` that imported these components was deleted [#62]; the remaining importers are the other legacy PyQt6 views and dialogs, which the active runtime never loads.

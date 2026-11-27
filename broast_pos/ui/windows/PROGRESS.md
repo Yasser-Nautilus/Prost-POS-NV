@@ -1,6 +1,6 @@
 # UI Windows — Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 
 ---
 
@@ -32,3 +32,13 @@
 ## Disposition
 
 Legacy window files are retained for reference. They should not be modified and are not part of active development.
+
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26. Legacy PyQt6 window classes are still untouched. Changes apply to the active `WebShell` (`broast_pos/ui/web_shell.py`) and to `main.py`.
+
+- Window title is now "Nautix POS - نظام البيع", and alert/confirm dialog titles read "Nautix POS" [#110].
+- `main.py` sets the application display name to "Nautix POS" and the window/taskbar icon to `assets/branding/nautix_app_icon.png` (hex N). Before this, no window icon was set and the OS default showed [#110].
+- The restaurant branding inside the UI (Prostsh, receipts, login page) is unchanged by the app rename [#79, #110].

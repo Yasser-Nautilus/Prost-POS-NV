@@ -1,6 +1,6 @@
 # Repositories — Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 > **Source of Truth:** Actual implementation files in `broast_pos/data/repositories/`
 
 ---
@@ -221,3 +221,15 @@ All repositories extend `BaseRepository`, which provides:
 | DriverSettlementRepository | `driver_settlement_repository.py` | 131 | Implemented | INSERT-only |
 | OrderStatusHistoryRepository | `order_status_history_repository.py` | 121 | Implemented | INSERT-only |
 | **Total** | **12 files** | | |
+
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26.
+
+- `user_repository.py`: `get_drivers()` restricted to `role = 'cashier'` with no cashier slot; user delete/reactivate and duplicate-name checks [#67, #110, #108].
+- `cashier_session_repository.py`: `set_handover_link()` sets the handover FK without the `is_open` guard [#61].
+- `delivery_repository.py`: removed the double `localtime` conversion in date filters; business-day scoped queries [#65, #104].
+- `cash_ledger_repository.py`, `financial_repository.py`, `order_repository.py`: `CASH_DROP` booking, refund routing and mixed payment parts [#86, #81, #100].
+- `customer_repository.py`, `parked_draft_repository.py`, `audit_repository.py` changed for customer lookup and durable parking [#95, #93].

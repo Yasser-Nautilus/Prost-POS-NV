@@ -1,6 +1,6 @@
 # Frontend — Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 > **Source of Truth:** `frontend/src/App.tsx`, `frontend/src/bridge.ts`, and all view/component files
 
 ---
@@ -49,7 +49,7 @@ The frontend is a **React 18 + TypeScript** single-page application built with *
 
 ---
 
-## Views (10 total — 9 mounted)
+## Views (10 total, all mounted since #59/#60)
 
 | View | File | Lines | Status | Description |
 |---|---|---|---|---|
@@ -62,10 +62,10 @@ The frontend is a **React 18 + TypeScript** single-page application built with *
 | `AuditLogView` | `AuditLogView.tsx` | 308 | Implemented | Audit trail viewer with filters |
 | `UsersView` | `UsersView.tsx` | — | Implemented | User management (admin only) |
 | `LoginView` | `LoginView.tsx` | — | Implemented | PIN-based login |
-| `SessionsView` | `SessionsView.tsx` | 693 | **Implemented — Not Integrated** | Cashier session management |
+| `SessionsView` | `SessionsView.tsx` | 693 | **Implemented, mounted (#59, #60)** | Cashier session management |
 
-> [!WARNING]
-> `SessionsView.tsx` (693 lines) is fully implemented and has corresponding bridge API endpoints (v2 session API in `bridge.ts`), but it is **not imported or mounted** in `App.tsx`. It is unreachable at runtime.
+> [!NOTE]
+> `SessionsView.tsx` (693 lines) is fully implemented and has corresponding bridge API endpoints (v2 session API in `bridge.ts`), and it is now imported and mounted in `App.tsx` (PRs #59, #60).
 
 ---
 
@@ -133,14 +133,45 @@ The bridge exposes actions for all implemented features:
 
 | Category | Count | Status |
 |---|---|---|
-| Views | 10 (9 mounted) | 1 not integrated (SessionsView) |
+| Views | 10 (all mounted) | none |
 | Components | 8 | All implemented |
 | Bridge client | 1 (1,330 lines) | Implemented with mock |
 | Build config | 3 files | Implemented |
 
 | Known Issue | Details |
 |---|---|
-| SessionsView not mounted | 693-line view exists but is not in App.tsx |
+| SessionsView not mounted | Fixed in #59/#60: now mounted in App.tsx |
 | ShiftDialog still active | Legacy component coexists with new session system |
 | `window.confirm()` | Used for logout — may not work in QWebEngineView |
 
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26. Details come from the merged PR descriptions (PR numbers in brackets).
+
+### Shell and navigation
+- `SessionsView` is now mounted in `App.tsx` with a navigation tab, role-based visibility and data refresh [#59, #60]. The earlier "Implemented, not integrated" warning no longer applies.
+- `window.confirm()` is replaced by the React `ConfirmDialog` in the POS views [#60].
+- Top bar is bigger (icons 24px, bar 80px, touch targets at least 48px); navbar tabs slide their name in on hover; account and shift controls stay visible at supported desktop widths [#99, #105, #95].
+- Dark/light theme toggle (`ThemeToggle.tsx`, `theme.ts`): sun/moon button in the header and on the login screen, dark by default, choice saved on the device [#108].
+- All modals (22 overlays) close when the dark area outside is clicked, using mousedown on the overlay itself [#109].
+- `bridge.ts` only falls back to the in-memory mock backend when `VITE_ALLOW_MOCK_BRIDGE=true` is set at build time [#85].
+- Favicon is the Nautix hex N [#110].
+
+### Branding and styling
+- Rebrand to Prostsh: brand accent changed from gold to red (`brand-gold` renamed `brand-red`), near-black surfaces, new login art and logo [#79]. Light login art and self-hosted Cairo font (`frontend/src/fonts/`) added [#110].
+- Login: logo sits in the circle at the top of the PIN card; duplicate white PIN dots removed (keyboard typing still works) [#99, #108, #110].
+
+### Views and components
+- `POSView`: cashier shortcuts (`/` or `F2` jumps to search, `Enter` adds the first match, `Esc` clears, `F8` opens discount) [#99]; per-item comment and mixed payment/bill split in `PaymentDialog` [#100]; discount re-validated after removing items [#98].
+- `CustomerLookup` / `CustomerHistoryModal`: lookup by a full phone number shows addresses and the last 3 orders; edit name and phone [#95, #100].
+- `phone.ts`: shared Egyptian mobile helper (`+20`, spaces and dashes normalise to `01XXXXXXXXX`), phone fields stop at 11 digits [#95, #110].
+- `ZonesPanel`: delivery zones management for manager and above, audit-logged, unique names [#95, #97].
+- `DriverStats`, `PeriodReports`: driver statistics and monthly/yearly reports (manager and above) [#95, #100].
+- `SettlementHistory`, `DriverSettlementView`: settlement history, daily settlement completed state, invoice number first in trip previews, optional notes field removed from single-trip settlement [#95, #96, #104, #105].
+- `ShiftDialog`: Escape closes it, expenses and pending shown for cashiers; `SessionsView` day-close Z-report no longer disappears after closing [#94, #97].
+- `UsersView`: delete (only users without history; users with records must be deactivated) and reactivate buttons, no second system admin in the role dropdown, the driver form hides the PIN (an internal 8-digit one is generated) and cashier slot, and the PIN field notes that new PINs need at least four English digits [#94, #108, #110].
+- `ProductsView`: price validation (0 to 50,000 EGP), duplicate names blocked, category delete [#93, #95, #108].
+- `TrackingView`: copy buttons for receipts, date picker in the archive, "sent to printer" notice clears after 5 seconds [#106, #109].
+- `ToastHost`, `ConfirmDialog`, `ManagerApprovalDialog`: new shared components [#60, #94, #108].

@@ -1,6 +1,6 @@
 # Config — Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 > **Source of Truth:** `config.py`, `.env.example`
 
 ---
@@ -78,3 +78,15 @@ Configured values for:
 | Printer config | Implemented |
 | Business rules | Implemented |
 | Secret externalization | Implemented |
+
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26.
+
+- `config.py` loads `.env` with the precedence process environment, then `.env`, then code defaults (`load_env_file()`). New helpers: `get_pin_pepper()`, `get_initial_admin_pin()`, `get_environment()`, `validate_production_secrets()`. Placeholder or weak secrets are rejected in production and the initial admin needs a secure PIN [#90].
+- `.env.example` documents the variables; `.gitignore` ignores `.env`, `.env.*` (except `.env.example`), `*.secret`, `*.key`, `*.pem` [#90].
+- `main.py` imports `config` so `config.LOGS_PATH` resolves for rotating file logging [#59, #60].
+- `PROST_PRINTER_SIMULATE=1` turns on simulated printer mode (default 0) [#69].
+- `restaurant.json`: theme colors moved to the Prostsh red/black palette (accent and confirm buttons `#e01038`, near-black surfaces) [#79]. `printers.json` was deleted from the repo and added to `.gitignore`: it is now a local per-machine file. A missing file falls back to a dummy config outside production and fails closed in production, where dummy and simulated printing are forbidden.

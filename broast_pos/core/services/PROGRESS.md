@@ -1,6 +1,6 @@
 # Core Services — Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 > **Source of Truth:** Actual implementation files in `broast_pos/core/services/`
 
 ---
@@ -361,3 +361,40 @@ AuditService
 | ProductService | `product_service.py` | 195 | Implemented |
 | AuditService | `audit_service.py` | 168 | Implemented |
 | **Total** | **11 files** | **4,696** | |
+
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26. Details come from the merged PR descriptions (PR numbers in brackets).
+
+### OrderService / PaymentCoordinator
+- Cash sales post to the authenticated cashier's session; the actor comes from `AuthService.get_current_user()`, not a caller-supplied id [#70, #72].
+- Paid active orders cannot be paid again (idempotency guard) and `amend_order()` rejects paid orders [#72, #91].
+- `add_item()` resolves name and price from `ProductService` by `product_id`; delivery fee comes from the zone lookup [#88].
+- `_check_items_available()` rejects missing or inactive products [#64].
+- Cancellation refunds route to the currently open till when the original session is closed (`_resolve_refund_session_id()`) [#81].
+- Mixed payment: new table `order_payments`, pay with several methods or split equally between N people (not for delivery orders) [#100].
+- Discounts re-validate after item removal; in-memory discount path now audits `DISCOUNT_APPLIED` [#62, #98].
+- `can_transition()` added (read-only) [#59].
+
+### CashierSessionService / FinancialService / BusinessDayService
+- `open_session()` and `close_session()` run in one transaction; `get_all_sessions_for_day()` is a public method [#60, #75].
+- `close_shift` is atomic with its audit write; shift audit events populate `audit_log.action` [#63, #66].
+- Expected cash comes from the cash ledger: `SUM(cash_ledger.amount_pt)` for the session is the one authorised formula; the orders-based `cash_sales − expenses` is only a fallback, and unpaid (pending) amounts are shown separately, never subtracted twice (H04) [#73].
+- Expense cap of 50,000 EGP; `add_expense` is atomic; expenses cannot post to a closed shift [#97, #77].
+- `transfer_shift` rejects same-user transfers and targets without a cashier slot [#97].
+- Day close runs through one guarded atomic operation that checks out all drivers [#77, #94]; schema v15 adds business-day closure keys [#104].
+
+### DriverSettlementService / DeliveryService
+- Remittance write failures are no longer treated as duplicates (only `sqlite3.IntegrityError`) [#82].
+- Dispatch and return update trip and orders atomically [#83].
+- Live previews, remittance, daily fee payment, print sheets and paid-state guards are scoped to the active business-day ID [#104]; daily fee closure is independent of per-trip settlement [#104].
+
+### AuthService / ProductService / CustomerService / ReportService / AuditService
+- PIN-only throttle uses a fixed key per surface; deactivation or demotion revokes authority immediately; last active admin and self-demotion are protected [#87, #89].
+- Duplicate usernames and active product names are rejected (case-insensitive) [#108].
+- Product prices validated from 0 to 50,000 EGP [#93].
+- Customer lookup by phone, edit name/phone, repeat-customer history [#95, #100].
+- Report endpoints need manager role; period reports count paid orders only [#80, #98].
+- `AuditService` is exposed through a public `audit_svc` property on `OrderService` (always a real `AuditService`, never None or bypassed) [#63].

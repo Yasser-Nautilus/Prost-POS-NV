@@ -1,6 +1,6 @@
 # Web Bridge — Progress
 
-> **Last Updated:** 2026-11-20
+> **Last Updated:** 2026-11-26
 > **Source of Truth:** `bridge.py` (1,016 lines)
 
 ---
@@ -165,3 +165,15 @@ The bridge contains 6 internal controller classes that handle specific action do
 | FinancialController | Implemented (242 lines) |
 | **Total bridge code** | **1,016 lines** (bridge.py) + **2,671 lines** (controllers) |
 
+---
+
+## Updates since 2026-11-20 (PRs #59 to #110)
+
+> Added 2026-11-26.
+
+- Session actions enforce ownership; cashiers cannot open or close another user's session; blind-count protection [#74].
+- Close shift routes through the guarded day-close operation [#77].
+- Report actions need manager role; `get_users_management` is admin-only [#80, #97].
+- New or routed actions include `get_printer_status` and `get_driver_stats` [#84, #101]; other bridge changes follow the per-feature notes in the other PROGRESS files.
+- CI test scans frontend `call(...)` actions and dispatches each through the real bridge to catch "unknown action" errors [#102].
+- `dispatch_trip` returns `print_failed` invoice numbers when slips fail [#107].
