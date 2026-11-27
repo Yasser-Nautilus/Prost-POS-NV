@@ -474,6 +474,18 @@ export const TrackingView: React.FC<TrackingViewProps> = ({ onResumeOrder, onHan
     return () => clearInterval(id);
   }, [fetchOrders]);
 
+  // Item 13: the backend pushes a signal whenever any terminal creates or
+  // changes an order, so this screen updates instantly (the 30s poll stays as
+  // a safety net for a dropped signal).
+  useEffect(() => {
+    const onOrdersChanged = () => {
+      fetchOrders();
+      if (isHistory) fetchHistory();
+    };
+    bridge.subscribe("ordersChanged", onOrdersChanged);
+    return () => bridge.unsubscribe("ordersChanged", onOrdersChanged);
+  }, [fetchOrders, fetchHistory, isHistory]);
+
   useEffect(() => {
     if (!isHistory) return;
     fetchHistory();
