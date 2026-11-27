@@ -180,3 +180,12 @@ The bridge contains 6 internal controller classes that handle specific action do
 - New or routed actions include `get_printer_status` and `get_driver_stats` [#84, #101]; other bridge changes follow the per-feature notes in the other PROGRESS files.
 - CI test scans frontend `call(...)` actions and dispatches each through the real bridge to catch "unknown action" errors [#102].
 - `dispatch_trip` returns `print_failed` invoice numbers when slips fail [#107].
+
+## Update 2026-11-27 (Batch 6: shifts, keyboard, live orders)
+
+- New `ordersChanged` signal, emitted after any order or delivery mutation (`_ORDERS_VISIBLE_ACTIONS` / `_DELIVERY_VISIBLE_ACTIONS`), so every cashier terminal refreshes the order screens immediately instead of waiting for the 30s poll.
+- New `session.last_day` action: the most recent business day with all its sessions, used when no day is open.
+- New `print_trip_sheet` delivery action (print without settling).
+- `set_customer_info` drops a zone name the cashier repeated at the start of the street (`_dedupe_zone_prefix`), so the delivery address is not printed twice.
+
+---

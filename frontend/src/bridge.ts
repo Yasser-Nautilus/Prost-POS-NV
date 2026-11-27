@@ -116,6 +116,14 @@ export interface ZReport extends XReport {
 
 type SignalCallback = (data: any) => void;
 
+/** Actions after which other terminals' order screens must refresh. */
+const ORDER_VISIBLE_ACTIONS = new Set([
+  "new_order", "add_item", "remove_item", "change_item_quantity", "set_item_note",
+  "set_customer_info", "set_table", "change_table", "apply_discount",
+  "park_order", "resume_parked_order", "confirm_order", "complete_payment",
+  "complete_payment_split", "cancel_order", "save_amendment",
+]);
+
 class POSBridgeClient {
   private backend: any = null;
   private channelReady: Promise<any>;
@@ -126,6 +134,7 @@ class POSBridgeClient {
     parkedChanged: new Set(),
     tableStateChanged: new Set(),
     shiftStatusChanged: new Set(),
+    ordersChanged: new Set(),
   };
 
   // Mock database state for local browser development
@@ -235,6 +244,8 @@ class POSBridgeClient {
               this.backend.tableStateChanged.connect((d: string) => this.notifyListeners("tableStateChanged", JSON.parse(d)));
             if (this.backend.shiftStatusChanged)
               this.backend.shiftStatusChanged.connect((d: string) => this.notifyListeners("shiftStatusChanged", JSON.parse(d)));
+            if (this.backend.ordersChanged)
+              this.backend.ordersChanged.connect((d: string) => this.notifyListeners("ordersChanged", JSON.parse(d)));
 
             resolve(true);
           });
@@ -282,7 +293,12 @@ class POSBridgeClient {
     }
 
     // Mock Implementation — only reachable with VITE_ALLOW_MOCK_BRIDGE=true.
-    return this.dispatchMock<T>(action, payload);
+    return this.dispatchMock<T>(action, payload).then((res) => {
+      // Native mode gets this from the backend signal; the mock has to fake it
+      // so the live order screens still refresh in browser development.
+      if (ORDER_VISIBLE_ACTIONS.has(action)) this.notifyListeners("ordersChanged", { action });
+      return res;
+    });
   }
 
   public subscribe(signal: string, callback: SignalCallback) {
@@ -335,6 +351,11 @@ class POSBridgeClient {
   /** Get all open sessions for the current business day. */
   public sessionGetActive(day_id?: number): Promise<CashierSession[]> {
     return this.call<CashierSession[]>('session.get_active', { day_id });
+  }
+
+  /** Most recent business day (open or closed) with its sessions. */
+  public sessionLastDay(): Promise<{ day: any; sessions: CashierSession[] } | null> {
+    return this.call('session.last_day', {});
   }
 
   /** Get all sessions (open + closed) for the current business day. */

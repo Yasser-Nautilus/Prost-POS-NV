@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
@@ -30,8 +30,25 @@ _PUBLIC_ACTIONS = frozenset({
 })
 
 
+# Actions that change what other terminals see on the order screens.
+_ORDERS_VISIBLE_ACTIONS = frozenset({
+    "new_order", "add_item", "remove_item", "change_item_quantity",
+    "set_item_note", "set_customer_info", "set_table", "change_table",
+    "apply_discount", "park_order", "resume_parked_order",
+    "confirm_order", "complete_payment", "complete_payment_split",
+    "cancel_order", "save_amendment", "load_order", "load_order_by_table",
+})
+_DELIVERY_VISIBLE_ACTIONS = frozenset({
+    "create_trip", "dispatch_trip", "return_trip", "settle_trip", "settle_driver",
+})
+
+
 class POSBridge(QObject):
     orderChanged = pyqtSignal(str)
+    # Item 13 (batch 6): fired on any change to the visible order list (new
+    # order, item added, confirmed, cancelled, dispatched) so every cashier
+    # terminal refreshes at once instead of waiting for the 30s poll.
+    ordersChanged = pyqtSignal(str)
     parkedChanged = pyqtSignal(str)
     tableStateChanged = pyqtSignal(str)
     shiftStatusChanged = pyqtSignal(str)
@@ -169,6 +186,28 @@ class POSBridge(QObject):
     def _on_table_changed_cb(self):
         state = self._order_ctrl.get_table_state() if self._order_ctrl else {}
         self.tableStateChanged.emit(json.dumps(state))
+
+    @staticmethod
+    def _dedupe_zone_prefix(address: str, zone: str) -> str:
+        """Drop a zone name the cashier typed again at the start of the street.
+
+        Staff often write "المنطقة - الشارع" in the street field, and the order
+        screen then prints the area twice (once as the zone, once inside the
+        address).
+        """
+        a = (address or "").strip()
+        z = (zone or "").strip()
+        if not a or not z or not a.startswith(z):
+            return a
+        rest = a[len(z):].lstrip(" -–—:|،,.")
+        return rest or a
+
+    def _trigger_orders_changed(self):
+        """Tell every terminal that the order list changed."""
+        try:
+            self.ordersChanged.emit(json.dumps({"at": datetime.now().isoformat(timespec="seconds")}))
+        except Exception:  # pragma: no cover - a signal failure must never break the write
+            logger.debug("ordersChanged emit failed", exc_info=True)
 
     def _trigger_shift_status_changed(self):
         try:
@@ -881,7 +920,10 @@ class POSBridge(QObject):
                             "load_order", "load_order_by_table", "save_amendment"):
                 if not self._order_ctrl:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
-                return self._dispatch_order(action, payload)
+                result = self._dispatch_order(action, payload)
+                if action in _ORDERS_VISIBLE_ACTIONS:
+                    self._trigger_orders_changed()
+                return result
 
             # ── Delivery ──────────────────────────────────────────────────────
             elif action in ("get_available_drivers", "get_active_trips", "check_in_driver",
@@ -891,10 +933,13 @@ class POSBridge(QObject):
                             "get_unassigned_deliveries", "get_driver_settlement_preview",
                             "settle_driver", "get_driver_settlements",
                             "get_driver_stats",
-                            "print_driver_day_sheet"):
+                            "print_driver_day_sheet", "print_trip_sheet"):
                 if not self._delivery_ctrl:
                     return json.dumps({"success": False, "error": "يجب تسجيل الدخول أولاً"})
-                return self._dispatch_delivery(action, payload)
+                result = self._dispatch_delivery(action, payload)
+                if action in _DELIVERY_VISIBLE_ACTIONS:
+                    self._trigger_orders_changed()
+                return result
 
             # ── Customer History (extended) ───────────────────────────────────
             elif action == "get_customer_by_id":
@@ -1051,7 +1096,9 @@ class POSBridge(QObject):
                     customer_id=payload.get("customer_id"),
                     phone=payload.get("phone", ""),
                     name=payload.get("name", ""),
-                    address=payload.get("address", ""),
+                    address=self._dedupe_zone_prefix(
+                        payload.get("address", ""), payload.get("zone", "")
+                    ),
                     zone=payload.get("zone", ""),
                     delivery_fee=payload.get("delivery_fee", 0.0),
                     address_id=payload.get("address_id"),
@@ -1313,6 +1360,16 @@ class POSBridge(QObject):
             if ok:
                 return json.dumps({"success": True, "data": {"printed": result["printed"]}})
             return json.dumps({"success": False, "error": result})
+        elif action == "print_trip_sheet":
+            ok, result = ctrl.print_trip_sheet(
+                driver_id=payload.get("driver_id"),
+                trip_id=payload.get("trip_id"),
+                settlement_date=payload.get("date"),
+                expected_day_id=payload.get("expected_day_id"),
+            )
+            if ok:
+                return json.dumps({"success": True, "data": result})
+            return json.dumps({"success": False, "error": result})
         elif action == "get_driver_settlements":
             records = ctrl.get_driver_settlements(
                 driver_id=payload.get("driver_id"),
@@ -1352,6 +1409,26 @@ class POSBridge(QObject):
                 day_id = active.id
 
         try:
+            if action == "last_day":
+                # Item 10: after the day is closed the shifts screen must still
+                # show that day's sessions instead of an empty page.
+                if self._financial is None:
+                    return json.dumps({"success": True, "data": None})
+                last = self._financial.get_last_shift()
+                if last is None:
+                    return json.dumps({"success": True, "data": None})
+                sessions = ctrl.get_all_sessions(last.id, actor_id=actor.id)
+                return json.dumps({"success": True, "data": {
+                    "day": {
+                        "id": last.id,
+                        "business_date": getattr(last, "business_date", None),
+                        "opened_at": str(last.opened_at) if last.opened_at else None,
+                        "closed_at": str(last.closed_at) if last.closed_at else None,
+                        "is_active": bool(last.is_active),
+                    },
+                    "sessions": sessions,
+                }})
+
             if action == "open":
                 # H09: reject session open against a closed/inactive business day
                 open_day_id = day_id or payload.get("day_id")

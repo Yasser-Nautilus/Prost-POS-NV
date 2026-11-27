@@ -51,7 +51,10 @@ def test_missing_drawer_rejects_expense_and_later_customer_save_cannot_rescue_it
 @pytest.mark.parametrize("role", [UserRole.CASHIER, UserRole.ADMIN])
 def test_actor_comes_from_login_not_payload(setup, role):
     bridge, db, call = setup
-    actor = bridge._auth.create_user("actor", "Expense actor", role, "5678", cashier_slot=1)
+    actor = bridge._auth.create_user(
+        "actor", "Expense actor", role, "5678", cashier_slot=1,
+        allow_second_admin=True,  # the seeded admin already exists
+    )
     call("logout")
     call("login", {"pin": "5678"})
     session = call("session.open", {"station": "ALL", "opening_float_egp": 100})

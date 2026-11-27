@@ -128,7 +128,7 @@ const TripSettlementDialog: React.FC<{
                       </td>
                       <td className="py-2.5 px-3 text-gray-400 text-xs">
                         {o.customer_zone && <div className="text-brand-red text-[10px] font-bold">{o.customer_zone}</div>}
-                        <div className="truncate max-w-[120px]">{o.customer_address}</div>
+                        <div className="truncate max-w-[120px]">{stripZonePrefix(o.customer_address, o.customer_zone)}</div>
                       </td>
                       <td className="py-2.5 px-3 text-center text-gray-300 text-xs">{o.payment_method || "cash"}</td>
                       <td className="py-2.5 px-3 text-center text-white font-bold font-mono">
@@ -189,6 +189,14 @@ const TripSettlementDialog: React.FC<{
 };
 
 /* ── Main View ─────────────────────────────────────────────────── */
+
+/** Drop a zone name repeated at the start of the street (see bridge dedupe). */
+const stripZonePrefix = (address?: string, zone?: string): string => {
+  const a = (address || "").trim();
+  const z = (zone || "").trim();
+  if (!a || !z || !a.startsWith(z)) return a;
+  return a.slice(z.length).replace(/^[\s\-–—:|،,.]+/, "") || a;
+};
 
 export const DeliveryView: React.FC<DeliveryViewProps> = () => {
   const [drivers, setDrivers] = useState<any[]>([]);

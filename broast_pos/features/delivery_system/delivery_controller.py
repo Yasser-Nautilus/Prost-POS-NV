@@ -495,6 +495,54 @@ class DeliveryController:
         except Exception as exc:
             return False, str(exc)
 
+    def print_trip_sheet(
+        self,
+        driver_id: int,
+        trip_id: int | None = None,
+        settlement_date: str | None = None,
+        expected_day_id: int | None = None,
+    ) -> tuple[bool, Any]:
+        """Print one trip's handover sheet without settling anything.
+
+        Same numbers the settlement would use (order number, customer, cash due
+        per order, online marked as already paid, total at the bottom), so the
+        cashier can hand a paper to the driver before confirming.
+        """
+        if self._settlement_svc is None:
+            return False, "خدمة التسوية غير مهيأة"
+        try:
+            preview = dict(self._settlement_svc.get_driver_settlement_preview(
+                driver_id=driver_id, settlement_date=settlement_date,
+                trip_id=trip_id, expected_day_id=expected_day_id,
+            ))
+        except Exception as exc:
+            return False, str(exc)
+
+        trips = preview.get("trips") or []
+        if not trips:
+            return False, "لا توجد رحلة للطباعة"
+        trip = trips[0]
+        orders = []
+        for o in trip.get("orders", []):
+            method = o.get("payment_method") or "cash"
+            orders.append({
+                "invoice_no": o.get("invoice_no"),
+                "customer_name": o.get("customer_name", ""),
+                "total": o.get("total", 0),
+                "payment_method": method,
+                "collected": o.get("cash_due", 0) if method == "cash" else 0,
+            })
+        sheet = {
+            "driver_name": preview.get("driver_name", ""),
+            "date": preview.get("settlement_date", ""),
+            "trip_number": trip.get("trip_id"),
+            "orders": orders,
+            "cash_collected": trip.get("cash", 0),
+            "delivery_fees": trip.get("fees", 0),
+        }
+        printed = bool(self._print.on_driver_settled(sheet, self._cashier_slot))
+        return True, {"printed": printed, "order_count": len(orders), "sheet": sheet}
+
     def print_driver_day_sheet(
         self,
         driver_id: int,

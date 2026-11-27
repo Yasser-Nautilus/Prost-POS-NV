@@ -236,3 +236,10 @@ All repositories extend `BaseRepository`, which provides:
 - `delivery_repository.py`: removed the double `localtime` conversion in date filters; business-day scoped queries [#65, #104].
 - `cash_ledger_repository.py`, `financial_repository.py`, `order_repository.py`: `CASH_DROP` booking, refund routing and mixed payment parts [#86, #81, #100].
 - `customer_repository.py`, `parked_draft_repository.py`, `audit_repository.py` changed for customer lookup and durable parking [#95, #93].
+
+## Update 2026-11-27 (Batch 6: shifts, keyboard, live orders)
+
+- `ProductRepository.count_products_in_category(category_id)`: counts every product in a category, hidden ones included, so a delete cannot orphan them.
+- `FinancialRepository.get_last_shift()`: most recent business day (open or closed).
+
+---

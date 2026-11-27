@@ -81,6 +81,11 @@ class FinancialRepository(BaseRepository[Shift]):
         )
         return self._row_to_shift(row) if row else None
 
+    def get_last_shift(self) -> Shift | None:
+        """Most recent business day, open or closed."""
+        row = self._db.fetch_one("SELECT * FROM shifts ORDER BY id DESC LIMIT 1")
+        return self._row_to_shift(row) if row else None
+
     def get_shift_history(self) -> list[Shift]:
         """Past closed shifts, most recent first."""
         rows = self._db.fetch_all(

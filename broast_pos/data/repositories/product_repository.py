@@ -98,6 +98,13 @@ class ProductRepository(BaseRepository[Product]):
         )
         return [self._row_to_product(r) for r in rows]
 
+    def count_products_in_category(self, category_id: int) -> int:
+        """How many products (active or hidden) reference this category."""
+        row = self._db.fetch_one(
+            "SELECT COUNT(*) AS n FROM products WHERE category_id = ?", (category_id,)
+        )
+        return int(row["n"]) if row else 0
+
     def has_order_history(self, product_id: int) -> bool:
         """True when any order line ever referenced this product."""
         row = self._db.fetch_one(

@@ -248,6 +248,12 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
     setCommentDraft(currentNote || "");
   };
 
+  // A half-typed note must never follow the cashier to the next order.
+  useEffect(() => {
+    setCommentIdx(null);
+    setCommentDraft("");
+  }, [currentOrder?.id]);
+
   const handleSaveComment = async (idx: number) => {
     try {
       await bridge.call("set_item_note", { index: idx, note: commentDraft.trim() });
@@ -898,6 +904,9 @@ export const POSView: React.FC<POSViewProps> = ({ currentUser, handoverOrder, on
                       onKeyDown={(e) => {
                         if (e.key === "Enter") handleSaveComment(idx);
                         if (e.key === "Escape") { setCommentIdx(null); setCommentDraft(""); }
+                      }}
+                      onBlur={() => {
+                        if (commentDraft.trim() !== (item.notes || "").trim()) handleSaveComment(idx);
                       }}
                       placeholder="ملاحظة للصنف (مثلاً: بدون بصل)..."
                       className="flex-1 bg-brand-dark border border-brand-border/50 rounded-lg py-2 px-3 text-white text-xs placeholder-gray-500 focus:outline-none focus:border-brand-red text-right"

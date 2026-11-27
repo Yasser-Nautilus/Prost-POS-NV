@@ -95,9 +95,8 @@ class ProductService:
         if cat is None:
             raise ValueError("الفئة غير موجودة")
 
-        # Check for active products in this category
-        products = self._products.get_products_by_category(category_id)
-        if products:
+        # Hidden products count too: deleting the category would orphan them.
+        if self._products.count_products_in_category(category_id):
             raise ValueError(
                 "لا يمكن حذف الفئة — يوجد منتجات مرتبطة بها"
             )

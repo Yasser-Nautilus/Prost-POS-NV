@@ -23,6 +23,10 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
   const [phoneError, setPhoneError] = useState("");
   const [matches, setMatches] = useState<any[]>([]);
   const phoneInputRef = useRef<HTMLInputElement>(null);
+  // Item 12: whichever form opens takes the cursor, so a cashier never needs
+  // the mouse (Enter submits, Escape closes).
+  const regNameRef = useRef<HTMLInputElement>(null);
+  const streetRef = useRef<HTMLInputElement>(null);
   const lastLookupRef = useRef("");
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
 
@@ -42,6 +46,14 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
   const [street, setStreet] = useState("");
   const [zones, setZones] = useState<any[]>([]);
   const [selectedZoneId, setSelectedZoneId] = useState<string>("");
+
+  useEffect(() => {
+    if (isRegistering) setTimeout(() => regNameRef.current?.focus(), 30);
+  }, [isRegistering]);
+
+  useEffect(() => {
+    if (isAddingAddress) setTimeout(() => streetRef.current?.focus(), 30);
+  }, [isAddingAddress]);
 
   useEffect(() => {
     if (isOpen) {
@@ -397,6 +409,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                         <div>
                           <label className="text-gray-400 text-xs block mb-1">الشارع والوصف التفصيلي</label>
                           <input
+                            ref={streetRef}
                             type="text"
                             required
                             placeholder="اسم الشارع، العمارة، الشقة..."
@@ -490,6 +503,7 @@ export const CustomerLookup: React.FC<CustomerLookupProps> = ({
                       <div>
                         <label className="text-gray-400 text-xs block mb-1">اسم العميل</label>
                         <input
+                          ref={regNameRef}
                           type="text"
                           required
                           placeholder="الاسم الكامل للعميل..."

@@ -222,3 +222,10 @@ Handles legacy financial bridge actions:
 - Handover: `HandoverDialog` flow (select target, cash count, variance, manager PIN, cash drop, incoming session) is atomic and validates `0 <= cash_drop <= counted` [#59, #61, #86].
 - `financial_controller.py`: `get_users_for_transfer()` returns cashier-slot users only; same-user transfer is rejected; open sessions show live expected cash; shifts show the cashier name [#68, #95, #97, #110].
 - Cashier blind count and close; large variance needs manager PIN and reason [#94].
+
+## Update 2026-11-27 (Batch 6: shifts, keyboard, live orders)
+
+- `FinancialController.get_users_for_transfer()`: handover recipients are active cashiers only — never the admin, never a manager who happens to hold a slot, never the cashier handing over (that filter stays in the dialog).
+- `FinancialController.get_active_shift()` no longer swallows exceptions; a failed read is reported instead of showing "no open shift".
+
+---

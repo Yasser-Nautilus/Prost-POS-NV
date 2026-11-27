@@ -371,6 +371,18 @@ class AuthService:
             if other.id != exclude_id and (other.username or "").strip().casefold() == wanted:
                 raise ValueError("اسم المستخدم موجود بالفعل")
 
+    def _ensure_single_admin(self, role: UserRole, exclude_id: int | None = None) -> None:
+        """Only one active system admin may exist.
+
+        The user screen already hides the role, but a direct bridge call could
+        still create a second one (batch 6, item 1).
+        """
+        if role != UserRole.ADMIN:
+            return
+        for other in self._users.get_all():
+            if other.id != exclude_id and other.role == UserRole.ADMIN and other.is_active:
+                raise ValueError("لا يمكن إنشاء مدير نظام آخر — يوجد مدير نظام بالفعل")
+
     def create_user(
         self,
         username: str,
@@ -381,8 +393,12 @@ class AuthService:
         avatar_path: str | None = None,
         phone: str | None = None,
         require_driver_phone: bool = False,
+        allow_second_admin: bool = False,
     ) -> User:
         """Create a new user. Validates username and unique PIN.
+
+        ``allow_second_admin`` exists only for seeding and test fixtures that
+        need two admins; every screen and bridge call leaves it False.
 
         With ``require_driver_phone`` (set by the user-management screen),
         drivers (cashier role with no cashier_slot) must have a phone number.
@@ -403,6 +419,8 @@ class AuthService:
             )
 
         self._ensure_unique_username(username)
+        if not allow_second_admin:
+            self._ensure_single_admin(role)
         if self._pin_in_use(pin):
             raise ValueError("رمز PIN مستخدم بالفعل لمستخدم آخر")
 
@@ -458,6 +476,7 @@ class AuthService:
         is_active: bool | None = None,
         phone: str | None = None,
         require_driver_phone: bool = False,
+        allow_second_admin: bool = False,
     ) -> User:
         """Update an existing user. Validates unique PIN if changed."""
         if cashier_slot != -1 or isinstance(cashier_slot, bool):
@@ -502,7 +521,8 @@ class AuthService:
                 raise ValueError("الاسم المعروض مطلوب")
             user.display_name = display_name
 
-        if role is not None:
+        if role is not None and not allow_second_admin:
+            self._ensure_single_admin(role, exclude_id=user_id)
             user.role = role
 
         if pin is not None:

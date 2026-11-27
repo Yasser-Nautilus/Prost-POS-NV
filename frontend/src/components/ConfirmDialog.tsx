@@ -19,12 +19,25 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 }) => {
   React.useEffect(() => {
     if (!isOpen) return;
+    // One decision per open: the focused confirm button also reacts to Enter,
+    // and a held key repeats, so without this guard a delete could run twice.
+    let handled = false;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Enter") onConfirm();
-      if (e.key === "Escape") onCancel();
+      if (e.repeat || handled) return;
+      if (e.key === "Enter") {
+        handled = true;
+        e.preventDefault();
+        e.stopPropagation();
+        onConfirm();
+      } else if (e.key === "Escape") {
+        handled = true;
+        e.preventDefault();
+        e.stopPropagation();
+        onCancel();
+      }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    window.addEventListener("keydown", handler, true);
+    return () => window.removeEventListener("keydown", handler, true);
   }, [isOpen, onConfirm, onCancel]);
 
   if (!isOpen) return null;
@@ -41,6 +54,7 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
         <div className="flex gap-3">
           <button
             onClick={onConfirm}
+            type="button"
             className="flex-1 py-2.5 bg-gradient-to-l from-red-600 to-red-700 text-white font-bold rounded-xl hover:brightness-110 active:scale-[0.98] transition-all"
             autoFocus
           >
