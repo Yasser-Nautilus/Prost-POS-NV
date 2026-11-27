@@ -524,6 +524,8 @@ class DriverSettlementService:
                     "customer_zone": order.customer_zone or "",
                     "total": order_total,
                     "delivery_fee": delivery_fee,
+                    "cash_due": order.cash_due_on_delivery,
+                    "online_paid": is_online,
                     "payment_method": order.payment_method.value if order.payment_method else "cash",
                     "status": order.status.value,
                 })
