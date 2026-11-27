@@ -949,6 +949,9 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ currentUser }) => {
   const [sessions, setSessions] = useState<CashierSession[]>([]);
   const [allSessions, setAllSessions] = useState<CashierSession[]>([]);
   const [loading, setLoading] = useState(true);
+  // Item 10: after the day is closed the screen used to go blank. Keep the
+  // closed day and its sessions visible until a new day is opened.
+  const [closedDay, setClosedDay] = useState<any>(null);
 
   // Dialogs
   const [showOpen, setShowOpen] = useState(false);
@@ -970,7 +973,20 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ currentUser }) => {
       const active = await bridge.sessionGetActive();
       const all = await bridge.sessionGetAll();
       setSessions(active);
-      setAllSessions(all);
+      if (active.length === 0 && all.length === 0) {
+        // No open day: show the last day's sessions instead of an empty page.
+        const last = await bridge.sessionLastDay().catch(() => null);
+        if (last?.day && !last.day.is_active) {
+          setAllSessions(last.sessions || []);
+          setClosedDay(last.day);
+        } else {
+          setAllSessions(all);
+          setClosedDay(null);
+        }
+      } else {
+        setAllSessions(all);
+        setClosedDay(null);
+      }
       loadedOnce.current = true;
     } catch (e) {
       console.error("Failed to load sessions:", e);
@@ -1035,6 +1051,14 @@ export const SessionsView: React.FC<SessionsViewProps> = ({ currentUser }) => {
           color="text-white"
         />
       </div>
+
+      {closedDay && (
+        <div className="bg-yellow-950/30 border border-yellow-900/40 rounded-2xl px-5 py-3 text-sm text-yellow-300" role="status">
+          يوم العمل مقفول — دي ورديات آخر يوم عمل
+          {closedDay.business_date ? ` (${closedDay.business_date})` : ""}.
+          افتح يوم عمل جديد عشان تبدأ ورديات جديدة.
+        </div>
+      )}
 
       {/* Action bar */}
       <div className="flex items-center gap-3 flex-wrap">
