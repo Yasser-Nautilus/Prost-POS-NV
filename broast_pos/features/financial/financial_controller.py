@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from broast_pos.core.models.user import UserRole
 from broast_pos.core.services.auth_service import AuthService
 from broast_pos.core.services.financial_service import FinancialService
 
@@ -30,21 +31,20 @@ class FinancialController:
 
     def get_active_shift(self) -> dict[str, Any] | None:
         """Return details of the current active shift, if any."""
-        try:
-            shift = self._financial_svc.get_active_shift()
-            if shift is None:
-                return None
-            return {
+        # No blanket except here: a failed read must not look like
+        # "no open shift" on screen (batch 6, item 9).
+        shift = self._financial_svc.get_active_shift()
+        if shift is None:
+            return None
+        return {
                 "id": shift.id,
                 "opened_by": shift.opened_by,
                 "opened_at": shift.opened_at,
                 "next_invoice_no": shift.next_invoice_no,
                 "is_active": shift.is_active,
                 "summary_printed_at": shift.summary_printed_at,
+                "business_date": getattr(shift, "business_date", None),
             }
-        except Exception as e:
-            logger.error("Error fetching active shift: %s", e)
-            return None
 
     def open_shift(self, user_id: int) -> dict[str, Any] | None:
         """Open a new shift."""
@@ -170,7 +170,12 @@ class FinancialController:
                     "cashier_slot": u.cashier_slot,
                 }
                 for u in users
-                if u.cashier_slot is not None
+                # Item 7: only real cashiers receive a handover — never the
+                # system admin or a manager who happens to hold a slot, and
+                # never an inactive account.
+                if u.role == UserRole.CASHIER
+                and u.cashier_slot is not None
+                and u.is_active
             ]
         except Exception as e:
             logger.error("Error listing users for transfer: %s", e)
