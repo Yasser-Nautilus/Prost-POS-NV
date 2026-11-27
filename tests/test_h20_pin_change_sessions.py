@@ -162,6 +162,7 @@ def two_admins(stations):
     # The UI/bridge no longer creates a second admin, so seed one directly.
     created = station_2.bridge._auth.create_user(
         "admin_a", "Admin A", UserRole.ADMIN, ADMIN_A_PIN,
+        allow_second_admin=True,  # fixture seeds the second admin directly
     )
     admin_a = _login(station_1, ADMIN_A_PIN)
     assert admin_a["id"] == created.id
